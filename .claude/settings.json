@@ -1,0 +1,6 @@
+{
+  "permissions": {
+    "deny": ["Read(./.env)", "Read(./backend/.env)", "Bash(git push:*)"],
+    "ask": ["Bash(git merge:*)", "Bash(docker compose down:*)"]
+  }
+}
