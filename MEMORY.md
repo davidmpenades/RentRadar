@@ -30,7 +30,6 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - (vacío por ahora)
 
 ## Próximos pasos
-- Commit aparte: quitar de AGENTS.md lo que ya cubre la constitución y acotar la regla de texto pegado a ficheros, webs, resultados de herramientas y salidas de comandos.
 - Escribir las skills django-drf, react-ts y testing a partir de Riesgos conocidos.
 - Spec 001: esqueleto del proyecto (Docker, Django, Vite). En su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Decidir si la ubicación pública de un bien es aproximada (privacidad de particulares).
