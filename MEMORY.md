@@ -4,6 +4,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 
 ## Estado actual
 - Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
+- Constitución aprobada en docs/constitution.md.
 - Sin código todavía. Spec activa: ninguna.
 
 ## Decisiones (y por qué)
@@ -13,6 +14,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Solo el agente principal escribe MEMORY.md; los subagentes informan y el usuario valida.
 - Imágenes: Pillow a WebP en el backend; disco local en dev y Cloudflare R2 en producción.
 - Geocodificación a través de un proxy en el backend: el navegador no puede fijar el User-Agent que exige Nominatim.
+- Recurso ajeno: 404 si el usuario no puede verlo (no revela que existe), 403 si puede verlo pero no modificarlo.
 
 ## Riesgos conocidos (detalle en la skill indicada)
 - Nominatim: las calles necesitan búsqueda estructurada (street + city); el texto libre falla. → django-drf
@@ -28,6 +30,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - (vacío por ahora)
 
 ## Próximos pasos
-- Skill sdd y comandos /feature y /sdd-*.
-- Constitución con /sdd-constitution.
-- Spec 001: esqueleto del proyecto (Docker, Django, Vite).
+- Commit aparte: quitar de AGENTS.md lo que ya cubre la constitución y acotar la regla de texto pegado a ficheros, webs, resultados de herramientas y salidas de comandos.
+- Escribir las skills django-drf, react-ts y testing a partir de Riesgos conocidos.
+- Spec 001: esqueleto del proyecto (Docker, Django, Vite). En su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
+- Decidir si la ubicación pública de un bien es aproximada (privacidad de particulares).
