@@ -1,0 +1,51 @@
+services:
+  db:
+    image: postgis/postgis:18-3.6
+    environment:
+      POSTGRES_DB: ${DB_NAME:?falta DB_NAME en .env (copia .env.example)}
+      POSTGRES_USER: ${DB_USER:?falta DB_USER en .env (copia .env.example)}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env (copia .env.example)}
+    ports:
+      - "127.0.0.1:5432:5432"
+    volumes:
+      # Desde PG18 los datos cuelgan de /var/lib/postgresql, no de .../data
+      - db-data:/var/lib/postgresql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U \"$${POSTGRES_USER}\" -d \"$${POSTGRES_DB}\""]
+      start_period: 30s
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build:
+      context: ./backend
+      target: dev
+    # Provisional hasta que T3/T8 arranquen la aplicación
+    command: ["sleep", "infinity"]
+    environment:
+      DJANGO_ENV: ${DJANGO_ENV:?falta DJANGO_ENV en .env (copia .env.example)}
+      DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?falta DJANGO_SECRET_KEY en .env (copia .env.example)}
+      DJANGO_DEBUG: ${DJANGO_DEBUG:-}
+      DJANGO_ALLOWED_HOSTS: ${DJANGO_ALLOWED_HOSTS:-}
+      DB_HOST: ${DB_HOST:?falta DB_HOST en .env (copia .env.example)}
+      DB_PORT: ${DB_PORT:?falta DB_PORT en .env (copia .env.example)}
+      DB_NAME: ${DB_NAME:?falta DB_NAME en .env (copia .env.example)}
+      DB_USER: ${DB_USER:?falta DB_USER en .env (copia .env.example)}
+      DB_PASSWORD: ${DB_PASSWORD:?falta DB_PASSWORD en .env (copia .env.example)}
+      RUFF_NO_CACHE: "true"
+    ports:
+      - "127.0.0.1:8000:8000"
+    volumes:
+      - ./backend:/app
+      - ./.env.example:/.env.example:ro
+    depends_on:
+      db:
+        condition: service_healthy
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+
+volumes:
+  db-data:

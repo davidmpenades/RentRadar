@@ -1,0 +1,5 @@
+# Regenerar desde la raíz del repo (después de requirements.txt): docker run --rm -u "$(id -u):$(id -g)" -e HOME=/tmp -v "$PWD/backend:/src" -w /src python:3.13-slim-trixie sh -c "pip install -q --user pip-tools==7.6.1 && python -m piptools compile --generate-hashes --strip-extras -o requirements-dev.txt requirements-dev.in"
+-c requirements.txt
+pytest
+pytest-django==4.14.0
+ruff==0.16.10

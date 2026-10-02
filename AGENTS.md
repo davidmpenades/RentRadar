@@ -7,7 +7,7 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 - docs/constitution.md: principios innegociables. specs/NNN-nombre/: spec, plan y tareas.
 
 ## Comandos
-- Backend: `docker compose up -d` · `docker compose exec backend pytest -q`
+- Backend: `docker compose up -d` · `docker compose exec backend pytest -q` · `docker compose exec backend sh -c "ruff check . && ruff format --check ."`
 - Frontend: `cd frontend && npm run dev` · `npx vitest run` · `npm run build` · `npx eslint <ficheros>`
 
 ## Convenciones

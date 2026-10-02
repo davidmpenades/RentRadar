@@ -1,7 +1,7 @@
 # Tareas 001 — Esqueleto del backend
 Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose exec backend sh -c "ruff check . && ruff format --check ."` en verde (T1 y T2 usan `docker compose run --rm backend …` porque aún no hay `manage.py`). Test primero, fallando por la razón esperada.
 
-- [ ] **T1. Imagen, dependencias fijadas, Compose y plantilla.** RF-2, RF-6, RF-7, RF-8, RF-27, RF-28
+- [x] **T1. Imagen, dependencias fijadas, Compose y plantilla.** RF-2, RF-6, RF-7, RF-8, RF-27, RF-28
   - Sin test automático (infraestructura sin aplicación todavía); se verifica con órdenes.
   - Ficheros: `backend/Dockerfile` (`runtime` y `dev`, UID 10001), `.dockerignore`, `requirements*.in/.txt` con hashes, `pyproject.toml` (ruff y pytest sin `--ds`), `docker-compose.yml`, `.gitignore`, `.env.example` (bloques del backend y ajeno) y la orden de lint en `AGENTS.md`.
   - Commit: `build: add backend image, pinned deps and compose stack`

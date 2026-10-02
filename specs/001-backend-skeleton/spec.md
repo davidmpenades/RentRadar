@@ -1,5 +1,5 @@
 # Spec 001 — Esqueleto del backend
-Estado: aprobada
+Estado: en curso
 
 ## Contexto y objetivo
 RentRadar no tiene código todavía. Antes de construir cualquier funcionalidad de negocio (bienes, búsqueda por radio, usuarios), hace falta una base de backend que:
