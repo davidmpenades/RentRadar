@@ -6,7 +6,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
 - Constitución aprobada en docs/constitution.md.
 - Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
-- Sin código todavía. Spec activa: ninguna.
+- Sin código todavía. Spec activa: 001-backend-skeleton (spec y plan aprobados, 10 tareas, siguiente T1).
+- Specs en borrador: 002-quality-gates (pre-commit, gitleaks, CI) y 003-health-checks (vida y preparación). Orden: 001, 002, 003.
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
@@ -18,7 +19,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Recurso ajeno: 404 si el usuario no puede verlo (no revela que existe), 403 si puede verlo pero no modificarlo.
 - Lanzamiento en España (castellano, euros); objetivo Europa. i18n desde el día 1.
 - Web y móvil (Expo) como objetivo; autenticación válida para ambos y API versionada.
-- Mapa con MapLibre (web y nativo), a validar en la spec 001.
+- Mapa con MapLibre (web y nativo), a validar en la spec del frontend.
+- Backend: apps en backend/apps/<app>/; solo config/env.py lee el entorno; PostGIS 18-3.6 (fuera del rango declarado por Django 5.2, lo vigila el test de RF-5).
 - Ubicaciones en PostGIS geography; precios con importe y moneda.
 - Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
 - Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
@@ -35,7 +37,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 
 ## Próximos pasos
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
-- Crear docs/architecture.md (ubicación de ficheros por capa); la skill django-drf ya remite a él.
-- Spec 001: esqueleto del proyecto (Docker, Django, Vite). En su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
+- Implementar la 001 tarea a tarea (T3 crea docs/architecture.md). Después, clarificar 002 y 003.
+- Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
+- Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico.
 - Ubicación y privacidad: confirmar lo pendiente en docs/product.md (celda, profesionales, mapa) y decidir si hay reservas.
 - docs/product.md con grill-me (incluye RGPD, DSA y DAC7 como requisitos a tener en cuenta).
