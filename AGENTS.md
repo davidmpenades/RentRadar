@@ -23,6 +23,7 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 - Toda funcionalidad nueva entra por /feature (SDD). Lee docs/constitution.md y la spec activa antes de tocar código.
 - Ante una decisión con compromisos reales (modelo de datos, contrato de API, dependencia, estructura), propón 2-3 opciones con qué resuelve cada una, qué evita, su coste y tu recomendación. En cambios evidentes, no.
 - Una tarea cada vez: al terminarla, para y espera aprobación.
+- Antes de proponer un commit, enseña el diff de lo que vas a commitear, aunque sea pequeño.
 - Al terminar, resume qué ha cambiado y qué decisiones debo revisar.
 
 ## Límites
