@@ -6,7 +6,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
 - Constitución aprobada en docs/constitution.md.
 - Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
-- Sin código todavía. Spec activa: 001-backend-skeleton (spec y plan aprobados, 10 tareas, siguiente T1).
+- Spec activa: 001-backend-skeleton, en curso en feature/001-backend-skeleton (progreso en su tasks.md).
 - Specs en borrador: 002-quality-gates (pre-commit, gitleaks, CI) y 003-health-checks (vida y preparación). Orden: 001, 002, 003.
 
 ## Decisiones (y por qué)
