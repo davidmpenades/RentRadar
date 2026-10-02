@@ -56,5 +56,5 @@ Pregunta antes de crear o aplicar una migración. Revisa el SQL (`sqlmigrate`) c
 
 ## Tests y verificación
 - Los tests de cada app van en un paquete `tests/` dentro de la app, con un módulo por capa o por endpoint.
-- Tras crear módulos nuevos (app, `tests/`, servicios…), reinicia el backend con `docker compose restart backend` antes de lanzar los tests.
+- Reinicia el backend con `docker compose restart backend` al crear módulos nuevos, añadir una app a `INSTALLED_APPS` o tocar `AppConfig.ready()`. El autorecargador solo vigila los módulos ya importados, y lo que se registra en `ready()` o una app nueva solo se carga al arrancar. Para editar ficheros que ya existen no hace falta.
 - `docker compose exec backend pytest -q` en verde antes de cada commit. El test se escribe primero y debe fallar por la razón esperada.
