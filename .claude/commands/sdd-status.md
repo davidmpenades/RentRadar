@@ -1,8 +1,9 @@
 ---
 description: SDD · Fase actual y siguiente paso de una spec
 argument-hint: [NNN-slug]
+arguments: [spec]
 ---
-Lee specs/$1/ (spec.md, plan.md y tasks.md, los que existan) y MEMORY.md. Si no se indica ninguna spec, usa la spec activa de MEMORY.md.
+Lee specs/$spec/ (spec.md, plan.md y tasks.md, los que existan) y MEMORY.md. Si no se indica ninguna spec, usa la spec activa de MEMORY.md.
 
 Dime en pocas líneas:
 1. En qué fase del flujo SDD está la spec y su estado.
