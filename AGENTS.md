@@ -2,7 +2,7 @@
 Marketplace de alquiler de bienes (productos y espacios) entre particulares o profesionales, con búsqueda por radio en un mapa.
 
 ## Stack y estructura
-- backend/: Django 5.2 + DRF + PostgreSQL/PostGIS, en Docker Compose. Una app por dominio.
+- backend/: Django 5.2 LTS + DRF + PostgreSQL/PostGIS, en Docker Compose. Una app por dominio.
 - frontend/: React + TypeScript + Vite + Tailwind v4, en el host. Organizado por feature. Versiones y librería de mapa se fijan en la spec 001 (MapLibre candidato).
 - docs/constitution.md: principios innegociables. specs/NNN-nombre/: spec, plan y tareas.
 
