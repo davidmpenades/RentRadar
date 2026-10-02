@@ -5,6 +5,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 ## Estado actual
 - Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
 - Constitución aprobada en docs/constitution.md.
+- Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
 - Sin código todavía. Spec activa: ninguna.
 
 ## Decisiones (y por qué)
@@ -20,6 +21,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Mapa con MapLibre (web y nativo), a validar en la spec 001.
 - Ubicaciones en PostGIS geography; precios con importe y moneda.
 - Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
+- Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
 
 ## Riesgos conocidos (detalle en la skill indicada)
 - Backend (Nominatim, 403/401 con sesión, locks de pip, caché por proceso): ver skill django-drf.
