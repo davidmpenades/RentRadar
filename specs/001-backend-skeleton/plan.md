@@ -135,7 +135,7 @@ No aplica: no hay interfaz de usuario. Los mensajes para el desarrollador van en
 | RF-8 | Validación: `git check-ignore` sobre `.env`, `.env.local`, `.env.production`, `.env.development.local`, `prod.env` y `backend/.env` (ignorados) y `.env.example` (no ignorado) |
 | RF-9 | pytest: `resolve_settings_module` con los tres valores; `load_settings` importa los tres módulos |
 | RF-10 | pytest en subproceso: `manage.py check` sin `DJANGO_ENV`, con `Production` y con `prod` sale con código ≠0 y lista los valores válidos; lo mismo al importar `config.wsgi` y `config.asgi` |
-| RF-11 | pytest: `load_production_config({})` nombra las 8 variables obligatorias; vacío o solo espacios cuenta como ausente. Subproceso con centinelas |
+| RF-11 | pytest: `load_production_config({})` nombra las 7 variables obligatorias; vacío o solo espacios cuenta como ausente. Subproceso con centinelas |
 | RF-12 | pytest: puerto `abc`, `0` y `70000`. Subproceso: el centinela no aparece en stdout ni en stderr |
 | RF-13 | pytest: clave de 49 caracteres rechazada y de 50 aceptada. Subproceso sin el valor en la salida |
 | RF-14 | pytest: `insecure-` en una clave de 50 o más caracteres y en la contraseña; la contraseña de la plantilla se rechaza. Subproceso |
