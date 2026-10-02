@@ -37,5 +37,5 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Crear docs/architecture.md (ubicación de ficheros por capa); la skill django-drf ya remite a él.
 - Spec 001: esqueleto del proyecto (Docker, Django, Vite). En su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
-- Decidir si la ubicación pública de un bien es aproximada (privacidad de particulares).
+- Ubicación y privacidad: confirmar lo pendiente en docs/product.md (celda, profesionales, mapa) y decidir si hay reservas.
 - docs/product.md con grill-me (incluye RGPD, DSA y DAC7 como requisitos a tener en cuenta).
