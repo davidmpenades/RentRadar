@@ -19,12 +19,10 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Web y móvil (Expo) como objetivo; autenticación válida para ambos y API versionada.
 - Mapa con MapLibre (web y nativo), a validar en la spec 001.
 - Ubicaciones en PostGIS geography; precios con importe y moneda.
+- Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
 
 ## Riesgos conocidos (detalle en la skill indicada)
-- Nominatim, si el adaptador usa Nominatim: las calles necesitan búsqueda estructurada (street + city); el texto libre falla. → django-drf
-- DRF con sesión: el anónimo recibe 403, no 401. → django-drf
-- Locks de pip con hashes: regenerarlos sin --no-index y revisar el diff. → django-drf
-- Caché local por proceso: con varios workers, los límites de tasa se multiplican. Antes del despliegue, caché compartida. → django-drf
+- Backend (Nominatim, 403/401 con sesión, locks de pip, caché por proceso): ver skill django-drf.
 - jsdom no calcula layout: el overflow y el responsive se verifican en navegador real. → testing
 - Mocks de fetch: respetar AbortSignal y ordenar las claves de más a menos específica. → testing
 - Leaflet captura eventos de puntero, si se usa Leaflet: los menús que cierran al hacer clic fuera escuchan pointerdown en fase de captura. → react-ts
@@ -34,7 +32,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - (vacío por ahora)
 
 ## Próximos pasos
-- Escribir las skills django-drf, react-ts y testing a partir de Riesgos conocidos.
+- Escribir las skills react-ts y testing a partir de Riesgos conocidos.
+- Crear docs/architecture.md (ubicación de ficheros por capa); la skill django-drf ya remite a él.
 - Spec 001: esqueleto del proyecto (Docker, Django, Vite). En su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Decidir si la ubicación pública de un bien es aproximada (privacidad de particulares).
 - docs/product.md con grill-me (incluye RGPD, DSA y DAC7 como requisitos a tener en cuenta).
