@@ -1,14 +1,7 @@
 ---
-description: SDD · Revisa la spec como un QA (solo detecta, no resuelve)
+description: SDD · Revisa la spec con dos revisores en paralelo (solo detectan)
 argument-hint: <NNN-slug>
 ---
-Revisa specs/$1/spec.md como un QA muy exigente. Usa la skill sdd y su checklist. No modifiques ningún archivo.
+Lanza EN PARALELO a reviewer-quality y reviewer-security sobre specs/$1/spec.md, en fase de spec. Pásales la ruta, la fase y qué se espera. No modifiques ningún archivo.
 
-Lista:
-1. Ambigüedades (requisitos que no se pueden verificar).
-2. Contradicciones entre requisitos.
-3. Casos límite no cubiertos.
-4. Huecos de permisos o de errores.
-5. Conflictos con docs/constitution.md.
-
-No propongas soluciones: solo detecta. Formato: lista numerada. Cuando las resuelva, actualizaré la spec contigo y te diré si queda aprobada.
+Junta sus resultados en una sola lista numerada, sin duplicados, agrupada en: ambigüedades, contradicciones, casos límite, permisos y errores, conflictos con la constitución. No propongas soluciones todavía.

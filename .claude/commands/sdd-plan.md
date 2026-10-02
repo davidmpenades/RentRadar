@@ -1,11 +1,11 @@
 ---
-description: SDD · Genera el plan técnico de una spec aprobada
+description: SDD · Plan técnico de una spec aprobada (investigación en paralelo + planner)
 argument-hint: <NNN-slug>
 ---
 Lee docs/constitution.md, AGENTS.md y specs/$1/spec.md. Usa la skill sdd. NO escribas código.
+Si la spec no está "aprobada" o tiene dudas abiertas, para y avísame.
 
-Si la spec no está en estado "aprobada" o tiene dudas abiertas, para y avísame.
-
-Lee el código existente que vaya a verse afectado antes de planificar: cada afirmación sobre el código tiene que estar comprobada o figurar en "Afirmaciones no verificadas". Consulta con Context7 las APIs de las librerías que intervengan.
-
-Genera specs/$1/plan.md con la plantilla de la skill. En "Decisiones", para cada decisión con compromisos reales, da 2-3 opciones, la elegida, qué evita y su coste. Marca qué RF cubre cada parte. Todo debe respetar la constitución.
+1. Lanza EN PARALELO a reviewer-docs y reviewer-security en fase de plan. Pásales la ruta de la spec, la fase y qué se espera de cada uno (los subagentes no ven esta conversación).
+2. Con sus dos informes, pide a planner plan.md y tasks.md, pasándole la spec, los informes y mis decisiones previas.
+3. Enséñame un resumen del plan, la tabla de decisiones y los riesgos. PARA hasta que lo apruebe.
+4. Con mi aprobación, escribe specs/$1/plan.md y specs/$1/tasks.md tal como los devolvió el planificador (o con los cambios que yo pida).
