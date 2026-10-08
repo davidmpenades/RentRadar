@@ -23,4 +23,4 @@ Lee docs/constitution.md, AGENTS.md, MEMORY.md, las skills del proyecto que apli
 Devuelve solo el cambio en spec.md (RF en EARS y casos límite) como diff. No toques el plan ni las tareas hasta que te lo pidan.
 
 ## Respuesta
-El contenido de cada fichero en un bloque propio con su ruta, y un resumen de 5 líneas como máximo. O solo la lista de preguntas.
+El contenido de cada fichero en un bloque propio con su ruta, y un resumen breve. O solo la lista de preguntas.
