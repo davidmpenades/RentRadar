@@ -1,13 +1,13 @@
 # Tareas 001 — Esqueleto del backend
 Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose exec backend sh -c "ruff check . && ruff format --check ."` en verde (T1 y T2 usan `docker compose run --rm backend …` porque aún no hay `manage.py`). Test primero, fallando por la razón esperada.
 
-- [ ] **T1. Imagen, dependencias fijadas, Compose y plantilla.** RF-2, RF-6, RF-7, RF-8, RF-27, RF-28
+- [x] **T1. Imagen, dependencias fijadas, Compose y plantilla.** RF-2, RF-6, RF-7, RF-8, RF-27, RF-28
   - Sin test automático (infraestructura sin aplicación todavía); se verifica con órdenes.
   - Ficheros: `backend/Dockerfile` (`runtime` y `dev`, UID 10001), `.dockerignore`, `requirements*.in/.txt` con hashes, `pyproject.toml` (ruff y pytest sin `--ds`), `docker-compose.yml`, `.gitignore`, `.env.example` (bloques del backend y ajeno) y la orden de lint en `AGENTS.md`.
   - Commit: `build: add backend image, pinned deps and compose stack`
   - Hecho cuando: `docker compose build` termina con `--require-hashes`; `db` queda healthy; `docker compose run --rm backend python -c "from django.contrib.gis.gdal import gdal_version; from django.contrib.gis.geos import geos_version; print(gdal_version(), geos_version())"` imprime las versiones; `docker compose run --rm backend id -u` da 10001; `ruff check .` y `ruff format --check .` dan 0; `git check-ignore` cumple la lista de RF-8; `docker compose config` muestra los puertos en 127.0.0.1.
 
-- [ ] **T2. Lectura y validación del entorno.** RF-9, RF-11, RF-12, RF-13, RF-14, RF-15, RF-20
+- [x] **T2. Lectura y validación del entorno.** RF-9, RF-11, RF-12, RF-13, RF-14, RF-15, RF-20
   - `config/env.py` con funciones puras y tests unitarios en `config/tests/test_env.py`, sin Django configurado.
   - Commit: `feat(config): add environment variable parsing and validation`
   - Hecho cuando: `docker compose run --rm backend pytest -q config/tests/test_env.py` pasa; los tests cubren todos los faltantes a la vez, vacío o solo espacios, puerto `abc`, `0` y `70000`, clave de 49 y 50 caracteres, `insecure-` en la clave y la contraseña, hosts `*`, `http://example.com`, `.example.com`, IP y espacios, y `parse_bool` con `yes` y `on`; ningún mensaje contiene el valor recibido.

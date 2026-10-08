@@ -6,7 +6,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
 - Constitución aprobada en docs/constitution.md.
 - Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
-- Sin código todavía. Spec activa: 001-backend-skeleton (spec y plan aprobados, 10 tareas, siguiente T1).
+- Spec activa: 001-backend-skeleton, en curso en feature/001-backend-skeleton (progreso en su tasks.md).
 - Specs en borrador: 002-quality-gates (pre-commit, gitleaks, CI) y 003-health-checks (vida y preparación). Orden: 001, 002, 003.
 
 ## Decisiones (y por qué)
@@ -38,6 +38,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 ## Próximos pasos
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Implementar la 001 tarea a tarea (T3 crea docs/architecture.md). Después, clarificar 002 y 003.
+- Al cerrar la 001, en el commit de AGENTS.md (sección Comandos): las órdenes que escriben en el bind mount (p. ej. `ruff format`) van con `docker compose run --rm -u "$(id -u)" backend …`, porque el UID 10001 no puede escribir.
 - Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico.
 - Ubicación y privacidad: confirmar lo pendiente en docs/product.md (celda, profesionales, mapa) y decidir si hay reservas.

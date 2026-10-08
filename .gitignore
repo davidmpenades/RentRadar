@@ -1,7 +1,12 @@
-.env
+.env*
+*.env
+!.env.example
 .claude/settings.local.json
 node_modules/
 __pycache__/
 *.pyc
+.pytest_cache/
+.ruff_cache/
+.venv/
 backend/media/
 dist/
