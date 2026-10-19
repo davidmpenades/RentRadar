@@ -18,7 +18,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(config): add per-environment settings and resolver`
   - Hecho cuando: pasan la matriz de `DEBUG` en development y test, los tests de hora e idioma por módulo y los subprocesos de RF-10 (sin variable, `Production` y `prod`, con `manage.py check`, `config.wsgi` y `config.asgi`); `docker compose up -d` deja runserver respondiendo en 127.0.0.1:8000; `docs/architecture.md` describe la estructura real creada hasta aquí y la prevista en `apps/`.
 
-- [ ] **T4. Producción rechaza la configuración insegura.** RF-11, RF-12, RF-13, RF-14, RF-15, RF-19, RF-20
+- [x] **T4. Producción rechaza la configuración insegura.** RF-11, RF-12, RF-13, RF-14, RF-15, RF-19, RF-20
   - `production.py` con `load_production_config()` y `DEBUG=False`; tests en subproceso con entorno limpio y centinelas.
   - Commit: `feat(config): reject unsafe production configuration`
   - Hecho cuando: cada caso inseguro sale con código ≠0, nombra la variable y ningún centinela aparece en stdout ni stderr; una configuración válida de centinelas pasa `manage.py check` con código 0; `DEBUG` es `False` en producción con `DJANGO_DEBUG=true`.
