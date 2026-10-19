@@ -1,9 +1,11 @@
+import os
 import traceback
 
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 
 from config.env import (
+    configure_settings_module,
     load_production_config,
     parse_allowed_hosts,
     parse_bool,
@@ -320,3 +322,11 @@ def test_load_production_config_accumulates_every_problem_without_values():
     for name in PRODUCTION_REQUIRED:
         assert name in message
     assert "SENTINEL" not in message
+
+
+def test_configure_settings_module_overrides_previous_value(monkeypatch):
+    monkeypatch.setenv("DJANGO_SETTINGS_MODULE", "config.settings.production")
+
+    configure_settings_module({"DJANGO_ENV": "test"})
+
+    assert os.environ["DJANGO_SETTINGS_MODULE"] == "config.settings.test"

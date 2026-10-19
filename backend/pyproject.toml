@@ -7,4 +7,4 @@ select = ["E", "F", "I", "UP", "B", "SIM", "DJ"]
 [tool.ruff.format]
 
 [tool.pytest.ini_options]
-addopts = "-p no:cacheprovider"
+addopts = "--ds=config.settings.test -p no:cacheprovider"

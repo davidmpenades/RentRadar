@@ -70,12 +70,21 @@ def resolve_settings_module(environ: Mapping[str, str] | None = None) -> str:
     return f"config.settings.{env}"
 
 
+def configure_settings_module(environ: Mapping[str, str] | None = None) -> None:
+    # Sobrescribe siempre: un DJANGO_SETTINGS_MODULE previo no puede saltarse DJANGO_ENV
+    os.environ["DJANGO_SETTINGS_MODULE"] = resolve_settings_module(environ)
+
+
 def require(environ: Mapping[str, str] | None, names: Iterable[str]) -> dict[str, str]:
     values = {name: _read(environ, name) for name in names}
     missing = [name for name, value in values.items() if not value]
     if missing:
         raise ImproperlyConfigured(_missing_message(missing))
     return values
+
+
+def read_optional(environ: Mapping[str, str] | None, name: str) -> str:
+    return _read(environ, name)
 
 
 def parse_bool(name: str, raw: str | None) -> bool:

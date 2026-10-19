@@ -12,7 +12,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(config): add environment variable parsing and validation`
   - Hecho cuando: `docker compose run --rm backend pytest -q config/tests/test_env.py` pasa; los tests cubren todos los faltantes a la vez, vacío o solo espacios, puerto `abc`, `0` y `70000`, clave de 49 y 50 caracteres, `insecure-` en la clave y la contraseña, hosts `*`, `http://example.com`, `.example.com`, IP y espacios, y `parse_bool` con `yes` y `on`; ningún mensaje contiene el valor recibido.
 
-- [ ] **T3. Settings por entorno, resolvedor y arquitectura.** RF-9, RF-10, RF-18, RF-19, RF-20, RF-29, RF-30, RF-31, RF-32
+- [x] **T3. Settings por entorno, resolvedor y arquitectura.** RF-9, RF-10, RF-18, RF-19, RF-20, RF-29, RF-30, RF-31, RF-32
   - `base.py`, `development.py` y `test.py`; `manage.py`, `wsgi.py` y `asgi.py` con el resolvedor; `urls.py` vacío; `--ds=config.settings.test -p no:cacheprovider` en `addopts`; fixture `load_settings`.
   - `docs/architecture.md` con la estructura del backend: `config/` (settings por entorno, `env.py`, logging), `apps/<app>/` para cada app (`core` y las de dominio), capas (servicios, selectores, serializers y vistas), y ubicación de tests y migraciones.
   - Commit: `feat(config): add per-environment settings and resolver`
