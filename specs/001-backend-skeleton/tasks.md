@@ -28,7 +28,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(core): enable postgis in an isolated test database`
   - Hecho cuando: el test de distancia Madrid-Barcelona pasa (505 km ±1 %), el de nombre de BD y el de la guarda también; `makemigrations --check --dry-run` está limpio; `migrate` en desarrollo aplica 0001.
 
-- [ ] **T6. Respuestas de error genéricas y cookies endurecidas.** RF-16, RF-21, RF-23, RF-24, RF-25
+- [x] **T6. Respuestas de error genéricas y cookies endurecidas.** RF-16, RF-21, RF-23, RF-24, RF-25
   - Urlconf y vistas de test; cookies en `base.py` y `production.py`; `django.contrib.sessions` (migración aprobada, D11).
   - Commit: `feat(config): harden error responses and cookies`
   - Hecho cuando: 400, 404, 405 y 500 son genéricos y sin marcadores prohibidos; `sessionid` lleva `HttpOnly` y `SameSite=Lax`; `csrftoken` no lleva `HttpOnly` y sí `SameSite=Lax`; con los valores de producción ambas llevan `Secure`. Prueba de mecanismo: quitar `CommonMiddleware` hace fallar RF-16, y después se restaura.

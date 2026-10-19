@@ -7,16 +7,25 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DEBUG = False
 
 INSTALLED_APPS = [
+    "django.contrib.sessions",
     "django.contrib.gis",
     "apps.core",
 ]
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
+    "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
+
+# La cookie CSRF debe poder leerla el frontend; la de sesión, no
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = False
+CSRF_USE_SESSIONS = False
+SESSION_COOKIE_SAMESITE = "Lax"
+CSRF_COOKIE_SAMESITE = "Lax"
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"

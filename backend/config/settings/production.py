@@ -9,6 +9,9 @@ _config = load_production_config()
 parse_bool("DJANGO_DEBUG", read_optional(None, "DJANGO_DEBUG"))
 DEBUG = False
 
+SESSION_COOKIE_SECURE = True
+CSRF_COOKIE_SECURE = True
+
 SECRET_KEY = _config.secret_key
 ALLOWED_HOSTS = list(_config.allowed_hosts)
 
