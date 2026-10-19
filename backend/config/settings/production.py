@@ -1,4 +1,5 @@
 from config.env import load_production_config, parse_bool, read_optional
+from config.log_redaction import build_production_logging
 from config.settings.base import *  # noqa: F403
 from config.settings.base import build_database
 
@@ -22,3 +23,5 @@ DATABASES = build_database(
     host=_config.db_host,
     port=_config.db_port,
 )
+
+LOGGING = build_production_logging((_config.secret_key, _config.db_password))

@@ -1,11 +1,9 @@
 import pytest
 from django.conf import settings as django_settings
 
-from config.tests.conftest import DEVELOPMENT_ENVIRON
-from config.tests.test_production import VALID_ENVIRON
+from config.tests.conftest import DEVELOPMENT_ENVIRON, PRODUCTION_ENVIRON
 
 FORBIDDEN_MARKERS = ("Traceback", "/app/", "SELECT", "RuntimeError", "missing-route")
-PRODUCTION_ENVIRON = {k: v for k, v in VALID_ENVIRON.items() if k != "DJANGO_ENV"}
 
 
 @pytest.fixture

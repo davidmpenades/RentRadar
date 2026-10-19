@@ -6,18 +6,8 @@ import pytest
 from django.conf import settings
 from django.core.exceptions import ImproperlyConfigured
 
-SECRET_SENTINEL = "sentinel-secret-key-" + "k" * 40
-PASSWORD_SENTINEL = "sentinel-db-password-xyz"
-VALID_ENVIRON = {
-    "DJANGO_ENV": "production",
-    "DJANGO_SECRET_KEY": SECRET_SENTINEL,
-    "DJANGO_ALLOWED_HOSTS": "rentradar.example,.example.com",
-    "DB_HOST": "sentinel-db-host",
-    "DB_PORT": "5432",
-    "DB_NAME": "sentinel_db",
-    "DB_USER": "sentinel_user",
-    "DB_PASSWORD": PASSWORD_SENTINEL,
-}
+from config.tests.conftest import PASSWORD_SENTINEL, SECRET_SENTINEL, VALID_ENVIRON
+
 REQUIRED = [name for name in VALID_ENVIRON if name != "DJANGO_ENV"]
 SENTINELS = (SECRET_SENTINEL, PASSWORD_SENTINEL, "sentinel-db-host", "sentinel_user")
 

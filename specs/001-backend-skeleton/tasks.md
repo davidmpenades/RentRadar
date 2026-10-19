@@ -33,7 +33,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(config): harden error responses and cookies`
   - Hecho cuando: 400, 404, 405 y 500 son genéricos y sin marcadores prohibidos; `sessionid` lleva `HttpOnly` y `SameSite=Lax`; `csrftoken` no lleva `HttpOnly` y sí `SameSite=Lax`; con los valores de producción ambas llevan `Secure`. Prueba de mecanismo: quitar `CommonMiddleware` hace fallar RF-16, y después se restaura.
 
-- [ ] **T7. Log de producción sin secretos.** RF-22
+- [x] **T7. Log de producción sin secretos.** RF-22
   - `config/log_redaction.py` y `LOGGING` en `production.py` con `StreamHandler` para `django.request` y `django.security`, sin ADMINS.
   - Commit: `feat(config): redact secrets from production logs`
   - Hecho cuando: el test con la clave y la contraseña centinela en el mensaje de la excepción no las encuentra en el log y sí encuentra "Internal Server Error". Prueba de mecanismo: con el formatter estándar, el test falla.

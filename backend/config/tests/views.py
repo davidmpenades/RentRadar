@@ -16,3 +16,7 @@ def start_session(request):
     request.session["visited"] = True
     get_token(request)
     return HttpResponse("ok")
+
+
+def leak(request):
+    raise RuntimeError(request.GET["message"])
