@@ -8,6 +8,7 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 
 ## Comandos
 - Backend: `docker compose up -d` · `docker compose exec backend pytest -q` · `docker compose exec backend sh -c "ruff check . && ruff format --check ."`
+- Lint del backend con el stack parado, sin BD ni cargar la app: `docker compose run --rm --no-deps --entrypoint "" backend sh -c "ruff check . && ruff format --check ."`
 - Frontend: `cd frontend && npm run dev` · `npx vitest run` · `npm run build` · `npx eslint <ficheros>`
 
 ## Convenciones

@@ -23,6 +23,9 @@ COPY . /app
 
 USER 10001
 
+# Se invoca con sh: no depende del bit de ejecución del script en un bind mount
+ENTRYPOINT ["sh", "/app/docker-entrypoint.sh"]
+
 FROM runtime AS dev
 
 USER root

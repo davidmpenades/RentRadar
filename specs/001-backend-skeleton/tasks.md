@@ -38,7 +38,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(config): redact secrets from production logs`
   - Hecho cuando: el test con la clave y la contraseña centinela en el mensaje de la excepción no las encuentra en el log y sí encuentra "Internal Server Error". Prueba de mecanismo: con el formatter estándar, el test falla.
 
-- [ ] **T8. Espera a la base de datos al arrancar.** RF-1, RF-3, RF-4
+- [x] **T8. Espera a la base de datos al arrancar.** RF-1, RF-3, RF-4
   - `apps/core/db_wait.py`, comando `wait_for_db` y `docker-entrypoint.sh` con `ENTRYPOINT` en el Dockerfile.
   - Commit: `feat(core): wait for the database on startup`
   - Hecho cuando: pasan los tests de espera con éxito tardío y de plazo vencido (con reloj falso) y el del comando con centinelas de host y usuario; `docker compose up -d` desde cero arranca la aplicación; con la BD parada el contenedor falla a los 60 s con el mensaje fijo.
