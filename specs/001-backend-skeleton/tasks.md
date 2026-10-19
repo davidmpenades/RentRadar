@@ -23,7 +23,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(config): reject unsafe production configuration`
   - Hecho cuando: cada caso inseguro sale con código ≠0, nombra la variable y ningún centinela aparece en stdout ni stderr; una configuración válida de centinelas pasa `manage.py check` con código 0; `DEBUG` es `False` en producción con `DJANGO_DEBUG=true`.
 
-- [ ] **T5. BD de test aislada con PostGIS.** RF-5, RF-17, RF-34
+- [x] **T5. BD de test aislada con PostGIS.** RF-5, RF-17, RF-34
   - App `apps/core` (`name = "apps.core"`) con `0001_postgis_extension` (aprobada, revisada con `sqlmigrate`), `NAME` y `TEST["NAME"]` literales y guarda en `conftest.py`. Reiniciar el backend al añadir la app.
   - Commit: `feat(core): enable postgis in an isolated test database`
   - Hecho cuando: el test de distancia Madrid-Barcelona pasa (505 km ±1 %), el de nombre de BD y el de la guarda también; `makemigrations --check --dry-run` está limpio; `migrate` en desarrollo aplica 0001.

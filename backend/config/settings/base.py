@@ -8,6 +8,7 @@ DEBUG = False
 
 INSTALLED_APPS = [
     "django.contrib.gis",
+    "apps.core",
 ]
 
 MIDDLEWARE = [
