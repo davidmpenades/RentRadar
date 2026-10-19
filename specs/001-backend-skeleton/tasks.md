@@ -43,7 +43,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `feat(core): wait for the database on startup`
   - Hecho cuando: pasan los tests de espera con éxito tardío y de plazo vencido (con reloj falso) y el del comando con centinelas de host y usuario; `docker compose up -d` desde cero arranca la aplicación; con la BD parada el contenedor falla a los 60 s con el mensaje fijo.
 
-- [ ] **T9. Plantilla y lector único del entorno.** RF-26, RF-27, RF-28
+- [x] **T9. Plantilla y lector único del entorno.** RF-26, RF-27, RF-28
   - Tests de comparación con la plantilla montada en `/.env.example`, test AST y valores `insecure-`.
   - Commit: `test(config): check env template against variables read`
   - Hecho cuando: los tests pasan. Prueba de mecanismo: añadir una variable a `KNOWN_VARIABLES` sin ponerla en la plantilla hace fallar el test, y un `os.getenv` fuera de `env.py` hace fallar el AST; después se restaura.
