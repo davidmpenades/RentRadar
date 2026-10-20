@@ -48,7 +48,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `test(config): check env template against variables read`
   - Hecho cuando: los tests pasan. Prueba de mecanismo: añadir una variable a `KNOWN_VARIABLES` sin ponerla en la plantilla hace fallar el test, y un `os.getenv` fuera de `env.py` hace fallar el AST; después se restaura.
 
-- [ ] **T10. Ejecución de tests, lint y aislamiento de red.** RF-6, RF-33, RF-35, RNF aislamiento
+- [x] **T10. Ejecución de tests, lint y aislamiento de red.** RF-6, RF-33, RF-35, RNF aislamiento
   - Fixture autouse de red en `conftest.py`, test `geteuid`, y subprocesos de pytest y ruff.
   - Commit: `test: cover test runner, linter and network isolation`
   - Hecho cuando: el subproceso de pytest con un test que falla y sin `DJANGO_ENV` sale con código ≠0; ruff sale con ≠0 sobre un fichero con infracciones y con 0 sobre el backend; `create_connection` a `example.com` falla en un test; toda la suite y el lint están en verde.
