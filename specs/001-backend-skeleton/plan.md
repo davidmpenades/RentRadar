@@ -111,7 +111,7 @@ No aplica: no hay interfaz de usuario. Los mensajes para el desarrollador van en
 ## Riesgos
 | Riesgo | Mitigación |
 |---|---|
-| PostGIS 3.6 y PG18 fuera del rango declarado por Django 5.2 | El test de RF-5 corre en cada suite; vuelta atrás documentada en D2 |
+| PostGIS 3.6 fuera del rango declarado por Django 5.2 | El test de RF-5 corre en cada suite; vuelta atrás documentada en D2 |
 | GeoDjango no encuentra `libgdal.so.36` o `libgeos_c` sin los paquetes `-dev` | T1 comprueba `gdal_version()` y `geos_version()`. Si falla, `GDAL_LIBRARY_PATH` y `GEOS_LIBRARY_PATH` literales en `base.py` (no por entorno) |
 | Valores filtrados en mensajes o trazas (`int()`, `ipaddress`, psycopg) | `raise … from None`, mensajes con solo nombres, `manage.py` sin traza, tests en subproceso con centinelas |
 | `ManagementUtility` captura `ImproperlyConfigured` en algunos subcomandos | `manage.py` fuerza la carga de settings dentro de su propio `try` antes de `execute_from_command_line` |
