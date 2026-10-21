@@ -7,7 +7,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Constitución aprobada en docs/constitution.md.
 - Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
 - Spec 001-backend-skeleton completada y validada (evidencia en specs/001-backend-skeleton/validation.md); PR #2 mergeado en dev.
-- 002-quality-gates (CI mínimo: GitHub Actions + Compose, lint y tests) implementada en feature/002-quality-gates (T1 test de migraciones, T2 ci.yml); pendiente validarla en GitHub (specs/002-quality-gates/validation.md). Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior.
+- 002-quality-gates (CI mínimo: GitHub Actions + Compose, lint y tests) implementada y validada en GitHub (specs/002-quality-gates/validation.md); pendiente de que el usuario mergee la PR #3 a dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior.
 - 003-health-checks aplazada hasta la spec de despliegue.
 
 ## Decisiones (y por qué)
@@ -26,6 +26,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
 - Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
 - La evidencia de las comprobaciones manuales de cada spec se registra en specs/NNN/validation.md, con fecha, orden y resultado.
+- git push está denegado a los agentes en .claude/settings.json; los push los hace el usuario.
 
 ## Riesgos conocidos (detalle en la skill indicada)
 - Backend (Nominatim, 403/401 con sesión, locks de pip, caché por proceso): ver skill django-drf.
@@ -34,16 +35,15 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Leaflet captura eventos de puntero, si se usa Leaflet: los menús que cierran al hacer clic fuera escuchan pointerdown en fase de captura. → react-ts
 - Las afirmaciones de un agente se comprueban contra el código antes de darlas por buenas.
 - Montaje de un fichero individual (./.env.example): un `sed -i` en el host cambia el inode y el contenedor sigue viendo el antiguo; se arregla recreando el contenedor.
-- Contrato para la 002: el fixture de red de backend/conftest.py bloquea también el loopback; un test con servidor local necesita una excepción explícita.
-- Contrato para la 002: el test de geteuid (== 10001) exige ejecutar los tests dentro del contenedor.
+- Tests: solo dentro del contenedor (geteuid == 10001) y con el loopback bloqueado por el fixture de red.
 
 ## Aprendizajes de este proyecto
 - El backend postgis de Django crea la extensión por su cuenta (prepare_database, llamado desde migrate); la migración 0001 sirve para BD gestionadas.
 
 ## Próximos pasos
-- Validar la 002 con ejecuciones reales (PR hacia dev, ci/red-check); requiere orden de push. Tras ello, pasar la spec a implementada y abrir la 004 (User custom y Asset).
-- Ajuste manual del propietario: protección de rama de dev en GitHub cuando el CI esté en verde; aprobación de workflows de forks.
-- Contrato para la 004: los tests de modelos nuevos exigen su migración (lo vigila config/tests/test_migrations.py); actions/checkout@v7 y requisitos de runner por confirmar en la primera ejecución.
+- Abrir la 004 (User custom y Asset). Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT para todos o sesión web + JWT móvil), formato de errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web.
+- Ajuste manual del propietario: protección de rama de dev en GitHub (el CI ya está en verde); aprobación de workflows de forks.
+- Contrato para la 004: los tests de modelos nuevos exigen su migración (lo vigila config/tests/test_migrations.py).
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico, DB_PASSWORD de 16 caracteres como mínimo en producción (cambio de spec con /sdd-change).
