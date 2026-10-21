@@ -1,7 +1,10 @@
+from datetime import UTC
+
 import pytest
 from django.core.exceptions import ImproperlyConfigured
+from django.utils import timezone as django_timezone
 
-from config.tests.conftest import DEVELOPMENT_ENVIRON
+from config.tests.conftest import DEVELOPMENT_ENVIRON, PRODUCTION_ENVIRON
 
 
 @pytest.mark.parametrize(
@@ -40,11 +43,19 @@ def test_non_boolean_debug_names_the_variable(load_settings, env):
         load_settings(env, DJANGO_DEBUG="yes", **DEVELOPMENT_ENVIRON)
 
 
-@pytest.mark.parametrize("env", ["development", "test"])
+@pytest.mark.parametrize("env", ["development", "test", "production"])
 def test_time_and_language_are_fixed(load_settings, env):
-    settings = load_settings(env, **DEVELOPMENT_ENVIRON)
+    environ = PRODUCTION_ENVIRON if env == "production" else DEVELOPMENT_ENVIRON
+    settings = load_settings(env, **environ)
 
     assert settings.USE_TZ is True
     assert settings.TIME_ZONE == "UTC"
     assert settings.LANGUAGE_CODE == "es"
     assert settings.USE_I18N is True
+
+
+def test_now_is_timezone_aware_and_utc():
+    now = django_timezone.now()
+
+    assert now.tzinfo is not None
+    assert now.tzinfo == UTC

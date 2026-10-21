@@ -71,3 +71,7 @@ def test_secret_examples_are_marked_insecure(sections):
 def test_backend_examples_are_readable_and_not_empty(sections):
     for name, (value, _) in sections[BACKEND_SECTION].items():
         assert READABLE_VALUE.match(value), name
+
+
+def test_backend_template_enables_debug(sections):
+    assert sections[BACKEND_SECTION]["DJANGO_DEBUG"][0] == "true"

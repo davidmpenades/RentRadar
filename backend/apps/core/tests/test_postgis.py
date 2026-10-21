@@ -27,3 +27,9 @@ def test_postgis_comes_from_core_migration():
             " WHERE app = 'core' AND name = '0001_postgis_extension'"
         )
         assert cursor.fetchone() is not None
+
+
+# Vigila el riesgo del plan: Django 5.2 declara PostGIS 3.1-3.4 y usamos 3.6
+@pytest.mark.django_db
+def test_django_backend_reports_postgis_3_6_or_later():
+    assert connection.ops.postgis_version_tuple()[1:3] >= (3, 6)
