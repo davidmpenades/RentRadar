@@ -1,7 +1,7 @@
 # Tareas 002 — Integración continua mínima
 Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose exec backend sh -c "ruff check . && ruff format --check ."` en verde. Test primero, fallando por la razón esperada. Sin `migrate` ni pushes sin orden explícita.
 
-- [ ] **T1. El test de migraciones pendientes.** RF-7
+- [x] **T1. El test de migraciones pendientes.** RF-7
   - Qué (ficheros): crea `backend/config/tests/test_migrations.py`. No toca nada más.
   - Por qué: la constitución (punto 4) exige que el test falle antes de pasar. Se hace en proceso con `call_command` y no por subproceso con `manage.py`, que usaría `DJANGO_ENV=development` y la BD de desarrollo, saltándose la guarda de `conftest.py`. Se marca `django_db` ya, porque `sessions` ya provoca acceso a BD. Alternativa descartada: marcarlo después y arriesgar un `RuntimeError`.
   - RF que cubre: RF-7.

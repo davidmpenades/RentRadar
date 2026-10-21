@@ -1,5 +1,5 @@
 # Spec 002 — Integración continua mínima
-Estado: aprobada
+Estado: en curso
 Depende de: spec 001 (esqueleto del backend), en concreto de RF-33 (la suite de tests se ejecuta sin indicar el entorno, en `test`, y falla con código distinto de cero), RF-35 (el análisis estático revisa estilo, errores comunes y formato sin cargar la aplicación) y RF-26 y RF-27 (la plantilla de variables incluye todas las que lee el backend, con valores de ejemplo legibles y no aleatorios).
 
 ## Contexto y objetivo
