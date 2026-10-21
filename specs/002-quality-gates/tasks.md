@@ -14,7 +14,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
   - Commit: `test(core): fail the suite on missing migrations`
   - Hecho cuando: el modelo temporal hace fallar el test con el mensaje propio; sin él, el test pasa; `pytest -q` completo y `ruff check . && ruff format --check .` en verde; el modelo temporal ya no está en el árbol de trabajo y `git status` solo muestra el test nuevo.
 
-- [ ] **T2. El flujo de CI con tres pasos de verificación y limpieza.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6
+- [x] **T2. El flujo de CI con tres pasos de verificación y limpieza.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6
   - Qué (ficheros): crea `.github/workflows/ci.yml`, con el orden de pasos literal del plan (Checkout, Prepare, Lint, Test, Clean up) y la cabecera descrita.
   - Por qué: es el único artefacto que exige la spec. Se elige `run` y no `up -d` + `exec`, por las razones del plan. La limpieza es un paso propio con `if: always()` y `if [ -f .env ]`, para que ni la limpieza oculte el fallo real ni falle por falta de `.env`. Alternativas descartadas: `|| true`, `hashFiles`, un test que lea el YAML (el backend no monta `.github/` y PyYAML sería una dependencia nueva), `actionlint` (dependencia nueva), ensayo local en copia limpia (lo sustituye la primera ejecución real en GitHub).
   - RF que cubre: RF-1 a RF-6, más los RNF de seguridad y coherencia. RF-7 ya está en T1.
