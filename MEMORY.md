@@ -3,12 +3,11 @@ Memoria del proyecto entre sesiones. Máximo ~50 líneas: resume o elimina lo qu
 Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitution.md.
 
 ## Estado actual
-- Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
-- Constitución aprobada en docs/constitution.md.
-- Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
-- Spec 001-backend-skeleton completada y validada (evidencia en specs/001-backend-skeleton/validation.md); PR #2 mergeado en dev.
-- 002-quality-gates (CI mínimo: GitHub Actions + Compose, lint y tests) implementada y validada en GitHub (specs/002-quality-gates/validation.md); pendiente de que el usuario mergee la PR #3 a dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior.
+- Arnés montado (AGENTS.md, MEMORY.md, MCPs Context7 y Chrome DevTools, skills de terceros) con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo. Constitución aprobada en docs/constitution.md.
+- 001-backend-skeleton y 002-quality-gates (CI mínimo) completadas y validadas; PR #3 mergeada en dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior.
 - 003-health-checks aplazada hasta la spec de despliegue.
+- 004 (usuarios y categorías) aprobada y planificada en 9 tareas; siguiente: T1.
+- 005 (assets y privacidad de ubicación) en borrador, pendiente de /sdd-clarify.
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
@@ -27,8 +26,10 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
 - La evidencia de las comprobaciones manuales de cada spec se registra en specs/NNN/validation.md, con fecha, orden y resultado.
 - git push está denegado a los agentes en .claude/settings.json; los push los hace el usuario.
+- En la 004, Claude escribe tests, servicios, migraciones y core; el usuario escribe models.py, normalize_email y normalize_name.
 
 ## Riesgos conocidos (detalle en la skill indicada)
+- Una sesión en segundo plano no puede editar dev; para implementar, sesión en primer plano.
 - Backend (Nominatim, 403/401 con sesión, locks de pip, caché por proceso): ver skill django-drf.
 - jsdom no calcula layout: el overflow y el responsive se verifican en navegador real. → testing
 - Mocks de fetch: respetar AbortSignal y ordenar las claves de más a menos específica. → testing
@@ -41,7 +42,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - El backend postgis de Django crea la extensión por su cuenta (prepare_database, llamado desde migrate); la migración 0001 sirve para BD gestionadas.
 
 ## Próximos pasos
-- Abrir la 004 (User custom y Asset). Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT para todos o sesión web + JWT móvil), formato de errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web.
+- Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT o sesión web + JWT móvil), errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web.
 - Ajuste manual del propietario: protección de rama de dev en GitHub (el CI ya está en verde); aprobación de workflows de forks.
 - Contrato para la 004: los tests de modelos nuevos exigen su migración (lo vigila config/tests/test_migrations.py).
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
