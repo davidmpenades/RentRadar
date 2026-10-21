@@ -1,6 +1,6 @@
 # Spec 003 — Comprobaciones de salud
-Estado: borrador
-Depende de: spec 001 (esqueleto del backend). Se implementa después de la 002.
+Estado: aplazada hasta la spec de despliegue
+Depende de: spec 001 (esqueleto del backend). No se implementa hasta la spec de despliegue.
 
 ## Contexto y objetivo
 Un orquestador o un sistema de monitorización necesita dos respuestas distintas:

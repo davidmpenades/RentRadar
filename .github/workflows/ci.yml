@@ -1,0 +1,45 @@
+name: CI
+
+on:
+  push:
+    branches: [dev, "feature/**"]
+  pull_request:
+    branches: [dev]
+    types: [opened, synchronize, reopened]
+
+permissions:
+  contents: read
+
+# Se agrupa por ref: el push y la PR de una rama no se cancelan entre sí
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  backend-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Prepare
+        run: |
+          cp .env.example .env
+          docker compose build
+
+      - name: Lint
+        run: |
+          docker compose run --rm -T --no-deps --entrypoint "" backend sh -c "ruff check . && ruff format --check ."
+
+      - name: Test
+        run: |
+          docker compose run --rm -T backend pytest -q
+
+      # Sin .env nada se construyó ni arrancó, y down -v fallaría al interpolar
+      - name: Clean up
+        if: always()
+        run: |
+          if [ -f .env ]; then docker compose down -v; fi
