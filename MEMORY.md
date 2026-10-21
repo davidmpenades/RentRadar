@@ -7,9 +7,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Constitución aprobada en docs/constitution.md.
 - Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
 - Spec 001-backend-skeleton completada y validada (evidencia en specs/001-backend-skeleton/validation.md); PR #2 mergeado en dev.
-- 002-quality-gates reducida a un CI mínimo (GitHub Actions + Compose, lint y tests); pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior. Pendiente de clarificar.
+- 002-quality-gates (CI mínimo: GitHub Actions + Compose, lint y tests) implementada en feature/002-quality-gates (T1 test de migraciones, T2 ci.yml); pendiente validarla en GitHub (specs/002-quality-gates/validation.md). Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior.
 - 003-health-checks aplazada hasta la spec de despliegue.
-- Siguiente tras la 002: 004 con User custom y Asset.
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
@@ -42,8 +41,9 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - El backend postgis de Django crea la extensión por su cuenta (prepare_database, llamado desde migrate); la migración 0001 sirve para BD gestionadas.
 
 ## Próximos pasos
-- Clarificar la 002 y después abrir la 004 (User custom y Asset).
-- Ajuste manual del propietario: protección de rama de dev en GitHub cuando el CI esté en verde.
+- Validar la 002 con ejecuciones reales (PR hacia dev, ci/red-check); requiere orden de push. Tras ello, pasar la spec a implementada y abrir la 004 (User custom y Asset).
+- Ajuste manual del propietario: protección de rama de dev en GitHub cuando el CI esté en verde; aprobación de workflows de forks.
+- Contrato para la 004: los tests de modelos nuevos exigen su migración (lo vigila config/tests/test_migrations.py); actions/checkout@v7 y requisitos de runner por confirmar en la primera ejecución.
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico, DB_PASSWORD de 16 caracteres como mínimo en producción (cambio de spec con /sdd-change).
