@@ -16,7 +16,7 @@ Para la base de datos se usa PostGIS 18-3.6 en Docker Compose. La extensión se 
 | `docs/architecture.md` | Crea | Estructura del backend: `config/` (settings, env, logging), `apps/<app>/` por dominio, capas (servicios, selectores, serializers, vistas), ubicación de tests y migraciones | — |
 | `backend/Dockerfile` | Crea | `python:3.13-slim-trixie` con `libgdal36`, `libgeos-c1t64` y `libproj25` (`--no-install-recommends`). Etapa `runtime` (requirements.txt) y etapa `dev` (+ requirements-dev.txt), `pip install --require-hashes`, `PYTHONDONTWRITEBYTECODE=1`, código propiedad de root, `USER 10001`, `ENTRYPOINT` | RF-6, RNF reproducibilidad |
 | `backend/.dockerignore` | Crea | Excluye `.env*`, `.git`, cachés y `__pycache__` | RNF seguridad |
-| `backend/requirements.in` / `.txt` | Crea | Django 5.2.17 y psycopg[binary] 3.3.x; el `.txt` lleva hashes (pip-compile) | RNF reproducibilidad |
+| `backend/requirements.in` / `.txt` | Crea | Django 5.2.18 y psycopg[binary] 3.3.x; el `.txt` lleva hashes (pip-compile) | RNF reproducibilidad |
 | `backend/requirements-dev.in` / `.txt` | Crea | pytest, pytest-django 4.14.0 y ruff 0.16.10, con `-c requirements.txt` y hashes | RF-33, RF-35 |
 | `backend/pyproject.toml` | Crea | `[tool.ruff]` con select E, F, I, UP, B, SIM y DJ, más `[tool.ruff.format]`. `[tool.pytest.ini_options]` con `addopts = "--ds=config.settings.test -p no:cacheprovider"`, sin `-l` ni `--reuse-db` | RF-33, RF-35 |
 | `backend/docker-entrypoint.sh` | Crea | `set -eu`, `python manage.py wait_for_db` y `exec "$@"`. Sin `set -x`, sin `env` y sin imprimir variables | RF-3, RF-4 |
@@ -111,7 +111,7 @@ No aplica: no hay interfaz de usuario. Los mensajes para el desarrollador van en
 ## Riesgos
 | Riesgo | Mitigación |
 |---|---|
-| PostGIS 3.6 y PG18 fuera del rango declarado por Django 5.2 | El test de RF-5 corre en cada suite; vuelta atrás documentada en D2 |
+| PostGIS 3.6 fuera del rango declarado por Django 5.2 | El test de RF-5 corre en cada suite; vuelta atrás documentada en D2 |
 | GeoDjango no encuentra `libgdal.so.36` o `libgeos_c` sin los paquetes `-dev` | T1 comprueba `gdal_version()` y `geos_version()`. Si falla, `GDAL_LIBRARY_PATH` y `GEOS_LIBRARY_PATH` literales en `base.py` (no por entorno) |
 | Valores filtrados en mensajes o trazas (`int()`, `ipaddress`, psycopg) | `raise … from None`, mensajes con solo nombres, `manage.py` sin traza, tests en subproceso con centinelas |
 | `ManagementUtility` captura `ImproperlyConfigured` en algunos subcomandos | `manage.py` fuerza la carga de settings dentro de su propio `try` antes de `execute_from_command_line` |
@@ -153,7 +153,7 @@ No aplica: no hay interfaz de usuario. Los mensajes para el desarrollador van en
 | RF-26 | pytest: `KNOWN_VARIABLES` coincide con las claves del bloque del backend de la plantilla. Test AST: `os.environ` y `os.getenv` solo aparecen en `config/env.py` (excluidos los tests) |
 | RF-27 | pytest: la clave y la contraseña de la plantilla contienen `insecure-` |
 | RF-28 | pytest: el bloque tras el marcador "Ajeno al backend" se ignora y `CONTEXT7_API_KEY` está vacía |
-| RF-29 | pytest: `USE_TZ` en los tres módulos; `timezone.now().tzinfo` es UTC |
+| RF-29 | pytest: `USE_TZ` en los tres módulos; `timezone.now()` es aware |
 | RF-30 | pytest: `TIME_ZONE == "UTC"` en los tres módulos |
 | RF-31 | pytest: `LANGUAGE_CODE == "es"` en los tres módulos |
 | RF-32 | pytest: `USE_I18N` en los tres módulos |
@@ -164,14 +164,14 @@ No aplica: no hay interfaz de usuario. Los mensajes para el desarrollador van en
 | RNF reproducibilidad | Validación: `pip install --require-hashes` en el build; lock sin entradas sin hash |
 
 ## Afirmaciones no verificadas
-- Django 5.2.17 funciona con PostGIS 3.6, PG18, GDAL de trixie (libgdal36, 3.10.x), GEOS 3.13 y PROJ 9.x. Django no declara PostGIS 3.6.
-- `ctypes.util.find_library` encuentra `libgdal.so.36` y `libgeos_c.so.1` en slim sin los paquetes `-dev`, a través de `ldconfig`.
-- `manage.py check` en producción no abre conexión a la BD.
-- pytest-django, en modo no interactivo, sustituye una BD de test huérfana sin preguntar.
-- La migración `CreateExtension` funciona sobre la BD de test creada desde `template1` con el usuario `POSTGRES_USER` (superusuario en la imagen).
+- ✅ Verificada (`apps/core/tests/test_postgis.py`): la suite pasa con Django 5.2.18, PostGIS 3.6, GDAL y GEOS de trixie. Django no declara PostGIS 3.6.
+- ✅ Verificada (T1): `gdal_version()` y `geos_version()` imprimen las versiones en la imagen slim sin los paquetes `-dev`.
+- ✅ Verificada (`config/tests/test_production.py`): `manage.py check` en producción no abre conexión a la BD; pasa con un host inexistente.
+- ✅ Verificada (RF-17 en `validation.md`): pytest-django, en modo no interactivo, sustituye una BD de test huérfana sin preguntar.
+- ✅ Verificada (T5, `apps/core/tests/test_postgis.py`): la migración `CreateExtension` funciona sobre la BD de test creada desde `template1` con el usuario `POSTGRES_USER` (superusuario en la imagen) (no-op: prepare_database ya la ha creado).
 - La imagen postgis/postgis:18-3.6 crea la extensión en `POSTGRES_DB` en initdb, y `IF NOT EXISTS` la hace idempotente.
-- `dictConfig` con `LOGGING` explícito sustituye los handlers de `DEFAULT_LOGGING` en `django` y `django.request`, y no queda `mail_admins` activo.
-- Parchear `socket` no afecta a la conexión de psycopg con libpq.
+- ✅ Verificada (`config/tests/test_log_redaction.py`): `dictConfig` con `LOGGING` explícito deja solo el handler que redacta y sin `ADMINS`, así que no queda `mail_admins` activo.
+- ✅ Verificada (suite con el fixture de red de `conftest.py`): parchear `socket` no afecta a la conexión de psycopg con libpq.
 - `RUFF_NO_CACHE=true` desactiva la caché de ruff en la versión 0.16.10.
 
 ## Skills que aplican

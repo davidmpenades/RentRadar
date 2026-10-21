@@ -21,8 +21,8 @@ services:
     build:
       context: ./backend
       target: dev
-    # Provisional hasta que T3/T8 arranquen la aplicación
-    command: ["sleep", "infinity"]
+    # 0.0.0.0 dentro del contenedor; fuera solo se publica en 127.0.0.1 (RF-7)
+    command: ["python", "manage.py", "runserver", "0.0.0.0:8000"]
     environment:
       DJANGO_ENV: ${DJANGO_ENV:?falta DJANGO_ENV en .env (copia .env.example)}
       DJANGO_SECRET_KEY: ${DJANGO_SECRET_KEY:?falta DJANGO_SECRET_KEY en .env (copia .env.example)}

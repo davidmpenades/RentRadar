@@ -8,6 +8,8 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 
 ## Comandos
 - Backend: `docker compose up -d` · `docker compose exec backend pytest -q` · `docker compose exec backend sh -c "ruff check . && ruff format --check ."`
+- Lint del backend con el stack parado, sin BD ni cargar la app: `docker compose run --rm --no-deps --entrypoint "" backend sh -c "ruff check . && ruff format --check ."`
+- Órdenes del backend que escriben en el bind mount (`ruff format`, `makemigrations`): `docker compose exec -u "$(id -u)" backend …`, porque el UID 10001 no puede escribir.
 - Frontend: `cd frontend && npm run dev` · `npx vitest run` · `npm run build` · `npx eslint <ficheros>`
 
 ## Convenciones
