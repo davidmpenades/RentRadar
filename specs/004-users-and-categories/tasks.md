@@ -14,7 +14,7 @@ Antes de cada commit:
 
 Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo, órdenes de git que descarten cambios, push.
 
-- [ ] **T1. Caracteres de control y error de dominio.** RF-4, RF-12, RF-16
+- [x] **T1. Caracteres de control y error de dominio.** RF-4, RF-12, RF-16
   - Quién: Claude escribe `apps/core/text.py` y `apps/core/errors.py` (funciones puras) y sus tests en `apps/core/tests/`. La normalización del email no va aquí: vive en `UserManager`, que nace en T2.
   - Cómo se prueba:
     - Detección de Cc, incluidos `\x00` y tabulador interno.

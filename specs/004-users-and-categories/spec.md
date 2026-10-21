@@ -1,5 +1,5 @@
 # Spec 004 — Usuarios y categorías
-Estado: aprobada
+Estado: en curso
 Depende de: spec 001 (RF-29 y RF-30: fechas con zona horaria y UTC como referencia) y spec 002 (RF-7: los cambios de modelos sin migración hacen fallar los tests).
 
 ## Contexto y objetivo
