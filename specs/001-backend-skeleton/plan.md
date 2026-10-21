@@ -167,9 +167,9 @@ No aplica: no hay interfaz de usuario. Los mensajes para el desarrollador van en
 - ✅ Verificada (`apps/core/tests/test_postgis.py`): la suite pasa con Django 5.2.18, PostGIS 3.6, GDAL y GEOS de trixie. Django no declara PostGIS 3.6.
 - ✅ Verificada (T1): `gdal_version()` y `geos_version()` imprimen las versiones en la imagen slim sin los paquetes `-dev`.
 - ✅ Verificada (`config/tests/test_production.py`): `manage.py check` en producción no abre conexión a la BD; pasa con un host inexistente.
-- ✅ Verificada (RF-17 en la validación): pytest-django, en modo no interactivo, sustituye una BD de test huérfana sin preguntar.
-- ✅ Verificada (T5, `apps/core/tests/test_postgis.py`): la migración `CreateExtension` funciona sobre la BD de test creada desde `template1` con el usuario `POSTGRES_USER` (superusuario en la imagen).
-- La imagen postgis/postgis:18-3.6 crea la extensión en `POSTGRES_DB` en initdb, y `IF NOT EXISTS` la hace idempotente (no-op: prepare_database ya la ha creado).
+- ✅ Verificada (RF-17 en `validation.md`): pytest-django, en modo no interactivo, sustituye una BD de test huérfana sin preguntar.
+- ✅ Verificada (T5, `apps/core/tests/test_postgis.py`): la migración `CreateExtension` funciona sobre la BD de test creada desde `template1` con el usuario `POSTGRES_USER` (superusuario en la imagen) (no-op: prepare_database ya la ha creado).
+- La imagen postgis/postgis:18-3.6 crea la extensión en `POSTGRES_DB` en initdb, y `IF NOT EXISTS` la hace idempotente.
 - ✅ Verificada (`config/tests/test_log_redaction.py`): `dictConfig` con `LOGGING` explícito deja solo el handler que redacta y sin `ADMINS`, así que no queda `mail_admins` activo.
 - ✅ Verificada (suite con el fixture de red de `conftest.py`): parchear `socket` no afecta a la conexión de psycopg con libpq.
 - `RUFF_NO_CACHE=true` desactiva la caché de ruff en la versión 0.16.10.
