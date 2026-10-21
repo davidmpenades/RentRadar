@@ -6,7 +6,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Arnés montado: AGENTS.md, MEMORY.md, MCPs (Context7, Chrome DevTools) y skills de terceros.
 - Constitución aprobada en docs/constitution.md.
 - Arnés con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo.
-- Spec activa: 001-backend-skeleton, T1-T10 hechas en feature/001-backend-skeleton; falta /sdd-validate y actualizar docs/architecture.md.
+- Spec 001-backend-skeleton completada y validada (evidencia en specs/001-backend-skeleton/validation.md), pendiente de PR a dev. Siguiente: clarificar la 002.
 - Specs en borrador: 002-quality-gates (pre-commit, gitleaks, CI) y 003-health-checks (vida y preparación). Orden: 001, 002, 003.
 
 ## Decisiones (y por qué)
@@ -24,6 +24,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Ubicaciones en PostGIS geography; precios con importe y moneda.
 - Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
 - Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
+- La evidencia de las comprobaciones manuales de cada spec se registra en specs/NNN/validation.md, con fecha, orden y resultado.
 
 ## Riesgos conocidos (detalle en la skill indicada)
 - Backend (Nominatim, 403/401 con sesión, locks de pip, caché por proceso): ver skill django-drf.
@@ -39,8 +40,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - El backend postgis de Django crea la extensión por su cuenta (prepare_database, llamado desde migrate); la migración 0001 sirve para BD gestionadas.
 
 ## Próximos pasos
+- Clarificar 002 y 003.
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
-- Validar la 001 con /sdd-validate y actualizar docs/architecture.md (marcas T4/T5 y ficheros nuevos). Después, clarificar 002 y 003.
 - Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico, DB_PASSWORD de 16 caracteres como mínimo en producción (cambio de spec con /sdd-change).
 - Ubicación y privacidad: confirmar lo pendiente en docs/product.md (celda, profesionales, mapa). Hay reservas en el MVP: solicitud simple, el arrendatario pide fechas y el propietario acepta o rechaza; la dirección exacta se revela al confirmar.
