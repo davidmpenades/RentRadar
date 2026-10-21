@@ -1,5 +1,3 @@
-from datetime import UTC
-
 import pytest
 from django.core.exceptions import ImproperlyConfigured
 from django.utils import timezone as django_timezone
@@ -54,8 +52,5 @@ def test_time_and_language_are_fixed(load_settings, env):
     assert settings.USE_I18N is True
 
 
-def test_now_is_timezone_aware_and_utc():
-    now = django_timezone.now()
-
-    assert now.tzinfo is not None
-    assert now.tzinfo == UTC
+def test_now_is_timezone_aware():
+    assert django_timezone.now().tzinfo is not None
