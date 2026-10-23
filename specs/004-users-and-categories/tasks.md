@@ -25,7 +25,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(core): add control character rule and domain validation error`
   - Hecho cuando: los tests nuevos fallaron antes de existir las funciones y ahora pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T2. Modelo de usuario por email, normalización del email, instalación de auth y migración inicial.** RF-1, RF-2, RF-5, RF-7, RF-12
+- [x] **T2. Modelo de usuario por email, normalización del email, instalación de auth y migración inicial.** RF-1, RF-2, RF-5, RF-7, RF-12
   - Quién:
     - Claude escribe primero `apps/users/tests/test_models.py` (estructura de RF-1, `__str__` sin email, `DataError` de RF-5 en BD, `IntegrityError` de RF-7 con el nombre de la restricción y fechas con zona horaria) y `apps/users/tests/test_emails.py` (normalización: recorte con `str.strip()` incluido NBSP, NFKC, minúsculas enteras y el orden de los tres pasos).
     - El usuario escribe `apps/users/models.py`: `User` y `UserManager`, con `normalize_email` (el código que hace pasar `test_emails.py`), `get_by_natural_key` normalizando y sin los métodos de creación todavía.
@@ -46,6 +46,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Cómo se prueba:
     - Los casos de la Estrategia de tests para RF-1 (`authenticate`) a RF-10.
     - Carrera simulada con `full_clean` anulado: da `email_taken` y la conexión sigue usable.
+    - Un test fija que el duplicado exacto salta con la restricción `users_user_email_key` (nombre exacto), porque el servicio traduce por ese nombre.
     - `make_password` no se llama ante ningún rechazo.
     - Prueba de mecanismo de la captura con un test temporal sin commitear.
   - Qué toca revisar: el orden "validar todo, después hashear"; que el `raise` está fuera del `except`; la firma solo con nombre (RF-10).
