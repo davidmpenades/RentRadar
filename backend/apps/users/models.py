@@ -17,6 +17,12 @@ class UserManager(BaseUserManager):
     def get_by_natural_key(self, email):
         return super().get_by_natural_key(self.normalize_email(email))
 
+    def create_user(self, *, email, password):
+        # Import diferido: services importa User de este módulo
+        from apps.users import services
+
+        return services.create_user(email=email, password=password)
+
 
 class User(AbstractUser):
     username = None

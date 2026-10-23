@@ -81,11 +81,8 @@ def test_exact_duplicate_email_is_rejected_by_the_database():
     with pytest.raises(IntegrityError) as raised, transaction.atomic():
         User(email="ana@correo.es").save()
 
-    # Postgres no garantiza cuál de las dos restricciones salta primero
-    assert raised.value.__cause__.diag.constraint_name in {
-        EMAIL_KEY,
-        EMAIL_LOWER_UNIQUE,
-    }
+    # Nombre automático de unique=True: el servicio lo traduce por este nombre
+    assert raised.value.__cause__.diag.constraint_name == EMAIL_KEY
 
 
 @pytest.mark.django_db

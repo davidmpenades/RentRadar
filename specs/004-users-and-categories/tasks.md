@@ -39,7 +39,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(users): add email-based custom user model`
   - Hecho cuando: `pytest -q`, ruff, `manage.py check` y `makemigrations --check --dry-run` en verde; la migración solo crea `users_user` y sus tablas M2M.
 
-- [ ] **T3. Servicio de alta de usuarios.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10
+- [x] **T3. Servicio de alta de usuarios.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10
   - Quién:
     - Claude escribe primero `apps/users/tests/test_services.py` y después `apps/users/services.py` (`create_user`, mapa de códigos, guardado protegido) y `PASSWORD_HASHERS` en `settings/test.py` (D7).
     - El usuario añade a `UserManager.create_user` la delegación en el servicio, con un import diferido.
