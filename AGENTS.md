@@ -14,6 +14,7 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 
 ## Convenciones
 - Comentarios en castellano, de una línea y solo donde aporten contexto que el código no da.
+- Los comentarios explican el porqué con palabras; no citan identificadores de la spec (RF-x, Dx, principio x). La trazabilidad vive en specs/.
 - Conventional Commits en inglés, mensaje corto, un commit por cambio atómico. Sin Co-Authored-By ni firmas.
 
 ## Diseño de código
