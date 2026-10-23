@@ -88,7 +88,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(categories): add category model`
   - Hecho cuando: `pytest -q`, ruff, `manage.py check` y `makemigrations --check --dry-run` en verde.
 
-- [ ] **T7. Servicio de validación y guardado de categorías.** RF-13, RF-14, RF-15, RF-16, RF-17, RF-18, RF-23
+- [x] **T7. Servicio de validación y guardado de categorías.** RF-13, RF-14, RF-15, RF-16, RF-17, RF-18, RF-23
   - Quién:
     - Claude escribe primero `apps/categories/tests/test_models.py` (casos nuevos de `Category.normalize_name`: recorte con `str.strip()`, NFC y que no cambia mayúsculas) y `apps/categories/tests/test_services.py`.
     - El usuario escribe `Category.normalize_name` en `apps/categories/models.py` (el código que hace pasar esos tests; no requiere migración).

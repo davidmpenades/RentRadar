@@ -1,3 +1,5 @@
+import unicodedata
+
 from django.core.validators import RegexValidator
 from django.db import models
 from django.db.models.functions import Lower
@@ -29,3 +31,8 @@ class Category(models.Model):
 
     def __str__(self):
         return self.name
+
+    @staticmethod
+    def normalize_name(raw):
+        name = raw.strip()
+        return unicodedata.normalize("NFC", name)

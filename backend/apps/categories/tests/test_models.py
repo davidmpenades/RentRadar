@@ -138,3 +138,45 @@ def test_names_differing_only_in_case_are_rejected_by_the_database(other):
         Category(slug="camp", name=other).save()
 
     assert raised.value.__cause__.diag.constraint_name == NAME_LOWER_UNIQUE
+
+
+NORMALIZE_CASES = [
+    ("  Tienda  ", "Tienda"),
+    (" Jardín ", "Jardín"),
+    ("\tZona deportiva\n", "Zona deportiva"),
+    ("Jardín", "Jardín"),
+    ("PISCINA", "PISCINA"),
+    ("piscina", "piscina"),
+    ("ﬁesta", "ﬁesta"),
+    ("Zona  deportiva", "Zona  deportiva"),
+    ("   ", ""),
+    ("Tien\tda", "Tien\tda"),
+]
+NORMALIZE_IDS = [
+    "strips-spaces",
+    "strips-nbsp",
+    "strips-tab-and-newline",
+    "composes-nfc",
+    "keeps-uppercase",
+    "keeps-lowercase",
+    "uses-nfc-not-nfkc",
+    "keeps-inner-spaces",
+    "blank-becomes-empty",
+    "keeps-inner-control-character",
+]
+
+
+@pytest.mark.parametrize(("raw", "expected"), NORMALIZE_CASES, ids=NORMALIZE_IDS)
+def test_normalize_name(raw, expected):
+    assert Category.normalize_name(raw) == expected
+
+
+@pytest.mark.parametrize("raw", [raw for raw, _ in NORMALIZE_CASES])
+def test_normalize_name_is_idempotent(raw):
+    once = Category.normalize_name(raw)
+
+    assert Category.normalize_name(once) == once
+
+
+def test_normalize_name_counts_a_decomposed_accent_as_one_character():
+    assert len(Category.normalize_name("Jardín")) == len("Jardín")
