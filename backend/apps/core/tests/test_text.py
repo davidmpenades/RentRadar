@@ -15,7 +15,7 @@ def test_detects_control_characters(text):
 
 @pytest.mark.parametrize(
     "text",
-    ["", "ana@correo.es", "Jardín", "a b", "ñandú ☃"],
+    ["", "ana@correo.es", "Jardín", "a\u00a0b", "ñandú ☃"],
     ids=["empty", "plain", "accents", "nbsp", "unicode"],
 )
 def test_ignores_text_without_control_characters(text):

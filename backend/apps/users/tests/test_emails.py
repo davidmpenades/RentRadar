@@ -9,7 +9,7 @@ from apps.users.models import User, UserManager
         " Ana@Correo.ES\n",
         "\tana@correo.es",
         "ana@correo.es\r\n",
-        " ana@correo.es ",
+        "\u00a0ana@correo.es\u00a0",
         "  ana@correo.es  ",
     ],
 )
@@ -25,7 +25,7 @@ def test_normalize_email_lowercases_local_part_and_domain():
     ("raw", "expected"),
     [
         ("ａｎａ@correo.es", "ana@correo.es"),
-        ("ﬁna@correo.es", "fina@correo.es"),
+        ("\ufb01na@correo.es", "fina@correo.es"),
     ],
 )
 def test_normalize_email_applies_nfkc(raw, expected):
