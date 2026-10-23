@@ -4,6 +4,10 @@ target-version = "py313"
 [tool.ruff.lint]
 select = ["E", "F", "I", "UP", "B", "SIM", "DJ"]
 
+[tool.ruff.lint.per-file-ignores]
+# Las migraciones las genera Django: help_text largos y orden de imports propio
+"**/migrations/*.py" = ["E501", "I001"]
+
 [tool.ruff.format]
 
 [tool.pytest.ini_options]
