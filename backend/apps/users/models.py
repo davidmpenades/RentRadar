@@ -23,6 +23,12 @@ class UserManager(BaseUserManager):
 
         return services.create_user(email=email, password=password)
 
+    def create_superuser(self, *, email, password):
+        # Import diferido: services importa User de este módulo
+        from apps.users import services
+
+        return services.create_superuser(email=email, password=password)
+
 
 class User(AbstractUser):
     username = None

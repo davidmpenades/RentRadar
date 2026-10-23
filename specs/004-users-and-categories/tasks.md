@@ -53,7 +53,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(users): add user creation service`
   - Hecho cuando: los tests de RF-1 a RF-10 pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T4. Superusuario y cambio de email.** RF-2, RF-4, RF-6, RF-8, RF-11
+- [x] **T4. Superusuario y cambio de email.** RF-2, RF-4, RF-6, RF-8, RF-11
   - Quién:
     - Claude escribe primero `apps/users/tests/test_superuser.py` y los casos de cambio de email, y después `create_superuser` y `change_user_email` en el servicio.
     - El usuario añade a `UserManager.create_superuser` la delegación en el servicio.
@@ -119,5 +119,6 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     3. `showmigrations` y un recuento de las once categorías en desarrollo.
     4. `validation.md` con fecha, orden y resultado RF por RF; `docs/architecture.md` con las apps nuevas y `core/text.py` y `core/errors.py`.
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
+  - Riesgo aceptado de T4 que anotar en `validation.md`: si la fila del usuario ya se ha borrado, `change_user_email` lanza `DatabaseError` (sin el email) y la instancia conserva el email nuevo, porque el error no pasa por la restauración.
   - Commit: `docs(spec): record spec 004 validation`
   - Hecho cuando: cada RF de RF-1 a RF-23 tiene su test en verde (RF-22 en parte, como prevé la spec); la BD de desarrollo contiene las once categorías; `validation.md` termina con un veredicto.
