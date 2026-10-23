@@ -78,7 +78,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(config): keep credentials out of errors and logs`
   - Hecho cuando: `pytest -q` y ruff en verde; la prueba de mecanismo se registra en T9 para `validation.md`.
 
-- [ ] **T6. Modelo de categoría y migración inicial.** RF-13, RF-15, RF-17
+- [x] **T6. Modelo de categoría y migración inicial.** RF-13, RF-15, RF-17
   - Quién:
     - Claude escribe primero `apps/categories/tests/test_models.py`: slug único; `IntegrityError` por slug repetido y por nombre repetido con otras mayúsculas; `DataError` con slug de 51 y nombre de 61 (D1).
     - El usuario escribe `apps/categories/models.py`.
@@ -120,6 +120,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     4. `validation.md` con fecha, orden y resultado RF por RF; `docs/architecture.md` con las apps nuevas y `core/text.py` y `core/errors.py`.
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
   - Riesgo aceptado de T4 que anotar en `validation.md`: si la fila del usuario ya se ha borrado, `change_user_email` lanza `DatabaseError` (sin el email) y la instancia conserva el email nuevo, porque el error no pasa por la restauración.
+  - Riesgo a comprobar en T9: `LOWER` de PostgreSQL con tildes depende de la localización de la BD. Hay que verificar que el `LC_CTYPE` de la BD es UTF-8; si no, la unicidad de `Jardín` frente a `JARDÍN` no funcionaría. Los tests de T6 usan `Tienda` y `TIENDA` (ASCII) y no lo detectarían.
   - Pruebas de mecanismo para `validation.md`. Cada mutación se aplicó a mano o con un `conftest.py` temporal, se revirtió y el sha256 de los ficheros coincidió con el inicial:
     - T3, quitar `or ""` de `_constraint_name`: falla `test_integrity_error_without_details_is_not_swallowed` (`DID NOT RAISE DomainValidationError`).
     - T3, calcular el hash antes de validar (`set_password` antes de `if errors:`): fallan `test_rejections_never_compute_the_hash` en los casos de contraseña ausente y de 129 caracteres, y `test_non_text_password_is_invalid`.

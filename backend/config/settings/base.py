@@ -13,6 +13,7 @@ INSTALLED_APPS = [
     "django.contrib.gis",
     "apps.core",
     "apps.users",
+    "apps.categories",
 ]
 
 AUTH_USER_MODEL = "users.User"
