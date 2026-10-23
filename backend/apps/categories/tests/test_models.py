@@ -180,3 +180,14 @@ def test_normalize_name_is_idempotent(raw):
 
 def test_normalize_name_counts_a_decomposed_accent_as_one_character():
     assert len(Category.normalize_name("Jardín")) == len("Jardín")
+
+
+@pytest.mark.django_db
+def test_accented_names_differing_only_in_case_are_rejected_by_the_database():
+    # Depende del LC_CTYPE de la BD: con la localización C, LOWER no pliega la tilde
+    Category(slug="garden", name="Jardín").save()
+
+    with pytest.raises(IntegrityError) as raised, transaction.atomic():
+        Category(slug="yard", name="JARDÍN").save()
+
+    assert raised.value.__cause__.diag.constraint_name == NAME_LOWER_UNIQUE
