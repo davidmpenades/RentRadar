@@ -3,7 +3,7 @@ from collections.abc import Iterable
 
 REDACTED = "[REDACTED]"
 LOG_FORMAT = "%(asctime)s %(levelname)s %(name)s %(message)s"
-LOGGER_NAMES = ("django", "django.request", "django.security")
+LOGGER_NAMES = ("django", "django.request", "django.security", "django.db.backends")
 
 
 class RedactingFormatter(logging.Formatter):

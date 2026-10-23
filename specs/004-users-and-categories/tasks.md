@@ -65,7 +65,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(users): add superuser creation and email change`
   - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T5. Credenciales fuera de errores y logs.** RF-12
+- [x] **T5. Credenciales fuera de errores y logs.** RF-12
   - Quién:
     - Claude escribe `apps/users/tests/test_leaks.py` y `config/tests/test_logging.py`.
     - Claude añade `LOGGING` a `base.py` y `django.db.backends` a INFO a `build_production_logging` (D5).
@@ -76,7 +76,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     - `test_log_redaction.py` sigue en verde.
   - Qué toca revisar: la configuración de log en los tres entornos.
   - Commit: `feat(config): keep credentials out of errors and logs`
-  - Hecho cuando: `pytest -q` y ruff en verde; la prueba de mecanismo queda descrita en el mensaje de la tarea y no en el repositorio.
+  - Hecho cuando: `pytest -q` y ruff en verde; la prueba de mecanismo se registra en T9 para `validation.md`.
 
 - [ ] **T6. Modelo de categoría y migración inicial.** RF-13, RF-15, RF-17
   - Quién:
@@ -120,5 +120,14 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     4. `validation.md` con fecha, orden y resultado RF por RF; `docs/architecture.md` con las apps nuevas y `core/text.py` y `core/errors.py`.
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
   - Riesgo aceptado de T4 que anotar en `validation.md`: si la fila del usuario ya se ha borrado, `change_user_email` lanza `DatabaseError` (sin el email) y la instancia conserva el email nuevo, porque el error no pasa por la restauración.
+  - Pruebas de mecanismo para `validation.md`. Cada mutación se aplicó a mano o con un `conftest.py` temporal, se revirtió y el sha256 de los ficheros coincidió con el inicial:
+    - T3, quitar `or ""` de `_constraint_name`: falla `test_integrity_error_without_details_is_not_swallowed` (`DID NOT RAISE DomainValidationError`).
+    - T3, calcular el hash antes de validar (`set_password` antes de `if errors:`): fallan `test_rejections_never_compute_the_hash` en los casos de contraseña ausente y de 129 caracteres, y `test_non_text_password_is_invalid`.
+    - T3, quitar `transaction.atomic()` del guardado: fallan los dos casos de `test_concurrent_duplicate_is_translated_to_email_taken` (`IntegrityError` en bruto y `TransactionManagementError`).
+    - T4, no restaurar el email de la instancia al rechazar: fallan 12 tests de `change_user_email` (9 emails inválidos, 2 duplicados y la carrera).
+    - T4, guardar sin `update_fields=["email"]`: fallan `test_change_user_email_does_not_overwrite_other_columns` (pisa `first_name`) y `test_change_user_email_of_a_deleted_user_fails_without_the_email` (el `save()` reinserta la fila).
+    - T4, hashear antes de validar solo en el flujo del superusuario: fallan tres tests, todos con `superuser` (`test_rejections_never_compute_the_hash` en dos casos y `test_non_text_password_is_invalid`); los de `user` pasan, lo que prueba la parametrización.
+    - T5, lanzar `DomainValidationError` con `from exc` dentro del `except`: fallan 5 tests de `test_leaks.py` (duplicado en BD y duplicado exacto en BD, ambos con `user` y `superuser`, y el duplicado en BD del cambio de email) por `__cause__` no nulo.
+    - T5, `django.db.backends` a DEBUG: fallan 13 tests de `test_leaks.py` porque el SQL con el email llega a `caplog.text`; pasan los otros 9 (rechazos por longitud, Cc y formato, y el de `str` y `repr` del usuario).
   - Commit: `docs(spec): record spec 004 validation`
   - Hecho cuando: cada RF de RF-1 a RF-23 tiene su test en verde (RF-22 en parte, como prevé la spec); la BD de desarrollo contiene las once categorías; `validation.md` termina con un veredicto.

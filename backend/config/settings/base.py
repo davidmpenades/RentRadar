@@ -42,6 +42,13 @@ USE_I18N = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
+# El SQL lleva email y hash como valores: se fija en INFO para que no salga al log
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "loggers": {"django.db.backends": {"level": "INFO"}},
+}
+
 
 def build_database(name: str, user: str, password: str, host: str, port: int) -> dict:
     return {
