@@ -7,10 +7,16 @@ BASE_DIR = Path(__file__).resolve().parent.parent.parent
 DEBUG = False
 
 INSTALLED_APPS = [
+    "django.contrib.contenttypes",
+    "django.contrib.auth",
     "django.contrib.sessions",
     "django.contrib.gis",
     "apps.core",
+    "apps.users",
+    "apps.categories",
 ]
+
+AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
     "django.middleware.security.SecurityMiddleware",
@@ -36,6 +42,13 @@ LANGUAGE_CODE = "es"
 USE_I18N = True
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+# El SQL lleva email y hash como valores: se fija en INFO para que no salga al log
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "loggers": {"django.db.backends": {"level": "INFO"}},
+}
 
 
 def build_database(name: str, user: str, password: str, host: str, port: int) -> dict:

@@ -14,7 +14,7 @@ Antes de cada commit:
 
 Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo, órdenes de git que descarten cambios, push.
 
-- [ ] **T1. Caracteres de control y error de dominio.** RF-4, RF-12, RF-16
+- [x] **T1. Caracteres de control y error de dominio.** RF-4, RF-12, RF-16
   - Quién: Claude escribe `apps/core/text.py` y `apps/core/errors.py` (funciones puras) y sus tests en `apps/core/tests/`. La normalización del email no va aquí: vive en `UserManager`, que nace en T2.
   - Cómo se prueba:
     - Detección de Cc, incluidos `\x00` y tabulador interno.
@@ -25,7 +25,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(core): add control character rule and domain validation error`
   - Hecho cuando: los tests nuevos fallaron antes de existir las funciones y ahora pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T2. Modelo de usuario por email, normalización del email, instalación de auth y migración inicial.** RF-1, RF-2, RF-5, RF-7, RF-12
+- [x] **T2. Modelo de usuario por email, normalización del email, instalación de auth y migración inicial.** RF-1, RF-2, RF-5, RF-7, RF-12
   - Quién:
     - Claude escribe primero `apps/users/tests/test_models.py` (estructura de RF-1, `__str__` sin email, `DataError` de RF-5 en BD, `IntegrityError` de RF-7 con el nombre de la restricción y fechas con zona horaria) y `apps/users/tests/test_emails.py` (normalización: recorte con `str.strip()` incluido NBSP, NFKC, minúsculas enteras y el orden de los tres pasos).
     - El usuario escribe `apps/users/models.py`: `User` y `UserManager`, con `normalize_email` (el código que hace pasar `test_emails.py`), `get_by_natural_key` normalizando y sin los métodos de creación todavía.
@@ -39,20 +39,21 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(users): add email-based custom user model`
   - Hecho cuando: `pytest -q`, ruff, `manage.py check` y `makemigrations --check --dry-run` en verde; la migración solo crea `users_user` y sus tablas M2M.
 
-- [ ] **T3. Servicio de alta de usuarios.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10
+- [x] **T3. Servicio de alta de usuarios.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8, RF-9, RF-10
   - Quién:
     - Claude escribe primero `apps/users/tests/test_services.py` y después `apps/users/services.py` (`create_user`, mapa de códigos, guardado protegido) y `PASSWORD_HASHERS` en `settings/test.py` (D7).
     - El usuario añade a `UserManager.create_user` la delegación en el servicio, con un import diferido.
   - Cómo se prueba:
     - Los casos de la Estrategia de tests para RF-1 (`authenticate`) a RF-10.
     - Carrera simulada con `full_clean` anulado: da `email_taken` y la conexión sigue usable.
+    - Un test fija que el duplicado exacto salta con la restricción `users_user_email_key` (nombre exacto), porque el servicio traduce por ese nombre.
     - `make_password` no se llama ante ningún rechazo.
     - Prueba de mecanismo de la captura con un test temporal sin commitear.
   - Qué toca revisar: el orden "validar todo, después hashear"; que el `raise` está fuera del `except`; la firma solo con nombre (RF-10).
   - Commit: `feat(users): add user creation service`
   - Hecho cuando: los tests de RF-1 a RF-10 pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T4. Superusuario y cambio de email.** RF-2, RF-4, RF-6, RF-8, RF-11
+- [x] **T4. Superusuario y cambio de email.** RF-2, RF-4, RF-6, RF-8, RF-11
   - Quién:
     - Claude escribe primero `apps/users/tests/test_superuser.py` y los casos de cambio de email, y después `create_superuser` y `change_user_email` en el servicio.
     - El usuario añade a `UserManager.create_superuser` la delegación en el servicio.
@@ -64,7 +65,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(users): add superuser creation and email change`
   - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T5. Credenciales fuera de errores y logs.** RF-12
+- [x] **T5. Credenciales fuera de errores y logs.** RF-12
   - Quién:
     - Claude escribe `apps/users/tests/test_leaks.py` y `config/tests/test_logging.py`.
     - Claude añade `LOGGING` a `base.py` y `django.db.backends` a INFO a `build_production_logging` (D5).
@@ -75,9 +76,9 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     - `test_log_redaction.py` sigue en verde.
   - Qué toca revisar: la configuración de log en los tres entornos.
   - Commit: `feat(config): keep credentials out of errors and logs`
-  - Hecho cuando: `pytest -q` y ruff en verde; la prueba de mecanismo queda descrita en el mensaje de la tarea y no en el repositorio.
+  - Hecho cuando: `pytest -q` y ruff en verde; la prueba de mecanismo se registra en T9 para `validation.md`.
 
-- [ ] **T6. Modelo de categoría y migración inicial.** RF-13, RF-15, RF-17
+- [x] **T6. Modelo de categoría y migración inicial.** RF-13, RF-15, RF-17
   - Quién:
     - Claude escribe primero `apps/categories/tests/test_models.py`: slug único; `IntegrityError` por slug repetido y por nombre repetido con otras mayúsculas; `DataError` con slug de 51 y nombre de 61 (D1).
     - El usuario escribe `apps/categories/models.py`.
@@ -87,7 +88,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(categories): add category model`
   - Hecho cuando: `pytest -q`, ruff, `manage.py check` y `makemigrations --check --dry-run` en verde.
 
-- [ ] **T7. Servicio de validación y guardado de categorías.** RF-13, RF-14, RF-15, RF-16, RF-17, RF-18, RF-23
+- [x] **T7. Servicio de validación y guardado de categorías.** RF-13, RF-14, RF-15, RF-16, RF-17, RF-18, RF-23
   - Quién:
     - Claude escribe primero `apps/categories/tests/test_models.py` (casos nuevos de `Category.normalize_name`: recorte con `str.strip()`, NFC y que no cambia mayúsculas) y `apps/categories/tests/test_services.py`.
     - El usuario escribe `Category.normalize_name` en `apps/categories/models.py` (el código que hace pasar esos tests; no requiere migración).
@@ -100,7 +101,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(categories): add category validation service`
   - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T8. Semilla de las once categorías.** RF-19, RF-20, RF-21, RF-22
+- [x] **T8. Semilla de las once categorías.** RF-19, RF-20, RF-21, RF-22
   - Quién: Claude escribe primero `apps/categories/tests/test_seed.py` y después `0002_seed_categories.py` (`makemigrations categories --empty --name seed_categories -u "$(id -u)"`, editada a mano).
   - Cómo se prueba:
     - RF-19: las once de la spec, escritas en el test, y cada entrada pasa `save_category`.
@@ -110,7 +111,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(categories): seed the closed category list`
   - Hecho cuando: `pytest -q`, ruff y `makemigrations --check --dry-run` en verde; la BD de test, creada desde cero, contiene la semilla.
 
-- [ ] **T9. Validación y BD de desarrollo.** Todos
+- [x] **T9. Validación y BD de desarrollo.** Todos
   - Quién: Claude.
   - Cómo se prueba:
     1. Suite completa, ruff, `manage.py check` y `makemigrations --check --dry-run`.
@@ -118,5 +119,31 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     3. `showmigrations` y un recuento de las once categorías en desarrollo.
     4. `validation.md` con fecha, orden y resultado RF por RF; `docs/architecture.md` con las apps nuevas y `core/text.py` y `core/errors.py`.
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
+  - Riesgo aceptado de T4 que anotar en `validation.md`: si la fila del usuario ya se ha borrado, `change_user_email` lanza `DatabaseError` (sin el email) y la instancia conserva el email nuevo, porque el error no pasa por la restauración.
+  - Riesgo a comprobar en T9: `LOWER` de PostgreSQL con tildes depende de la localización de la BD. Hay que verificar que el `LC_CTYPE` de la BD es UTF-8; si no, la unicidad de `Jardín` frente a `JARDÍN` no funcionaría. Los tests de T6 usan `Tienda` y `TIENDA` (ASCII) y no lo detectarían.
+  - Riesgo aceptado de T8 (D6) que anotar en `validation.md`: si alguien inserta por shell una categoría ajena con el nombre de una de la semilla (coincidencia sin distinguir mayúsculas), la migración de la semilla falla de forma atómica y no cambia nada; hay que corregirlo a mano.
+  - Riesgo para specs futuras que anotar en `validation.md`: un test con `transaction=True` vacía las tablas al terminar y la semilla desaparece para los tests siguientes; habría que usar `serialized_rollback`. Hoy ningún test del proyecto lo hace.
+  - Pruebas de mecanismo para `validation.md`. Cada mutación se aplicó a mano o con un `conftest.py` temporal, se revirtió y el sha256 de los ficheros coincidió con el inicial:
+    - T3, quitar `or ""` de `_constraint_name`: falla `test_integrity_error_without_details_is_not_swallowed` (`DID NOT RAISE DomainValidationError`).
+    - T3, calcular el hash antes de validar (`set_password` antes de `if errors:`): fallan `test_rejections_never_compute_the_hash` en los casos de contraseña ausente y de 129 caracteres, y `test_non_text_password_is_invalid`.
+    - T3, quitar `transaction.atomic()` del guardado: fallan los dos casos de `test_concurrent_duplicate_is_translated_to_email_taken` (`IntegrityError` en bruto y `TransactionManagementError`).
+    - T4, no restaurar el email de la instancia al rechazar: fallan 12 tests de `change_user_email` (9 emails inválidos, 2 duplicados y la carrera).
+    - T4, guardar sin `update_fields=["email"]`: fallan `test_change_user_email_does_not_overwrite_other_columns` (pisa `first_name`) y `test_change_user_email_of_a_deleted_user_fails_without_the_email` (el `save()` reinserta la fila).
+    - T4, hashear antes de validar solo en el flujo del superusuario: fallan tres tests, todos con `superuser` (`test_rejections_never_compute_the_hash` en dos casos y `test_non_text_password_is_invalid`); los de `user` pasan, lo que prueba la parametrización.
+    - T5, lanzar `DomainValidationError` con `from exc` dentro del `except`: fallan 5 tests de `test_leaks.py` (duplicado en BD y duplicado exacto en BD, ambos con `user` y `superuser`, y el duplicado en BD del cambio de email) por `__cause__` no nulo.
+    - T5, `django.db.backends` a DEBUG: fallan 13 tests de `test_leaks.py` porque el SQL con el email llega a `caplog.text`; pasan los otros 9 (rechazos por longitud, Cc y formato, y el de `str` y `repr` del usuario).
+    - T7, quitar la comprobación de tipo del nombre: falla `test_non_text_name_is_invalid` (`AttributeError`).
+    - T7, quitar la comprobación de inmutabilidad del slug: fallan 5 tests de RF-18 (`test_slug_of_a_saved_category_cannot_change`, `test_changed_slug_reports_only_the_immutability` en sus tres casos y `test_changed_slug_and_name_errors_are_reported_together`).
+    - T7, quitar la reasignación `(__all__, name_taken)` del mapa: fallan 4 tests de nombres duplicados sin distinguir mayúsculas.
+    - T7, normalizar el nombre después de validar: fallan 4 tests (nombre en blanco, errores juntos, 60 caracteres descompuestos y slug cambiado con nombre vacío).
+    - T7, guardar una categoría existente sin `update_fields=["name"]`: falla `test_renaming_a_deleted_category_fails_instead_of_reinserting_it` (`DID NOT RAISE DatabaseError`).
+    - T7, quitar `or ""` de la copia de `_constraint_name`: falla `test_integrity_error_without_details_is_not_swallowed` (`DID NOT RAISE DomainValidationError`).
+    - T8, `update_or_create` por `create`: fallan los dos tests de RF-20 (`IntegrityError` en `categories_category_slug_key`).
+    - T8, `reverse_seed` con `.all().delete()`: falla `test_reverting_the_seed_deletes_only_its_categories`.
+    - T8, `reverse_code` por `RunPython.noop`: falla `test_seed_is_one_reversible_atomic_operation`.
+    - T8, quitar `.using(...)` en las dos funciones: fallan los dos casos de `test_seed_writes_to_the_connection_being_migrated`.
+    - T8, `Piragua` por `Piraguas` en `SEED`: fallan 5 tests (los literales de RF-19 y los dos de RF-20).
+    - T8, borrado fila a fila en `reverse_seed`: falla `test_reverting_the_seed_issues_a_single_delete` (`assert 11 == 1`).
+    - T1: ver `validation.md` (informe del implementer, no repetido). T2 y T6: sin mutaciones; detalle en `validation.md`.
   - Commit: `docs(spec): record spec 004 validation`
   - Hecho cuando: cada RF de RF-1 a RF-23 tiene su test en verde (RF-22 en parte, como prevé la spec); la BD de desarrollo contiene las once categorías; `validation.md` termina con un veredicto.

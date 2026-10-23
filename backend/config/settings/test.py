@@ -6,13 +6,16 @@ TEST_DATABASE_NAME = "rentradar_test"
 
 _env = require(None, ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD"))
 
-# Excepción acotada al principio 6 (D9): no es un secreto y producción la rechazaría
+# Clave fija solo en test: no es un secreto y producción la rechazaría
 SECRET_KEY = "insecure-test-only-not-a-secret"
 
-# Se valida DJANGO_DEBUG para que un valor mal formado falle también aquí (RF-20),
-# pero se descarta: en test la depuración siempre está apagada (RF-19)
+# Se valida DJANGO_DEBUG para que un valor mal formado falle también aquí,
+# pero se descarta: en test la depuración siempre está apagada
 parse_bool("DJANGO_DEBUG", read_optional(None, "DJANGO_DEBUG"))
 DEBUG = False
+
+# Hasher rápido solo en test: PBKDF2 tardaría segundos por usuario creado
+PASSWORD_HASHERS = ["django.contrib.auth.hashers.MD5PasswordHasher"]
 
 DATABASES = build_database(
     name=TEST_DATABASE_NAME,

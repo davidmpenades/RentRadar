@@ -53,6 +53,30 @@ El throttling de DRF guarda los contadores en la caché por defecto. Con `LocMem
 
 ## Migraciones
 Pregunta antes de crear o aplicar una migración. Revisa el SQL (`sqlmigrate`) cuando toque campos espaciales o índices.
+- Las migraciones generadas incumplen E501 e I001; `pyproject.toml` los ignora solo en `**/migrations/`. El resto de reglas de ruff sigue activo, también en las escritas a mano.
+- Una migración de datos obtiene el modelo con `apps.get_model` (nunca importa el actual), escribe con `.using(schema_editor.connection.alias)`, siembra con `update_or_create` y declara un `reverse_code` explícito con un único `delete()` de QuerySet. Nunca `RunPython.noop`: revertir dejaría los datos.
+
+## Errores de dominio y guardado protegido
+- Los servicios lanzan `DomainValidationError` (`apps/core/errors.py`): solo campos y códigos estables en inglés, nunca el valor ni `params`. `translate_validation_error` convierte `(campo, código de Django)` en `(campo, código de dominio)`; una restricción con `Lower` llega en `__all__` y el mapa la lleva a su campo.
+- El `IntegrityError` lleva el valor duplicado en su mensaje. El guardado va en `transaction.atomic()`, lee `exc.__cause__.diag.constraint_name` y **devuelve** los códigos; quien llama lanza fuera del `except`, así `__context__` y `__cause__` quedan en `None`. Si la restricción no tiene nombre, el resultado es `constraint_violated`: sin ese caso el error se tragaría y el servicio devolvería un objeto no guardado.
+- Una instancia que ya existe se guarda con `save(update_fields=[...])`, y "existe" se decide con `_state.adding`, no con `pk`. Si la fila se borró, Django lanza `DatabaseError` en vez de reinsertarla.
+- Los nombres automáticos de `unique=True` (`<tabla>_<campo>_key`) no salen en `sqlmigrate`; los fija un test con `diag.constraint_name`.
+- El guardado protegido está copiado en `users` y `categories`; se extrae a `apps/core` en la tercera repetición.
+
+## Texto: normalización y validación
+- Recorta con `str.strip()`. El email va en NFKC y en minúsculas; los nombres, en NFC (NFKC cambiaría su significado al plegar ligaduras). La longitud se cuenta después de normalizar.
+- `reject_control_characters` solo cubre la categoría Cc. Los Cf (U+202E, U+200B, U+200D) pasan, y `validate_email` los acepta en el dominio aunque los rechaza en la parte local. Qué Cf se rechazan es una decisión de cada spec, con cuidado de los legítimos como U+200D.
+- `LOWER` de PostgreSQL con tildes depende de `LC_CTYPE`: la BD debe ser UTF-8 o `Jardín` y `JARDÍN` no chocarían. Un test lo fija en test y CI; la de producción se comprueba al desplegar.
+
+## Tests de BD, de migraciones de datos y de fugas
+- Unicidad y longitud en la BD: guarda saltándote la validación, dentro de `pytest.raises(...)` y `transaction.atomic()`, y espera `IntegrityError` (unicidad, con el nombre exacto de la restricción) o `DataError` (longitud).
+- Las funciones de una migración de datos se prueban con las apps históricas (`MigrationLoader(connection).project_state(...)`) y un `schema_editor` sustituto que solo aporta `.connection`. Un test del alias (`ConnectionDoesNotExist`) demuestra que no escriben en `default` por casualidad.
+- La semilla vive en la BD de test: los tests usan datos fuera de ella y comparan recuentos, no totales. Un test con `transaction=True` la vaciaría para los siguientes; usa `serialized_rollback`.
+- Los caracteres invisibles o combinantes (NBSP, tildes descompuestas, ligaduras) se escriben en los tests como escapes Unicode, nunca literales: un editor que normalice haría que el test dejara de probar lo que dice.
+- Para comprobar que no se filtra un valor: una marca que no aparece en ningún identificador ni línea de la llamada (el traceback imprime el código fuente), `caplog` a DEBUG y `connection.force_debug_cursor` para que Django intente registrar el SQL con sus valores.
+
+## Pruebas de mecanismo
+Un test en verde desde el principio no demuestra que detecte nada. Tras implementar una regla de seguridad o de integridad, rompe el código a propósito, una mutación cada vez, con el sha256 del fichero antes y después; comprueba qué test falla y por qué, y revierte a mano. Si una mutación no hace fallar ningún test, o falta un test o la mutación no cambia el comportamiento (como NON_EMAIL_FIELDS hoy); en el segundo caso se dice de forma explícita en validation.md. Se registran en `validation.md`.
 
 ## Tests y verificación
 - Los tests de cada app van en un paquete `tests/` dentro de la app, con un módulo por capa o por endpoint.

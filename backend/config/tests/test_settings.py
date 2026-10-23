@@ -54,3 +54,20 @@ def test_time_and_language_are_fixed(load_settings, env):
 
 def test_now_is_timezone_aware():
     assert django_timezone.now().tzinfo is not None
+
+
+MD5_HASHER = "django.contrib.auth.hashers.MD5PasswordHasher"
+
+
+def test_test_environment_uses_a_fast_password_hasher(load_settings):
+    settings = load_settings("test", **DEVELOPMENT_ENVIRON)
+
+    assert settings.PASSWORD_HASHERS == [MD5_HASHER]
+
+
+@pytest.mark.parametrize("env", ["base", "production"])
+def test_real_environments_keep_the_default_password_hashers(load_settings, env):
+    environ = PRODUCTION_ENVIRON if env == "production" else {}
+    settings = load_settings(env, **environ)
+
+    assert not hasattr(settings, "PASSWORD_HASHERS")
