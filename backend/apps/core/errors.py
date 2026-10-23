@@ -15,14 +15,14 @@ class DomainValidationError(ValidationError):
 
 
 def translate_validation_error(
-    error: ValidationError, codes: dict[tuple[str, str], str]
+    error: ValidationError, codes: dict[tuple[str, str], tuple[str, str]]
 ) -> dict[str, list[str]]:
+    # El destino incluye el campo: una UniqueConstraint con Lower llega en __all__
     translated: dict[str, list[str]] = {}
     for field, field_errors in error.error_dict.items():
         for field_error in field_errors:
-            mapped_code = codes.get((field, field_error.code))
-            target_field, target_code = (
-                (field, mapped_code) if mapped_code else UNMAPPED_ERROR
+            target_field, target_code = codes.get(
+                (field, field_error.code), UNMAPPED_ERROR
             )
             target_codes = translated.setdefault(target_field, [])
             if target_code not in target_codes:

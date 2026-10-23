@@ -51,9 +51,9 @@ def test_translate_maps_each_field_and_code_pair():
         }
     )
     codes = {
-        ("email", "unique"): "email_taken",
-        ("email", "invalid"): "email_invalid",
-        ("password", "max_length"): "password_too_long",
+        ("email", "unique"): ("email", "email_taken"),
+        ("email", "invalid"): ("email", "email_invalid"),
+        ("password", "max_length"): ("password", "password_too_long"),
     }
 
     assert translate_validation_error(error, codes) == {
@@ -75,7 +75,9 @@ def test_translate_discards_messages_and_params():
         }
     )
 
-    result = translate_validation_error(error, {("email", "unique"): "email_taken"})
+    result = translate_validation_error(
+        error, {("email", "unique"): ("email", "email_taken")}
+    )
 
     assert result == {"email": ["email_taken"]}
     assert SENTINEL not in repr(result)
@@ -92,8 +94,8 @@ def test_translate_removes_duplicates_keeping_order():
         }
     )
     codes = {
-        ("email", "invalid"): "email_invalid",
-        ("email", "max_length"): "email_too_long",
+        ("email", "invalid"): ("email", "email_invalid"),
+        ("email", "max_length"): ("email", "email_too_long"),
     }
 
     assert translate_validation_error(error, codes) == {
@@ -111,8 +113,8 @@ def test_translate_removes_duplicates_from_different_django_codes_with_same_targ
         }
     )
     codes = {
-        ("email", "unique"): "email_taken",
-        ("email", "unique_together"): "email_taken",
+        ("email", "unique"): ("email", "email_taken"),
+        ("email", "unique_together"): ("email", "email_taken"),
     }
 
     assert translate_validation_error(error, codes) == {"email": ["email_taken"]}
@@ -144,10 +146,27 @@ def test_translate_keeps_mapped_codes_next_to_unmapped_ones():
         }
     )
 
-    assert translate_validation_error(error, {("email", "unique"): "email_taken"}) == {
+    codes = {("email", "unique"): ("email", "email_taken")}
+
+    assert translate_validation_error(error, codes) == {
         "email": ["email_taken"],
         "__all__": ["validation_failed"],
     }
+
+
+def test_translate_can_move_a_non_field_error_to_a_field():
+    error = ValidationError(
+        {
+            "email": [ValidationError("a", code="unique")],
+            NON_FIELD_ERRORS: [ValidationError("b", code="email_taken")],
+        }
+    )
+    codes = {
+        ("email", "unique"): ("email", "email_taken"),
+        (NON_FIELD_ERRORS, "email_taken"): ("email", "email_taken"),
+    }
+
+    assert translate_validation_error(error, codes) == {"email": ["email_taken"]}
 
 
 @pytest.mark.parametrize("field", [NON_FIELD_ERRORS, "email"])
