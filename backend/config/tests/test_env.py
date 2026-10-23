@@ -53,9 +53,6 @@ def assert_no_value_leaks(message, environ):
             assert value.strip() not in message
 
 
-# RF-9 / RF-10: selección del módulo de settings
-
-
 @pytest.mark.parametrize("env", ["development", "test", "production"])
 def test_resolve_settings_module_maps_each_environment(env):
     assert resolve_settings_module({"DJANGO_ENV": env}) == f"config.settings.{env}"
@@ -105,9 +102,6 @@ def test_require_keeps_secrets_unchanged():
     assert require(environ, ["DJANGO_SECRET_KEY", "DB_PASSWORD"]) == environ
 
 
-# RF-20: booleanos estrictos
-
-
 @pytest.mark.parametrize(
     ("raw", "expected"),
     [
@@ -135,9 +129,6 @@ def test_parse_bool_rejects_non_boolean_naming_variable_without_value(raw):
     assert raw not in message
 
 
-# RF-12: puerto
-
-
 @pytest.mark.parametrize(
     ("raw", "expected"), [("1", 1), ("5432", 5432), ("65535", 65535)]
 )
@@ -161,9 +152,6 @@ def test_parse_port_rejects_invalid_without_leaking_value(raw):
     if raw not in ("0", "-1"):
         assert raw not in message
         assert raw not in rendered
-
-
-# RF-15: hosts permitidos
 
 
 def test_parse_allowed_hosts_accepts_domain_subdomain_wildcard_and_ip_ignoring_blanks():
@@ -196,9 +184,6 @@ def test_parse_allowed_hosts_rejects_invalid_without_leaking_value(bad_host):
     assert "DJANGO_ALLOWED_HOSTS" in message
     assert bad_host not in message
     assert "example.com" not in message
-
-
-# RF-11 a RF-15: configuración de producción
 
 
 def test_load_production_config_returns_parsed_values():

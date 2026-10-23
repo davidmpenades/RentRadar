@@ -6,7 +6,7 @@ TEST_DATABASE_NAME = "rentradar_test"
 
 _env = require(None, ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD"))
 
-# Excepción acotada al principio 6 (D9): no es un secreto y producción la rechazaría
+# Clave fija solo en test: no es un secreto y producción la rechazaría
 SECRET_KEY = "insecure-test-only-not-a-secret"
 
 # Se valida DJANGO_DEBUG para que un valor mal formado falle también aquí,

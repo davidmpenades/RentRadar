@@ -94,7 +94,7 @@ def _save_guarded(instance):
             instance.save()
     except IntegrityError as exc:
         violated = _constraint_name(exc)
-    # El raise va fuera del except: así el error no encadena el original (RF-12)
+    # Raise fuera del except: no se encadena el IntegrityError, que lleva el email
     if violated is not None:
         raise DomainValidationError(_codes_for_constraint(violated))
 
