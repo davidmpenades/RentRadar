@@ -142,12 +142,12 @@ def test_names_differing_only_in_case_are_rejected_by_the_database(other):
 
 NORMALIZE_CASES = [
     ("  Tienda  ", "Tienda"),
-    (" Jardín ", "Jardín"),
+    ("\u00a0Jardín\u00a0", "Jardín"),
     ("\tZona deportiva\n", "Zona deportiva"),
-    ("Jardín", "Jardín"),
+    ("Jardi\u0301n", "Jardín"),
     ("PISCINA", "PISCINA"),
     ("piscina", "piscina"),
-    ("ﬁesta", "ﬁesta"),
+    ("\ufb01esta", "\ufb01esta"),
     ("Zona  deportiva", "Zona  deportiva"),
     ("   ", ""),
     ("Tien\tda", "Tien\tda"),
@@ -179,7 +179,7 @@ def test_normalize_name_is_idempotent(raw):
 
 
 def test_normalize_name_counts_a_decomposed_accent_as_one_character():
-    assert len(Category.normalize_name("Jardín")) == len("Jardín")
+    assert len(Category.normalize_name("Jardi\u0301n")) == len("Jardín")
 
 
 @pytest.mark.django_db

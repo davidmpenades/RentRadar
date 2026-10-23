@@ -242,7 +242,7 @@ def test_name_of_61_characters_is_too_long(category_count):
 @pytest.mark.django_db
 @pytest.mark.parametrize(
     "name",
-    [" Jardín ", " Jardín ", "Jardín"],
+    [" Jardín ", "\u00a0Jardín\u00a0", "Jardi\u0301n"],
     ids=["spaces", "nbsp", "decomposed"],
 )
 def test_name_is_stored_trimmed_and_composed(name):
@@ -255,7 +255,7 @@ def test_name_is_stored_trimmed_and_composed(name):
 @pytest.mark.django_db
 def test_renamed_category_is_stored_trimmed_and_composed():
     category = save_category(Category(slug="garden", name=GARDEN))
-    category.name = " Huerto "
+    category.name = " Huerto\u00a0"
 
     save_category(category)
 
