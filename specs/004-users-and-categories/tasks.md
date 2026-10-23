@@ -101,7 +101,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(categories): add category validation service`
   - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T8. Semilla de las once categorías.** RF-19, RF-20, RF-21, RF-22
+- [x] **T8. Semilla de las once categorías.** RF-19, RF-20, RF-21, RF-22
   - Quién: Claude escribe primero `apps/categories/tests/test_seed.py` y después `0002_seed_categories.py` (`makemigrations categories --empty --name seed_categories -u "$(id -u)"`, editada a mano).
   - Cómo se prueba:
     - RF-19: las once de la spec, escritas en el test, y cada entrada pasa `save_category`.
@@ -121,6 +121,8 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
   - Riesgo aceptado de T4 que anotar en `validation.md`: si la fila del usuario ya se ha borrado, `change_user_email` lanza `DatabaseError` (sin el email) y la instancia conserva el email nuevo, porque el error no pasa por la restauración.
   - Riesgo a comprobar en T9: `LOWER` de PostgreSQL con tildes depende de la localización de la BD. Hay que verificar que el `LC_CTYPE` de la BD es UTF-8; si no, la unicidad de `Jardín` frente a `JARDÍN` no funcionaría. Los tests de T6 usan `Tienda` y `TIENDA` (ASCII) y no lo detectarían.
+  - Riesgo aceptado de T8 (D6) que anotar en `validation.md`: si alguien inserta por shell una categoría ajena con el nombre de una de la semilla (coincidencia sin distinguir mayúsculas), la migración de la semilla falla de forma atómica y no cambia nada; hay que corregirlo a mano.
+  - Riesgo para specs futuras que anotar en `validation.md`: un test con `transaction=True` vacía las tablas al terminar y la semilla desaparece para los tests siguientes; habría que usar `serialized_rollback`. Hoy ningún test del proyecto lo hace.
   - Pruebas de mecanismo para `validation.md`. Cada mutación se aplicó a mano o con un `conftest.py` temporal, se revirtió y el sha256 de los ficheros coincidió con el inicial:
     - T3, quitar `or ""` de `_constraint_name`: falla `test_integrity_error_without_details_is_not_swallowed` (`DID NOT RAISE DomainValidationError`).
     - T3, calcular el hash antes de validar (`set_password` antes de `if errors:`): fallan `test_rejections_never_compute_the_hash` en los casos de contraseña ausente y de 129 caracteres, y `test_non_text_password_is_invalid`.
