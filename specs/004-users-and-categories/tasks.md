@@ -111,7 +111,7 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
   - Commit: `feat(categories): seed the closed category list`
   - Hecho cuando: `pytest -q`, ruff y `makemigrations --check --dry-run` en verde; la BD de test, creada desde cero, contiene la semilla.
 
-- [ ] **T9. Validación y BD de desarrollo.** Todos
+- [x] **T9. Validación y BD de desarrollo.** Todos
   - Quién: Claude.
   - Cómo se prueba:
     1. Suite completa, ruff, `manage.py check` y `makemigrations --check --dry-run`.
@@ -132,5 +132,18 @@ Prohibido sin tu OK explícito en ese momento: `migrate` en la BD de desarrollo,
     - T4, hashear antes de validar solo en el flujo del superusuario: fallan tres tests, todos con `superuser` (`test_rejections_never_compute_the_hash` en dos casos y `test_non_text_password_is_invalid`); los de `user` pasan, lo que prueba la parametrización.
     - T5, lanzar `DomainValidationError` con `from exc` dentro del `except`: fallan 5 tests de `test_leaks.py` (duplicado en BD y duplicado exacto en BD, ambos con `user` y `superuser`, y el duplicado en BD del cambio de email) por `__cause__` no nulo.
     - T5, `django.db.backends` a DEBUG: fallan 13 tests de `test_leaks.py` porque el SQL con el email llega a `caplog.text`; pasan los otros 9 (rechazos por longitud, Cc y formato, y el de `str` y `repr` del usuario).
+    - T7, quitar la comprobación de tipo del nombre: falla `test_non_text_name_is_invalid` (`AttributeError`).
+    - T7, quitar la comprobación de inmutabilidad del slug: fallan 5 tests de RF-18 (`test_slug_of_a_saved_category_cannot_change`, `test_changed_slug_reports_only_the_immutability` en sus tres casos y `test_changed_slug_and_name_errors_are_reported_together`).
+    - T7, quitar la reasignación `(__all__, name_taken)` del mapa: fallan 4 tests de nombres duplicados sin distinguir mayúsculas.
+    - T7, normalizar el nombre después de validar: fallan 4 tests (nombre en blanco, errores juntos, 60 caracteres descompuestos y slug cambiado con nombre vacío).
+    - T7, guardar una categoría existente sin `update_fields=["name"]`: falla `test_renaming_a_deleted_category_fails_instead_of_reinserting_it` (`DID NOT RAISE DatabaseError`).
+    - T7, quitar `or ""` de la copia de `_constraint_name`: falla `test_integrity_error_without_details_is_not_swallowed` (`DID NOT RAISE DomainValidationError`).
+    - T8, `update_or_create` por `create`: fallan los dos tests de RF-20 (`IntegrityError` en `categories_category_slug_key`).
+    - T8, `reverse_seed` con `.all().delete()`: falla `test_reverting_the_seed_deletes_only_its_categories`.
+    - T8, `reverse_code` por `RunPython.noop`: falla `test_seed_is_one_reversible_atomic_operation`.
+    - T8, quitar `.using(...)` en las dos funciones: fallan los dos casos de `test_seed_writes_to_the_connection_being_migrated`.
+    - T8, `Piragua` por `Piraguas` en `SEED`: fallan 5 tests (los literales de RF-19 y los dos de RF-20).
+    - T8, borrado fila a fila en `reverse_seed`: falla `test_reverting_the_seed_issues_a_single_delete` (`assert 11 == 1`).
+    - T1: ver `validation.md` (informe del implementer, no repetido). T2 y T6: sin mutaciones; detalle en `validation.md`.
   - Commit: `docs(spec): record spec 004 validation`
   - Hecho cuando: cada RF de RF-1 a RF-23 tiene su test en verde (RF-22 en parte, como prevé la spec); la BD de desarrollo contiene las once categorías; `validation.md` termina con un veredicto.
