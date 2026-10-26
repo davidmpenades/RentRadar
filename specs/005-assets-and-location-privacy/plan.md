@@ -15,10 +15,10 @@ Spec: specs/005-assets-and-location-privacy/spec.md (aprobada)
 - La ubicación pública se deriva en el servicio, dentro de la transacción que bloquea la fila (`select_for_update`). Se deriva al crear y cuando cambian la exacta o el radio (D6).
 - Proyección EPSG:4326 → EPSG:3035 con GDAL de `django.contrib.gis`, con orden de ejes tradicional y sin dependencias nuevas. Los tests miden las distancias geodésicas con `ST_Distance` sobre geography.
 - No hay endpoints, serializers, vistas ni interfaz.
-- T1 y T2 fijan con tests el comportamiento de PostgreSQL, PostGIS y GDAL que este plan supone.
-  - Sus resultados entran en un único `/sdd-change` antes de T4, junto con D1, D4, D5, D6 y D7.
-  - Si un resultado contradice el plan, se corrigen el plan y las tareas antes de seguir.
-  - Tras T2 se decide si la spec se parte en 005a (T1 a T5) y 005b (T6 a T10).
+- T1 y T2 fijaron con tests el comportamiento de PostgreSQL, PostGIS y GDAL que este plan suponía (resultados en `validation.md`).
+  - Sus resultados entraron en un único `/sdd-change` antes de T4, junto con D1, D4, D5, D6 y D7: el cambio A de T1 (con el CHECK como coordenadas finitas), D10 (b) y D4 (b) de T2.
+  - Ningún resultado contradijo el resto del plan.
+  - Decidido tras T2: la spec no se parte.
 - Dudas abiertas de la spec que se resuelven aquí:
   - método de test de RF-35 y verificación de RF-32: D10;
   - catálogo, formato y mapeo de los códigos de error: D8 y "Lógica".
@@ -27,7 +27,7 @@ Spec: specs/005-assets-and-location-privacy/spec.md (aprobada)
 | Archivo | Crea/Modifica | Responsabilidad | RF |
 |---|---|---|---|
 | backend/apps/core/tests/test_database_platform.py | Crea (T1) | Fija el comportamiento de PostgreSQL y PostGIS que el plan supone | RF-5, RF-13, RF-36; prepara RF-2, RF-22, RF-34, RF-35 |
-| backend/apps/core/tests/test_projection_platform.py | Crea (T2) | Fija versiones, orden de ejes, valores de proyección, cadena de transformación y fallo cerca del antípoda | RF-24, RF-27, RF-31, RF-37 |
+| backend/apps/core/tests/test_projection_platform.py | Crea (T2) | Fija versiones, orden de ejes, valores de proyección, contraste con la fórmula LAEA y fallo en el antípoda | RF-24, RF-27, RF-31, RF-37 |
 | backend/apps/core/db.py | Crea (T3) | `run_guarded`, `constraint_name` y `codes_for_constraint` | RF-38 |
 | backend/apps/core/tests/test_db.py | Crea (T3) | Tests del guardado protegido, incluidos los dos que hoy llaman a `services._codes_for_constraint` | RF-38 |
 | backend/apps/users/services.py | Modifica (T3) | Usa `run_guarded`; borra `_save_guarded`, `_constraint_name` y `_codes_for_constraint` | — |
@@ -77,12 +77,15 @@ Restricciones (`CheckConstraint(condition=..., name=...)`; los nombres tienen me
 | `assets_asset_price_unit_valid` | `price_unit IN ('hour','day','week','month')` |
 | `assets_asset_privacy_radius_valid` | `privacy_radius IN (500,1000,2000)` |
 | `assets_asset_status_valid` | `status IN ('active','paused')` |
-| `assets_asset_exact_location_valid` | `NOT ST_IsEmpty(exact_location::geometry)` y, si T1 lo permite, `ST_Y` entre -90 y 90 y `ST_X` entre -180 y 180 |
+| `assets_asset_exact_location_valid` | `NOT ST_IsEmpty(exact_location::geometry)` y coordenadas finitas: `ST_X` entre -180 y 180 y `ST_Y` entre -90 y 90 |
 | `assets_asset_public_location_valid` | Lo mismo sobre `public_location` (RF-36) |
 
 - Un CHECK que da NULL se cumple, y `ST_Y(POINT EMPTY)` es NULL. Por eso el `NOT ST_IsEmpty` va explícito.
 - La expresión hace un cast de geography a geometry (`Cast` + `Func`). Su forma exacta se confirma con `sqlmigrate` [NV].
-- Si T1 confirma que geography ajusta los valores fuera de rango, la parte de rango se quita (cambio A del `/sdd-change`).
+- Los límites del CHECK de `ST_X` y `ST_Y` no son un rango:
+  - T1 mostró que geography ajusta lo fuera de rango (91 pasa a 89) y que guarda NaN tal cual, así que ningún valor fuera de rango llega a la comprobación;
+  - en PostgreSQL NaN es mayor que cualquier número, por lo que no cumple el `BETWEEN` y el CHECK lo rechaza (T1 lo fija en una tabla temporal con la misma expresión);
+  - el rango de latitud y longitud solo lo rechaza la validación (RF-13).
 
 ### Migración
 - `assets/0001_initial` se genera con `docker compose exec -u "$(id -u)" backend python manage.py makemigrations assets`, con OK previo, y se le pasa `ruff format` con el mismo `-u`.
@@ -120,6 +123,7 @@ No aplica: la spec no expone endpoints, así que no hay anónimo, usuario ni pro
   - en cada llamada crean `SpatialReference(srid, axis_order=AxisOrder.TRADITIONAL)` y `CoordTransform`, porque GDAL no es thread-safe y nada se guarda a nivel de módulo;
   - usan `Point(lon, lat, srid=4326).transform(ct, clone=True)`.
 - `GDALException`, `SRSException` y `GEOSException` se capturan solo para marcar el fallo. `ApproximationError` se lanza fuera del `except`, así que `__context__` y `__cause__` quedan a `None`.
+  - T2 mostró que el antípoda del origen de la proyección, (−52, −170), lanza `GDALException("OGR failure.")` y que `django.contrib.gis` registra un único mensaje fijo sin coordenadas.
 - Nunca se interpola `str(Point)` (EWKT) ni ninguna coordenada.
 - Los tests que fuerzan un valor infinito sustituyen `_project` o `_unproject` con `monkeypatch`.
 
@@ -128,9 +132,8 @@ Cada `clean_<campo>(raw)` devuelve `(valor_limpio | None, [códigos])`. El servi
 - **Texto** (`clean_title`, `clean_description`), en este orden:
   1. Si no es `str`, `*_invalid` y se para.
   2. Si contiene un sustituto suelto (categoría Cs), `*_invalid` y se para (D4).
-  3. Si el texto recibido supera 400 o 8000 puntos de código, `*_too_long` y se para (D4 (a); se omite si T2 lleva D4 a (b)).
-  4. `text = unicodedata.normalize("NFC", raw.strip())`.
-  5. Se acumulan:
+  3. `text = unicodedata.normalize("NFC", raw.strip())`. No hay tope bruto del texto recibido (D4 (b)).
+  4. Se acumulan:
      - `*_control_char`: Cc; en la descripción se admiten `\n`, `\r` y `\t`;
      - `*_format_char`: Cf distinto de U+200D;
      - `title_too_short`: menos de 3 caracteres visibles (visible: no `isspace()`, ni Cc, ni Cf);
@@ -224,7 +227,8 @@ def check_deferred_constraints():
   - `monkeypatch` sobre `Model.save` sigue valiendo;
   - las dos sentencias `SET CONSTRAINTS` se añaden también a sus guardados; sus restricciones son unicidades inmediatas, así que no cambia el resultado [NV, lo comprueba la suite de T3].
 - Un `DomainValidationError` lanzado dentro de `write` deshace el atomic y sale tal cual, con `__context__` a `None`.
-- Si T1 muestra que las restricciones no vuelven a diferidas cuando el savepoint se revierte tras un error, `run_guarded` ejecuta `SET CONSTRAINTS ALL DEFERRED` después de la reversión, dentro de la transacción exterior.
+- T1 mostró que un savepoint revertido restaura el modo de las restricciones con el que se entró, así que `run_guarded` no ejecuta `SET CONSTRAINTS ALL DEFERRED` tras la reversión.
+- Al terminar bien, `check_deferred_constraints` deja las restricciones diferidas sea cual sea el modo de entrada (T1: el modo inmediato sobrevive a un savepoint que termina bien, por eso `ALL DEFERRED` es necesario). El comentario de `run_guarded` lo dice.
 
 ### Catálogo de códigos (formato: `DomainValidationError({campo: [códigos]})`)
 | Campo | Código | Cuándo | Origen |
@@ -236,7 +240,7 @@ def check_deferred_constraints():
 | title | `title_required` | Falta o `None` | Servicio |
 | title | `title_invalid` | No es `str` o tiene un sustituto suelto | Regla; `assets_asset_title_length` |
 | title | `title_too_short` | Menos de 3 visibles | Regla |
-| title | `title_too_long` | Más de 100 tras normalizar, o más de 400 recibidos (D4) | Regla |
+| title | `title_too_long` | Más de 100 tras normalizar | Regla |
 | title | `title_control_char`, `title_format_char` | Cc; Cf distinto de U+200D | Regla |
 | description | `description_required`, `description_invalid`, `description_too_short`, `description_too_long`, `description_control_char`, `description_format_char` | Lo mismo con 20 y 2000; se admiten `\n`, `\r` y `\t` | Regla; `assets_asset_description_length` va a `description_invalid` |
 | price | `price_required` | Falta o `None` | Servicio |
@@ -277,13 +281,13 @@ Todas aprobadas por el usuario; D3 y D10 con los cambios que pidió.
 | D1. Forma del servicio (RF-32, RF-20, RF-33) | (a) `create_asset` y `update_asset`, solo con nombre y lista blanca de campos; `owner_id` solo al crear y `asset_id` solo al modificar; ni instancias ni pública. (b) Una sola `save_asset(asset_id=None, ...)`. (c) Una función que recibe una instancia (como `save_category`) | (a) | (b): ramas por modo dentro de una función (valores por defecto, propietario y estados distintos). (c): confiar en una instancia que el llamador puede haber manipulado (pública, propietario, fechas) | `/sdd-change` de la Definición de "servicio de escritura" y de RF-32: "las dos funciones de escritura de un único módulo". RF-20 y la pública recibida se cumplen por construcción, con `TypeError` y sin código |
 | D2. Extracción del guardado protegido | (a) `run_guarded(write, constraint_codes)` en `core/db.py`: bloque entero en atomic, devuelve (resultado, códigos). (b) Extraer solo `constraint_name` y `codes_for_constraint`; cada servicio conserva su try/atomic. (c) Sin extracción; variante propia en bienes | (a) | Una cuarta copia; que bienes capture solo el `save()` y deje el bloqueo y la validación fuera; cambiar la semántica de users y categories | Commit aparte (T3) con la suite antes y después; dos tests de privados pasan a core |
 | D3. Rechazo en la BD y FK diferidas (RF-2, RF-38) | (a) `TextField` + CHECK; `numeric(8,2)` + CHECK; solo `IntegrityError`; `run_guarded` fuerza la comprobación de las restricciones diferidas al terminar el bloque (`SET CONSTRAINTS ALL IMMEDIATE` y después `ALL DEFERRED`, como `connection.check_constraints()` de Django en PostgreSQL) y el servicio comprueba de forma explícita que existen propietario y categoría. (b) `varchar(100)` y `numeric(7,2)`, capturando también `DataError` como `constraint_violated`, con `/sdd-change` ("error de datos"). (c) `atomic(durable=True)`. (d) `SET CONSTRAINTS ALL IMMEDIATE` al abrir el bloque y sin volver a diferidas | (a), con el cambio pedido por el usuario | `DataError` antes del CHECK; una violación de FK que salta en el COMMIT de una transacción exterior, fuera del try; (c) rompería un futuro `ATOMIC_REQUESTS`; (d) dejaría el resto de la transacción exterior en modo inmediato | Dos sentencias más por guardado, también en users y categories. Una violación pendiente que el código exterior dejó antes del bloque salta en la comprobación y se traduce a `constraint_violated`. Un precio de 10^6 o más escrito por fuera da `DataError` |
-| D4. Texto: tope bruto y sustitutos (RF-3, RF-4) | (a) Rechazar antes de normalizar lo que supere 4 veces el máximo (400 y 8000) con `*_too_long`, y los sustitutos sueltos con `*_invalid`. (b) Sin tope (lo pondrá el límite del cuerpo en la spec de API) y sustitutos `*_invalid`. (c) Sin tope ni regla de sustitutos | (a) si T2 mide un coste superlineal de NFC o de `Decimal()`; si no, (b). Los sustitutos se rechazan en los dos casos | NFC de coste cuadrático sobre megas de marcas combinantes [NV]; el `UnicodeEncodeError` crudo de psycopg | `/sdd-change` de casos límite. Con (a), un título válido con más de 300 espacios de relleno se rechaza |
+| D4. Texto: tope bruto y sustitutos (RF-3, RF-4) | (a) Rechazar antes de normalizar lo que supere 4 veces el máximo (400 y 8000) con `*_too_long`, y los sustitutos sueltos con `*_invalid`. (b) Sin tope (lo pondrá el límite del cuerpo en la spec de API) y sustitutos `*_invalid`. (c) Sin tope ni regla de sustitutos | (b). T2 midió un coste lineal de NFC y de `Decimal()` (2,5 millones de marcas combinantes alternas en 95 ms; 2,5 millones de dígitos en 10 ms). Los sustitutos se rechazan como en (a) | El `UnicodeEncodeError` crudo de psycopg; rechazar un título válido con más de 300 espacios de relleno | `/sdd-change`: RF-3 y RF-4 dicen «no es texto» y los sustitutos son un caso límite. Sin tope bruto, el tamaño de la entrada lo limita la spec de API con el límite del cuerpo |
 | D5. Entrada numérica (RF-5, RF-10, RF-13) | (a) Precio `str` o `Decimal` validado por `str()` con patrón ASCII, y decimales contados sin ceros finales (12.340 vale 12.34). Coordenadas `int`, `float` o `Decimal` sin `bool` ni `str`, convertidas a `float` antes de comparar. Radio `int` sin `bool`. (b) Decimales escritos, como `DecimalValidator` (12.340 se rechaza); coordenadas solo `float` | (a) | Rechazar representaciones equivalentes (coherente con el riesgo aceptado de `+5` y `007.50`); dígitos Unicode, `1_0`, `sNaN`; que `500.0 in {500}` cuele; el `OverflowError` de `10**400`; que `Decimal("40.4") == 40.4` sea falso | `/sdd-change` de casos límite: "12.340 se acepta como 12.34" y "coordenada como texto se rechaza" |
 | D6. RF-33 frente a RF-34 | (a) Derivar al crear y cuando cambian la exacta o el radio. (b) Recalcular en cada escritura y corregir la pública que no coincida. (c) Recalcular siempre y rechazar si no coincide | (a) | (b): que tras actualizar PROJ editar el título de un bien activo mueva su pública, contra HU-4. (c): impedir incluso pausar | Una pública escrita por fuera del servicio queda hasta el siguiente cambio de exacta o radio (riesgo de escrituras por fuera). `/sdd-change` del caso límite "pública manipulada" |
 | D7. Activar y mover en la misma llamada (RF-39) | (a) Rechazar pasar de `paused` a `active` y a la vez cambiar la exacta o el radio. (b) Aceptarlo, que es la lectura literal de RF-39 | (a) | Publicar una zona nueva sin la revisión que pide HU-4 | `/sdd-change` de RF-39; el cliente hace dos llamadas |
 | D8. Catálogo y formato de errores (RF-31, RNF Errores) | (a) `DomainValidationError` con todos los errores de forma a la vez y una segunda fase de BD; RF-31 con `ApproximationError(ValueError)` y `code`; errores de programación como `TypeError` o `ValueError`, sin código. (b) Solo el primer error. (c) `DomainValidationError` también en la función | (a) | (b) obliga al cliente a reenviar varias veces; (c) acopla la función pura al formato de validación de modelos | Unos 35 códigos fijados por test; un fallo de forma no consulta la BD |
 | D9. Función de aproximación (RF-23 a RF-31) | (a) Módulo puro `apps/assets/location.py`: `CoordTransform` por llamada, orden TRADITIONAL explícito, y los tests sustituyen `_project`/`_unproject` para forzar infinito. (b) `apps/core/geo.py` con `CoordTransform` a nivel de módulo. (c) `ST_Transform` de PostGIS | (a) | (b): GDAL no es thread-safe, y `core` es para lo compartido; (c): consulta la BD (RNF Rendimiento) y usaría el PROJ de la imagen de PostGIS | Crear las SRS en cada llamada cuesta del orden del milisegundo [NV]; los tests sustituyen dos privadas |
-| D10. Verificación de RF-35 y RF-32 | RF-35: (a) `CaptureQueriesContext` (el primer SQL sobre `assets_asset` es `SELECT … FOR UPDATE`, antes del UPDATE) más un test con `django_db(transaction=True, serialized_rollback=True)` en el que, con el bloqueo tomado (gancho en la derivación), una segunda conexión hace `SELECT … FOR UPDATE NOWAIT` y espera `LockNotAvailable` (55P03); (b) solo `CaptureQueriesContext`; (c) hilos con espera. RF-32: (a) test estático por AST, `related_name="+"` y exactamente dos funciones públicas en `services.py`; (b) un QuerySet que bloquee `update` y `bulk_*` | (a) para los dos. El test de la segunda conexión exige `transaction=True`: una segunda conexión no ve las filas sin confirmar, y en un `django_db` normal el `FOR UPDATE NOWAIT` no encontraría la fila y el test pasaría sin probar nada. Exige también `serialized_rollback=True`, para que el vaciado de la BD no se lleve la semilla. | Tests con `sleep` y no deterministas; un test que pasa en vacío; una segunda vía de escritura por el gestor inverso o por un import de `Asset` | Depende de T1 (segunda conexión). El test transaccional es más lento y deja la BD de test a restaurar. El AST no ve `RunSQL`, `loaddata` ni SQL de superusuario (riesgo aceptado) |
+| D10. Verificación de RF-35 y RF-32 | RF-35: (a) `CaptureQueriesContext` (el primer SQL sobre `assets_asset` es `SELECT … FOR UPDATE`, antes del UPDATE) más un test con `django_db(transaction=True, serialized_rollback=True)` en el que, con el bloqueo tomado (gancho en la derivación), una segunda conexión hace `SELECT … FOR UPDATE NOWAIT` y espera `LockNotAvailable` (55P03); (b) solo `CaptureQueriesContext`; (c) hilos con espera. RF-32: (a) test estático por AST, `related_name="+"` y exactamente dos funciones públicas en `services.py`; (b) un QuerySet que bloquee `update` y `bulk_*` | (b) para RF-35 y (a) para RF-32. T1 mostró que la segunda conexión no se puede abrir: psycopg resuelve el nombre del servidor en Python y el fixture de red lo corta. No se hace ninguna excepción al bloqueo de red | Tests con `sleep` y no deterministas; un test que pasa en vacío; una segunda vía de escritura por el gestor inverso o por un import de `Asset`; un test transaccional que vacíe la semilla | RF-35 se verifica por el orden del SQL y su prueba de mecanismo, no por su efecto con dos conexiones. El AST no ve `RunSQL`, `loaddata` ni SQL de superusuario (riesgo aceptado) |
 
 Aceptado como riesgo:
 - Escrituras que el test estático no ve: `RunSQL`, migraciones de datos, `loaddata`, shell y SQL de superusuario (riesgo aceptado de la spec). El admin no está instalado (`base.py:9-17`) y así sigue.
@@ -291,17 +295,19 @@ Aceptado como riesgo:
 - `str(ProtectedError)` incluye la representación de los bienes protegidos: título e id, sin coordenadas (RF-17).
 - Un bien que se borra mientras otra modificación espera el bloqueo da `asset_not_found`.
 - El log del servidor PostgreSQL (STATEMENT con literales y DETAIL con la fila en EWKB) queda para la spec de despliegue.
-- El manejador de errores de GDAL de Django escribe en `django.contrib.gis` a nivel ERROR. Se acepta si T2 confirma que su texto no lleva coordenadas.
+- El manejador de errores de GDAL de Django escribe en `django.contrib.gis` a nivel ERROR. T2 confirmó que su texto es fijo y no lleva coordenadas (`GDAL_ERROR 1: b'Point outside of projection domain'`).
+- RF-35 no se prueba con dos conexiones simultáneas (D10 (b)): el bloqueo se verifica por su SQL.
+- El tamaño del texto recibido no tiene tope en el servicio (D4 (b)): lo limitará el cuerpo de la petición en la spec de API.
 
-Cambios de spec que propone este plan, en un único `/sdd-change` antes de T4:
+Cambios de spec aplicados en el `/sdd-change` de la puerta, antes de T4:
 1. D1: la Definición de "servicio de escritura" y RF-32 pasan a "dos funciones de un único módulo".
-2. D4:
-   - sustitutos sueltos: un caso límite, y RF-3 y RF-4 pasan a decir "no es texto";
-   - tope bruto, si T2 lo justifica.
-3. D5: casos límite de `12.340` y de la coordenada como texto.
-4. D6: se reescribe el caso límite "pública manipulada", porque el servicio no acepta una pública y la guardada solo cambia con la exacta o el radio.
+2. D4 (b): RF-3 y RF-4 pasan a decir "no es texto", los sustitutos sueltos son un caso límite y no hay tope bruto (queda fuera de alcance y como regla para la spec de API).
+3. D5: casos límite de `12.340` y de la coordenada como texto; RF-5 y RF-13 lo dicen.
+4. D6: se reescribe el caso límite "pública manipulada", porque el servicio no acepta una pública y la guardada solo cambia con la exacta o el radio; RF-33 se ajusta a D6 y deja de hablar de «sustituir» la recibida.
 5. D7: RF-39 añade "activar y cambiar exacta o radio en la misma modificación se rechaza".
-6. Según T1 y T2, los cambios A, A', B y C descritos en sus tareas.
+6. A (T1): el rango de latitud y longitud lo garantiza el tipo, que ajusta; el CHECK se mantiene como coordenadas finitas en la exacta y en la pública, y la exacta lleva además el de no vacía (RF-36, reparto de la validación).
+7. D10 (b) (T1): RF-35 se verifica con el orden del SQL y su prueba de mecanismo (criterios de finalización y fuera de alcance).
+8. T2 no cambia nada más en la spec.
 
 ## Blast radius
 - `users/services.py:124-144` y `categories/services.py:99-119` se sustituyen por `core.db` (T3).
@@ -310,10 +316,10 @@ Cambios de spec que propone este plan, en un único `/sdd-change` antes de T4:
   - `users/tests/test_services.py:397-411` y `categories/tests/test_services.py:340-350` exigen que el `DatabaseError` de `update_fields` se siga propagando.
   - Los guardados de users y categories ejecutan ahora dos sentencias `SET CONSTRAINTS` más; cualquier test que cuente consultas allí tendría que ajustarse [NV, lo revela la suite de T3].
 - `base.py:9-17`: `INSTALLED_APPS` gana `apps.assets`. Tras añadirla, `docker compose restart backend`. `auth` crea permisos y tipos de contenido de `Asset` en `post_migrate`.
-- `config/tests/test_logging.py:29` exige que `LOGGING["loggers"]` sea exactamente `[DB_LOGGER]`. No se configura `django.contrib.gis` salvo que T2 lo obligue, y entonces se cambia ese test en la misma tarea.
+- `config/tests/test_logging.py:29` exige que `LOGGING["loggers"]` sea exactamente `[DB_LOGGER]`. No se configura `django.contrib.gis` y ese test no cambia: T2 mostró que el texto que GDAL registra no lleva coordenadas.
 - `config/tests/test_migrations.py` vigila `assets` desde T6. `config/tests/test_tooling.py` exige que la migración generada pase `ruff format`.
 - `categories/tests/test_seed.py:41-42`: `historical_apps()` calcula el estado en `categories.0002`, que no tiene `Asset`. Ningún test nuevo lo usa para comprobar `PROTECT`, porque daría un falso verde.
-- `conftest.py:32-44`: el bloqueo de red afecta a la segunda conexión de RF-35 si psycopg resuelve el nombre en Python [NV, T1].
+- `conftest.py:32-44`: el bloqueo de red impide abrir una segunda conexión, porque psycopg resuelve el nombre del servidor en Python (T1). El fixture no cambia y RF-35 se verifica con D10 (b).
 - Borrar usuarios o categorías queda protegido. Los tests existentes que borran lo hacen sin bienes (`users/tests/test_services.py:400`, `categories/tests/test_services.py:343`, `test_seed.py:93-99`) y no cambian.
 - `related_name="+"`: `user.assets` y `category.asset_set` no existen; las specs posteriores filtran por `Asset.objects`.
 - La BD de desarrollo tiene migraciones sin aplicar desde T6 hasta T10 (`runserver` avisa y no falla).
@@ -322,24 +328,23 @@ Cambios de spec que propone este plan, en un único `/sdd-change` antes de T4:
 ## Riesgos
 | Riesgo | Mitigación |
 |---|---|
-| geography ajusta los valores fuera de rango y el CHECK nunca ve 91 o 181 | T1 lo fija antes del modelo; si ajusta, `/sdd-change` A y el rango solo se garantiza en validación |
-| PROJ elige una transformación WGS84→ETRS89 distinta de la identidad, o cambia con las rejillas | T2 compara con la fórmula LAEA de la guía EPSG 7-2 escrita en el test; si difiere, `/sdd-change` C (tomar la entrada como ETRS89, EPSG:4258) |
+| geography ajusta los valores fuera de rango y el CHECK nunca ve 91 o 181 | Confirmado en T1: el rango solo lo rechaza la validación (RF-13). El CHECK de `ST_X` y `ST_Y` se mantiene como coordenadas finitas, porque rechaza NaN, que geography guarda tal cual; T1 lo fija |
+| PROJ elige una transformación WGS84→ETRS89 distinta de la identidad, o cambia con las rejillas | T2 comparó con la fórmula LAEA de la guía EPSG 7-2 escrita en el test: coincide por debajo de 0,000001 mm, así que no hay desplazamiento. El test de versiones avisa si cambia la imagen |
 | Una actualización de GDAL o PROJ cambia los centros publicados | Test de valores de referencia (T4); con D6, nada recalcula sin cambio de exacta o radio; riesgo aceptado de la spec |
 | Una FK diferida se viola en el COMMIT de una transacción exterior | `run_guarded` fuerza la comprobación al terminar el bloque y después pone las restricciones en diferidas (D3); test con la comprobación anulada |
 | Fugas de coordenadas por EWKT, EWKB, DETAIL, log de GDAL o NOTICE de psycopg | El servicio construye `Point` desde `float` validados; mensajes fijos; test de fugas con todas las formas (T9) |
-| Un test con `transaction=True` vacía la semilla | `serialized_rollback=True` en todos; T8 comprueba que hay once categorías al empezar [NV, orden de pytest-django] |
-| El test de la segunda conexión pasa en vacío porque la fila no está confirmada | `transaction=True` y una aserción previa de que la segunda conexión ve la fila (D10) |
-| Revertir la semilla en un test deja la BD de test sin 0002 si el test falla | Revertir dentro de `atomic` con `set_rollback(True)` (T1 lo valida); si no, `finally` con `migrate` hacia delante |
+| Revertir la semilla en un test deja la BD de test sin 0002 si el test falla | Revertir dentro de `atomic` con `set_rollback(True)`; T1 lo fijó: dentro no queda la semilla y al salir hay once categorías y `0002` registrada. No hace falta `transaction=True` ni `finally` |
+| RF-35 se verifica por el SQL y no por su efecto con dos conexiones | D10 (b), aceptado: el test del orden de consultas y su prueba de mecanismo (sin `select_for_update`, o con una lectura del bien antes del bloqueo, falla) |
 | GDAL no es thread-safe | SRS y `CoordTransform` creados en cada llamada (D9) |
-| T4 y T6 son las tareas más largas | Si superan los 30 min, se anota; tras T2 se decide si se parte la spec en 005a (T1 a T5) y 005b (T6 a T10) |
+| T4 y T6 son las tareas más largas | Si superan los 30 min, se anota y se reevalúa entonces; la spec no se parte (decidido tras T2) |
 
 ## Estrategia de tests
 | RF | Cómo se verifica (pytest) |
 |---|---|
 | RF-1 | `test_create.py`: un alta válida guarda propietario, categoría, título y descripción normalizados, precio `Decimal`, moneda, unidad, exacta, pública, radio, estado y fechas. `test_models.py`: existen los campos y no hay ningún campo más. |
 | RF-2 | `test_rules.py`: `clean_reference` con `None`, `True`, `"5"`, `0` y 2^63. `test_create.py`: propietario o categoría ausentes, `None`, no `int` o inexistentes dan `*_required`, `*_invalid` o `*_not_found`, y no se crea ninguna fila. BD (`test_models.py`): INSERT por SQL con una FK inexistente, tras `SET CONSTRAINTS ALL IMMEDIATE`, da `IntegrityError` con el nombre de la FK. Servicio con la comprobación de existencia anulada por `monkeypatch`: `owner_not_found` por traducción de la FK, gracias a la comprobación forzada de `run_guarded`. Prueba de mecanismo: sin la comprobación forzada, el test falla con `DID NOT RAISE`. |
-| RF-3 | `test_rules.py`, con los casos límite de la spec y escapes con `chr()`: solo espacios, 2, 3, 100 y 101 caracteres, solo U+200D, "a" con dos U+200D, la familia de tres emojis, NFD, U+202E, Cc, no `str`, sustituto suelto y tope bruto (D4). BD: 2 y 101 puntos de código por `save()` directo dan `IntegrityError` `assets_asset_title_length`. |
-| RF-4 | `test_rules.py`: 19, 20, 2000 y 2001 caracteres; ESC; `\r\n` aceptado; U+202E; U+200D dentro de un emoji aceptado; no `str`; tope bruto. BD: 19 y 2001 dan `IntegrityError` `assets_asset_description_length`. |
+| RF-3 | `test_rules.py`, con los casos límite de la spec y escapes con `chr()`: solo espacios, 2, 3, 100 y 101 caracteres, solo U+200D, "a" con dos U+200D, la familia de tres emojis, NFD, U+202E, Cc, no `str` y sustituto suelto (D4). BD: 2 y 101 puntos de código por `save()` directo dan `IntegrityError` `assets_asset_title_length`. |
+| RF-4 | `test_rules.py`: 19, 20, 2000 y 2001 caracteres; ESC; `\r\n` aceptado; U+202E; U+200D dentro de un emoji aceptado; no `str`; sustituto suelto. BD: 19 y 2001 dan `IntegrityError` `assets_asset_description_length`. |
 | RF-5 | `test_rules.py`: `0.1` (`float`), `True`, `5` (`int`), `1e2`, `1E2`, `Decimal("1E+2")`, `NaN`, `Infinity`, `sNaN`, `12,50`, dígitos `chr(0x0661)`, `1_0`, `" 5"`, `0`, `0.00`, `-5`, `100000`, `12.345`, `0.01`, `99999.99`, `12.340` (D5), `+5` y `007.50`. Se comprueba que el valor guardado es el recibido, sin redondeo. BD: `0` y `100000` dan `IntegrityError` `assets_asset_price_range`. `test_database_platform.py` (T1): con `numeric(7,2)`, 100000 daría `DataError`. |
 | RF-6 | `test_create.py`: sin moneda se guarda `EUR`. |
 | RF-7 | `test_rules.py`: `usd`, `eur`, `USD`, `None` y `1` dan `currency_invalid`. BD: `USD` da `IntegrityError` `assets_asset_currency_eur`. |
@@ -348,7 +353,7 @@ Cambios de spec que propone este plan, en un único `/sdd-change` antes de T4:
 | RF-10 | `test_rules.py`: `0`, `-500`, `1500`, `500.5`, `500.0`, `True`, `"500"` y `Decimal(500)` se rechazan. BD: 1500 da `IntegrityError`. |
 | RF-11 | `test_create.py`: sin estado o con `paused`, el bien nace `paused`. |
 | RF-12 | `test_create.py`: `active` al crear da `status_invalid`. `test_update.py`: `deleted`, `Active` y `None` se rechazan. BD: `deleted` da `IntegrityError`. |
-| RF-13 | `test_rules.py`: ±91, ±181, `True`, `False`, NaN, ±inf, `"40.4"`, `None`, `10**400`, `Decimal("sNaN")` y una sola coordenada. BD: según T1, un CHECK de rango con `IntegrityError` o el ajuste fijado en `test_database_platform.py`, y una exacta vacía da `IntegrityError` `assets_asset_exact_location_valid`. |
+| RF-13 | `test_rules.py`: ±91, ±181, `True`, `False`, NaN, ±inf, `"40.4"`, `None`, `10**400`, `Decimal("sNaN")` y una sola coordenada. BD (`test_models.py`): una coordenada NaN, en la latitud o en la longitud, y una exacta vacía dan `IntegrityError` `assets_asset_exact_location_valid`; la latitud 91 y la longitud 181 no dan error, porque el tipo las ajusta (comportamiento fijado en `test_database_platform.py`). Una coordenada como texto (`"40.4"`) se rechaza en `test_rules.py`. |
 | RF-14 | `test_rules.py`: coordenadas intercambiadas (-3.7, 40.4) se rechazan. Lisboa, Andorra y Toulouse se aceptan, igual que los cuatro límites exactos. `math.nextafter` hacia fuera de cada límite se rechaza. |
 | RF-15 | `test_create.py`: `created_at == updated_at == now`, con zona horaria y desplazamiento UTC 0. Un `now` sin zona horaria da `ValueError` y no escribe nada. `test_models.py`: `auto_now` y `auto_now_add` son `False`. |
 | RF-16 | `test_update.py`: un cambio pone `updated_at = now2` y conserva `created_at`. Sin cambios, o con valores iguales (precio `"12.3"` frente a 12.30, mismas coordenadas), no hay UPDATE en `CaptureQueriesContext` ni cambian las fechas. |
@@ -357,7 +362,7 @@ Cambios de spec que propone este plan, en un único `/sdd-change` antes de T4:
 | RF-19 | `test_update.py`: activar y pausar funcionan; activar un bien activo y pausar uno pausado no dan error, no hacen UPDATE ni tocan fechas. |
 | RF-20 | `test_update.py`: `update_asset(owner_id=...)` da `TypeError` y el propietario no cambia. Cambiar la categoría se acepta. |
 | RF-21 | `test_deletion.py`: `user.delete()` da `ProtectedError` y el usuario sigue existiendo. `DELETE` por SQL tras `SET CONSTRAINTS ALL IMMEDIATE`, dentro de `atomic`, da `IntegrityError` (ForeignKeyViolation) con el nombre de la FK. |
-| RF-22 | `test_deletion.py`: lo mismo con la categoría. `call_command("migrate", "categories", "0001_initial")` con un bien de `pool` da `ProtectedError`, quedan las once categorías y `0002` sigue registrada. `test_architecture.py`: `MigrationLoader(...).graph.forwards_plan(("assets", "0001_initial"))` no incluye `("categories", "0002_seed_categories")`. |
+| RF-22 | `test_deletion.py`: lo mismo con la categoría. `call_command("migrate", "categories", "0001_initial")` con un bien de `pool`, dentro de `transaction.atomic()` y con `set_rollback(True)` (T1: no hace falta `transaction=True`), da `ProtectedError`, quedan las once categorías y `0002` sigue registrada. `test_architecture.py`: `MigrationLoader(...).graph.forwards_plan(("assets", "0001_initial"))` no incluye `("categories", "0002_seed_categories")`. |
 | RF-23 | `test_location.py`: sobre el conjunto de muestra (las cuatro esquinas de la caja, Canarias, Baleares, Lisboa, Andorra, Toulouse, bordes y esquinas de celda, y 200 puntos de `random.Random(5)`) y para los tres radios, el resultado proyectado está a menos de 1 m del centro de la celda que contiene el original. `grid_cell_centre` con `x` exactamente en un borde lo asigna a la celda superior. Un punto válido fuera de la caja devuelve un valor. |
 | RF-24 | `test_location.py`: dos llamadas dan el mismo resultado, sin marca `django_db` (un acceso a la BD fallaría) y con la red bloqueada. `test_location_reference.py`: centros literales para Madrid, Las Palmas y Palma con los tres radios. |
 | RF-25 | `test_location.py`: la distancia en la proyección no supera 0,71 × radio en toda la muestra. |
@@ -366,12 +371,12 @@ Cambios de spec que propone este plan, en un único `/sdd-change` antes de T4:
 | RF-28 | `test_location.py`: dos puntos de la misma celda (cerca de la esquina inferior izquierda y de la superior derecha) dan el mismo resultado. |
 | RF-29 | `test_location.py`: f(f(p)) == f(p) en toda la muestra. |
 | RF-30 | `test_location.py`: el resultado con 500 está en la misma celda de 1000 y de 2000 que el original, y el de 1000 en la misma de 2000. |
-| RF-31 | `test_location.py`: radios `0`, `1500`, `True`, `"1000"` y `500.0` dan `radius_invalid`. Coordenadas 91, NaN, inf, `True` y `"40"` dan `coordinate_invalid`. El antípoda (según T2) y `_project` o `_unproject` sustituidos para devolver `math.inf` dan `projection_failed`. No se devuelve ningún valor, y `__context__` y `__cause__` son `None`. |
+| RF-31 | `test_location.py`: radios `0`, `1500`, `True`, `"1000"` y `500.0` dan `radius_invalid`. Coordenadas 91, NaN, inf, `True` y `"40"` dan `coordinate_invalid`. El antípoda (−52, −170), cuya `GDALException` es real (T2), y `_project` o `_unproject` sustituidos para devolver `math.inf` dan `projection_failed`. No se devuelve ningún valor, y `__context__` y `__cause__` son `None`. |
 | RF-32 | `test_architecture.py` (AST sobre `backend/apps` y `backend/config`, sin `migrations/` ni `tests/`): solo `assets/models.py`, `services.py` y `selectors.py` importan `Asset`; nadie llama a `get_model("assets", …)`; `models.py` y `selectors.py` no llaman a `save`, `create`, `update`, `delete`, `bulk_create`, `bulk_update`, `get_or_create` ni `update_or_create`; las funciones públicas de `services.py` son exactamente `{create_asset, update_asset}`; `owner` y `category` tienen `related_name == "+"`. Prueba de mecanismo: un módulo temporal que importa `Asset` hace fallar el test. |
 | RF-33 | `test_create.py`: la pública es igual a `approximate_location(exacta, radio)`, y pasar `public_location=` da `TypeError`. `test_update.py`: mover la exacta de un bien pausado a otra celda o cambiar su radio actualiza la pública en el mismo guardado. Criterio de la spec: tras una secuencia de altas y modificaciones, cada pública guardada coincide con la derivada de su exacta y su radio. |
 | RF-34 | `test_update.py`: mover la exacta dentro de la misma celda no cambia la pública. Cambiar solo el título no llama a `approximate_location` (espía con `monkeypatch`) ni cambia la pública (D6). |
-| RF-35 | `test_concurrency.py`, dos tests. (1) Con `CaptureQueriesContext` (vale un `django_db` normal), el primer SQL sobre `assets_asset` es `SELECT … FOR UPDATE`, y el UPDATE va después dentro del mismo atomic. (2) Con `django_db(transaction=True, serialized_rollback=True)`, el gancho en `approximate_location` abre una segunda conexión y, con el bloqueo tomado: primero comprueba que esa conexión **ve** la fila (`SELECT count(*)` da 1), después ejecuta `SELECT … FOR UPDATE NOWAIT`, espera `OperationalError` con sqlstate 55P03 y cierra la conexión. Pruebas de mecanismo: sin `select_for_update`, el test (2) falla en el `NOWAIT`; con el test (2) marcado como `django_db` normal, falla la aserción de visibilidad, en lugar de pasar en vacío. Al terminar, un test posterior comprueba que siguen las once categorías. |
-| RF-36 | `test_models.py`: `exact_location` y `public_location` son campos distintos. Una pública vacía da `IntegrityError` `assets_asset_public_location_valid`, y una nula da `IntegrityError` de NOT NULL. |
+| RF-35 | `test_concurrency.py`, con `CaptureQueriesContext` (vale un `django_db` normal; D10 (b), sin segunda conexión): el primer SQL sobre `assets_asset` es `SELECT … FOR UPDATE`, antes de cualquier otra lectura del bien, y el UPDATE va después dentro del mismo atomic. Pruebas de mecanismo: sin `select_for_update` falla el test; con una lectura del bien antes del bloqueo, falla el test. |
+| RF-36 | `test_models.py`: `exact_location` y `public_location` son campos distintos. Una pública vacía, o con una coordenada NaN, da `IntegrityError` `assets_asset_public_location_valid`, y una nula da `IntegrityError` de NOT NULL. |
 | RF-37 | `test_leaks.py`, con coordenadas centinela, `caplog` a DEBUG (captura también `django.contrib.gis` y `psycopg`) y `connection.force_debug_cursor`. Casos: rechazo de validación, `location_locked`, fallo de la función por radio, por coordenada y por proyección, CHECK de la BD (regla parcheada para que pase `price=0`), y `ProtectedError` de usuario, de categoría y de la reversión de la semilla. Se busca la exacta y la pública derivada como `repr(float)`, con 6 decimales, en EWKT, en EWKB hexadecimal en mayúsculas y en minúsculas, y como hexadecimal little y big endian de cada `double`. Se busca en `str()`, `repr()`, `traceback.format_exception()`, `message_dict` y `caplog.text`. |
 | RF-38 | `core/tests/test_db.py`: traducción por nombre; desconocida o sin nombre da `constraint_violated`; el `DatabaseError` se propaga; el `DomainValidationError` lanzado dentro hace rollback; una FK violada dentro del bloque salta dentro del `try`; tras el bloque, una FK violada posterior en la misma transacción exterior no salta hasta pedirlo (restricciones en diferidas). `test_leaks.py` y `test_create.py`: un CHECK en el servicio da su código, `__context__` y `__cause__` son `None` y la conexión sigue usable. Pruebas de mecanismo: con `from exc` dentro del `except`, el test falla; sin el `SET CONSTRAINTS ALL DEFERRED`, falla el test de restricciones diferidas. |
 | RF-39 | `test_update.py`: bien `active` con la exacta cambiada da `location_locked`, y con el radio cambiado `privacy_radius_locked`. `active` con los mismos valores se acepta. `paused` con cambio se acepta. Pausar y mover en la misma llamada se rechaza. `paused` a `active` con movimiento se rechaza (D7). |
@@ -389,25 +394,26 @@ Cada test que protege un mecanismo lleva su prueba de mecanismo, que se registra
   - `full_clean` admite `validate_constraints` (`db/models/base.py:1634`). Si la consulta de un CHECK falla, Django escribe un WARNING con el error (`db/models/query_utils.py:192-193`); por eso los bienes no usan `full_clean`.
   - `GeometryField.get_prep_value` interpola el valor en un `ValueError` (`gis/db/models/fields.py:229-230`).
   - `DecimalValidator` cuenta los decimales escritos (`core/validators.py:538` y siguientes).
-- [NV] Lo que comprueba T1:
-  - geography ajusta, rechaza o guarda 91, 181 y NaN;
+- [V, T1, `validation.md`] Comportamiento de PostgreSQL y PostGIS:
+  - geography ajusta 91 y 181 (con un NOTICE fijo sin coordenadas) y guarda NaN tal cual;
+  - un CHECK de `ST_X` y `ST_Y` entre los límites rechaza NaN;
   - geography admite POINT EMPTY, y `ST_Y` da NULL;
   - el `DataError` de `numeric(7,2)` no lleva el valor;
   - las FK de Django son `DEFERRABLE INITIALLY DEFERRED`;
-  - la ida y vuelta EWKB es exacta;
-  - la segunda conexión abre y usa la BD de test, y solo ve las filas confirmadas;
+  - la ida y vuelta EWKB y de texto con 17 cifras es exacta;
+  - la segunda conexión no abre bajo el bloqueo de red;
   - `migrate` hacia atrás funciona dentro de la transacción del test y `set_rollback` lo deshace;
-  - `SET CONSTRAINTS ALL IMMEDIATE` dentro de un savepoint que se revierte tras un error deja las restricciones en diferidas.
-- [NV] Lo que comprueba T2:
-  - PROJ usa la identidad WGS84→ETRS89 y `PROJ_NETWORK` está apagado;
-  - qué hace GDAL cerca del antípoda (−52, −170) y qué texto registra;
-  - el coste de NFC y de `Decimal()` sobre entradas de megas.
-- [NV] `SET CONSTRAINTS ALL IMMEDIATE` comprueba en ese momento lo pendiente de toda la transacción, y `ALL DEFERRED` pone todas las restricciones diferibles en diferidas, que para las FK de Django coincide con su modo inicial.
+  - un savepoint revertido restaura el modo de las restricciones con el que se entró, y `SET CONSTRAINTS ALL IMMEDIATE` sobrevive a un savepoint que termina bien;
+  - `SET CONSTRAINTS ALL IMMEDIATE` comprueba en ese momento lo pendiente, y `ALL DEFERRED` devuelve las FK de Django a su modo inicial.
+- [V, T2, `validation.md`] Comportamiento de GDAL y PROJ:
+  - GDAL 3.10.3 y PROJ 9.6.0 en el backend;
+  - PROJ usa la identidad WGS84→ETRS89 (coincide con la fórmula LAEA de la guía EPSG 7-2 por debajo de 0,000001 mm);
+  - el antípoda (−52, −170) lanza `GDALException`, y su texto de registro es fijo y sin coordenadas;
+  - el coste de NFC y de `Decimal()` sobre entradas de 2,5 millones de caracteres es lineal.
+- [V, sondeo sin test] El acceso de PROJ a la red está apagado en el backend: `OSRGetPROJEnableNetwork()` devuelve 0 y el entorno no tiene variables `PROJ*`.
 - [NV] El recolector aplica `PROTECT` con `related_name="+"` (relaciones ocultas incluidas). Lo cubren los tests de RF-21 y RF-22.
 - [NV] Al revertir `categories.0002` con `migrate`, el estado histórico incluye `Asset`, así que `PROTECT` actúa. Lo cubre el test de RF-22.
 - [NV] La forma de la expresión del CHECK (`Cast`, `Func` y lookups como expresiones dentro de `condition`); se confirma con `sqlmigrate`.
-- [NV] pytest-django serializa la BD de test cuando algún test pide `serialized_rollback` y ejecuta los transaccionales al final.
-- [NV] `LockNotAvailable` llega como `django.db.utils.OperationalError` con `__cause__.sqlstate == "55P03"`.
 - [NV] psycopg 3.3 entrega los NOTICE de PostgreSQL al logger `psycopg`.
 - [NV] `char_length` cuenta puntos de código en una BD UTF-8.
 - [NV] Crear `SpatialReference(3035)` en cada llamada cuesta del orden del milisegundo.

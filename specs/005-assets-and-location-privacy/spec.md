@@ -30,7 +30,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - **Cuadrícula**: división del plano de la proyección ETRS89-LAEA Europe (EPSG:3035) en celdas cuadradas de lado igual al radio de privacidad, con origen en el origen de esa proyección. Es fija y anidada: todas las celdas comparten origen, cada celda de 1000 m contiene exactamente 4 de 500 m y cada una de 2000 m contiene exactamente 4 de 1000 m. Una celda incluye sus bordes inferior e izquierdo y excluye los superior y derecho, de modo que un punto pertenece a una sola celda. La proyección y el origen no cambian: cambiarlos movería todas las celdas públicas.
 - **Función de aproximación**: función que, dada una coordenada y un radio de privacidad, devuelve el centro de la celda que contiene esa coordenada, expresado en latitud y longitud y redondeado a 6 decimales.
 - **Caja de coherencia**: rectángulo con latitud entre 27,5 y 44,0 grados y longitud entre -18,5 y 5,0 grados, ambos límites incluidos. Es un control de coherencia que detecta coordenadas intercambiadas y valores absurdos, no una frontera: incluye toda España, pero también Portugal continental, Andorra, Madeira, el sur de Francia y el norte de Marruecos y Argelia.
-- **Servicio de escritura de bienes**: la única función de escritura de bienes que expone el dominio.
+- **Servicio de escritura de bienes**: las dos funciones de escritura de bienes (crear y modificar), definidas en un único módulo. Son las únicas que expone el dominio.
 - **Arrendatario con reserva confirmada**: usuario cuya solicitud de reserva sobre un bien ha aceptado el propietario (se define en la spec de reservas).
 - **Texto recortado**, **carácter de control** y **rechazar**: como en la spec 004. En validación, el error lleva un código y el campo, nunca el valor; en la base de datos, un error de integridad.
 - **Texto normalizado**: título y descripción se guardan recortados y en forma NFC, como el nombre de categoría de la spec 004.
@@ -43,9 +43,9 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 ### Datos del bien
 - RF-1: CUANDO el servicio de escritura crea un bien válido, EL SISTEMA lo guarda con propietario, categoría, título y descripción normalizados, precio, moneda, unidad de precio, ubicación exacta, ubicación pública, radio de privacidad, estado, fecha de creación y fecha de modificación.
 - RF-2: SI falta el propietario o la categoría, o no corresponde a un usuario o una categoría existente, ENTONCES EL SISTEMA rechaza el bien.
-- RF-3: SI el título normalizado tiene menos de 3 caracteres visibles o más de 100 puntos de código, o contiene caracteres de control o de formato, ENTONCES EL SISTEMA rechaza el bien.
-- RF-4: SI la descripción normalizada tiene menos de 20 o más de 2000 caracteres, o contiene un carácter de control distinto del salto de línea, el retorno de carro y el tabulador, o un carácter de formato, ENTONCES EL SISTEMA rechaza el bien.
-- RF-5: SI el precio no llega como texto o `Decimal` (un `float`, un booleano o cualquier otro tipo), se expresa con exponente, no es un número decimal finito, es menor que 0,01, es mayor que 99999,99 o tiene más de 2 decimales, ENTONCES EL SISTEMA rechaza el bien sin redondearlo.
+- RF-3: SI el título no es texto, o el título normalizado tiene menos de 3 caracteres visibles o más de 100 puntos de código, o contiene caracteres de control o de formato, ENTONCES EL SISTEMA rechaza el bien.
+- RF-4: SI la descripción no es texto, o la descripción normalizada tiene menos de 20 o más de 2000 caracteres, o contiene un carácter de control distinto del salto de línea, el retorno de carro y el tabulador, o un carácter de formato, ENTONCES EL SISTEMA rechaza el bien.
+- RF-5: SI el precio no llega como texto o `Decimal` (un `float`, un booleano o cualquier otro tipo), se expresa con exponente, no es un número decimal finito, es menor que 0,01, es mayor que 99999,99 o tiene más de 2 decimales significativos (los ceros finales no cuentan), ENTONCES EL SISTEMA rechaza el bien sin redondearlo.
 - RF-6: CUANDO se crea un bien sin indicar moneda, EL SISTEMA asigna EUR.
 - RF-7: SI se indica una moneda distinta de EUR, ENTONCES EL SISTEMA rechaza el bien.
 - RF-8: SI la unidad de precio falta o no es `hour`, `day`, `week` ni `month`, ENTONCES EL SISTEMA rechaza el bien.
@@ -53,7 +53,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - RF-10: SI el radio de privacidad no es exactamente 500, 1000 o 2000 (incluidos 0, negativos, decimales y valores intermedios como 1500), ENTONCES EL SISTEMA rechaza el bien.
 - RF-11: CUANDO se crea un bien, EL SISTEMA lo deja en estado `paused`, para que no publique su ubicación aproximada hasta que el anunciante haya revisado su radio y lo active a propósito (RF-19).
 - RF-12: SI al crear un bien se indica un estado distinto de `paused`, o al modificarlo uno distinto de `active` o `paused`, ENTONCES EL SISTEMA lo rechaza.
-- RF-13: SI la ubicación exacta falta, o su latitud está fuera de -90 a 90, o su longitud fuera de -180 a 180, o alguna es un booleano o no es un número finito, ENTONCES EL SISTEMA rechaza el bien.
+- RF-13: SI la ubicación exacta falta, o su latitud está fuera de -90 a 90, o su longitud fuera de -180 a 180, o alguna es un booleano o un texto, o no es un número finito, ENTONCES EL SISTEMA rechaza el bien.
 - RF-14: SI la ubicación exacta está fuera de la caja de coherencia, ENTONCES EL SISTEMA rechaza el bien.
 - RF-15: CUANDO se crea un bien, EL SISTEMA registra la fecha de creación y la de modificación con zona horaria, con la hora que recibe el servicio de escritura como parámetro.
 - RF-16: CUANDO una modificación cambia algún valor del bien, EL SISTEMA actualiza la fecha de modificación, con la hora recibida como parámetro, y conserva la de creación; si no cambia ningún valor, no toca ninguna fecha.
@@ -65,7 +65,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - RF-20: SI se intenta cambiar el propietario de un bien ya creado, ENTONCES EL SISTEMA rechaza el cambio. La categoría sí puede cambiarse.
 - RF-21: SI se intenta borrar un usuario que tiene bienes, ENTONCES EL SISTEMA rechaza el borrado: con el ORM, con un error de borrado protegido; con SQL directo, con un error de integridad de la clave foránea.
 - RF-22: SI se intenta borrar una categoría que tiene bienes, incluido al revertir la migración de la semilla de la spec 004, ENTONCES EL SISTEMA rechaza el borrado del mismo modo que en RF-21 y sin borrar ninguna categoría.
-- RF-39: SI se intenta cambiar la ubicación exacta o el radio de privacidad de un bien que está en estado `active` según el estado guardado antes de la modificación, ENTONCES EL SISTEMA rechaza la modificación; con el bien `paused` el cambio se acepta. Un valor igual al guardado no es un cambio.
+- RF-39: SI se intenta cambiar la ubicación exacta o el radio de privacidad de un bien que está en estado `active` según el estado guardado antes de la modificación, o activar un bien pausado y cambiar en la misma modificación la ubicación exacta o el radio, ENTONCES EL SISTEMA rechaza la modificación; con el bien `paused` que sigue pausado el cambio se acepta. Un valor igual al guardado no es un cambio.
 
 ### Función de aproximación
 - RF-23: EL SISTEMA dispone de una función de aproximación que, dadas una coordenada válida (latitud de -90 a 90 y longitud de -180 a 180) y un radio de privacidad admitido, devuelve el centro de la celda de la cuadrícula que contiene la coordenada. La función no comprueba la caja de coherencia; eso lo hace la validación del bien (RF-14), y las garantías de RF-25 a RF-27 solo valen para coordenadas dentro de la caja.
@@ -76,14 +76,14 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - RF-28: EL SISTEMA garantiza que dos coordenadas de la misma celda dan el mismo resultado.
 - RF-29: EL SISTEMA garantiza que aplicar la función a su propio resultado con el mismo radio devuelve ese mismo resultado.
 - RF-30: EL SISTEMA garantiza que la cuadrícula es anidada: el resultado con radio 500 pertenece a la misma celda de 1000 y de 2000 que la coordenada original, y el resultado con radio 1000 pertenece a la misma celda de 2000.
-- RF-31: SI el radio no es 500, 1000 o 2000, o la coordenada no es válida, o la proyección no da un valor finito, ENTONCES la función de aproximación falla con un error y no devuelve ningún valor.
+- RF-31: SI el radio no es 500, 1000 o 2000, o la coordenada no es válida, o la proyección falla o no da un valor finito, ENTONCES la función de aproximación falla con un error y no devuelve ningún valor.
 
 ### Ubicación pública y servicio de escritura
-- RF-32: EL SISTEMA expone el servicio de escritura de bienes como la única función de escritura de bienes del dominio; es el único que calcula la ubicación pública.
-- RF-33: CUANDO el servicio de escritura guarda un bien, EL SISTEMA fija su ubicación pública como el resultado de la función de aproximación aplicada a la ubicación exacta y al radio guardados, y sustituye cualquier ubicación pública recibida por la derivada.
+- RF-32: EL SISTEMA expone el servicio de escritura de bienes como las dos únicas funciones de escritura de bienes del dominio, definidas en un único módulo; solo ellas calculan la ubicación pública.
+- RF-33: CUANDO el servicio de escritura crea un bien o cambia su ubicación exacta o su radio, EL SISTEMA fija su ubicación pública como el resultado de la función de aproximación aplicada a la ubicación exacta y al radio guardados. El servicio no admite que se le indique una ubicación pública: falla con un error de programación.
 - RF-34: SI una modificación no cambia la ubicación exacta ni el radio, ENTONCES EL SISTEMA no cambia la ubicación pública. Se comparan con igualdad exacta los valores recibidos, ya validados, y los guardados.
 - RF-35: CUANDO el servicio de escritura modifica un bien, EL SISTEMA lo hace en una única transacción atómica que bloquea la fila del bien, de modo que dos modificaciones simultáneas no dejan una ubicación pública derivada de valores obsoletos.
-- RF-36: EL SISTEMA guarda la ubicación exacta y la pública en campos separados, y la pública nunca queda vacía.
+- RF-36: EL SISTEMA guarda la ubicación exacta y la pública en campos separados, y ninguna de las dos queda nunca vacía ni con una coordenada no finita.
 
 ### Errores y logs
 - RF-37: EL SISTEMA no incluye coordenadas (exactas ni públicas) en ningún error que devuelve (de validación, de la función de aproximación o de borrado protegido), ni en su `str()`, su `repr()` o su traceback, ni en ningún registro de log que emite la aplicación.
@@ -93,8 +93,8 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - **Permisos**: esta spec no expone endpoints, así que no hay accesos de anónimo, usuario ni propietario que declarar aquí. Las specs de API los declaran según las "Reglas para specs posteriores". El servicio de escritura no comprueba quién actúa: la autorización por objeto es de la API.
 - **Arquitectura (constitución, punto 3)**: el cálculo de la ubicación pública vive en la función de aproximación (pura) y en el servicio de escritura de bienes. No vive en el guardado del modelo, porque `QuerySet.update()` y `bulk_create()` se lo saltan.
 - **Desconfianza de la entrada (constitución, punto 6)**: reparto del rechazo entre la validación y la base de datos:
-  - En validación y en la base de datos: rango del precio, radio en {500, 1000, 2000}, moneda EUR, unidad, estado, longitudes de título y descripción contadas en puntos de código sobre el texto normalizado, rangos de latitud y longitud, y ubicación pública no vacía.
-  - Solo en validación: caja de coherencia, mínimo de caracteres visibles del título, recorte, normalización, caracteres de control y de formato, tipo y formato del precio (texto o `Decimal`, sin exponente), precisión del precio, propietario inmutable y cambio de exacta o radio con el bien activo.
+  - En validación y en la base de datos: rango del precio, radio en {500, 1000, 2000}, moneda EUR, unidad, estado, longitudes de título y descripción contadas en puntos de código sobre el texto normalizado, coordenadas finitas y ubicaciones exacta y pública no vacías.
+  - Solo en validación: rango de latitud y longitud (la base de datos no lo rechaza: el tipo de ubicación ajusta una coordenada fuera de rango, por ejemplo 91 a 89), caja de coherencia, mínimo de caracteres visibles del título, recorte, normalización, caracteres de control y de formato, tipo y formato del precio (texto o `Decimal`, sin exponente), precisión del precio, tipo de las coordenadas, propietario inmutable y cambio de exacta o radio con el bien activo.
   - En el ORM y en la base de datos: el borrado de un usuario o de una categoría con bienes (RF-21, RF-22).
 - **Errores**: cada rechazo en validación lleva un código de error estable en inglés y el campo afectado, no un mensaje en castellano; el cliente traduce los códigos.
 - **Rendimiento**: la función de aproximación no consulta la base de datos ni la red.
@@ -121,6 +121,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - **Datos personales (API, listados y fotos)**: los listados públicos no exponen más datos del propietario que los estrictamente necesarios, las fotos se guardan sin metadatos EXIF y el formulario avisa de que el título y la descripción son públicos y no deben incluir la dirección, el teléfono ni el email.
 - **Elección del radio (frontend)**: al elegir el radio de privacidad, la interfaz explica que en zonas poco pobladas un radio pequeño puede señalar la vivienda.
 - **Validación de la respuesta (frontend)**: el frontend valida la forma de la respuesta de la API para el bien antes de usarla (constitución, punto 6).
+- **Tamaño de la entrada (API)**: el servicio de escritura no limita el tamaño del texto recibido antes de normalizarlo; la spec de API limita el tamaño del cuerpo de la petición.
 
 ## Casos límite
 - Título formado solo por espacios: tras recortar queda vacío y se rechaza (RF-3).
@@ -130,9 +131,12 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Título con un emoji compuesto de tres personas (3 emojis unidos por 2 U+200D): se acepta, porque tiene 3 caracteres visibles (RF-3).
 - Título con una letra y su acento combinante (NFD): se normaliza a NFC y cuenta como un carácter (RF-3).
 - Título con U+202E: se rechaza; con U+200D dentro de un emoji compuesto: se acepta. La descripción se trata igual (RF-3, RF-4).
+- Título o descripción con un sustituto suelto (categoría Unicode Cs): no es texto válido y se rechaza (RF-3, RF-4).
+- Título o descripción que no es texto (un número, `None`, bytes): se rechaza (RF-3, RF-4).
 - Descripción de 19 o de 2001 caracteres recortados: se rechaza; de 20 y de 2000: se acepta (RF-4). El texto se guarda normalizado, sin escapar: escapar HTML es cosa del cliente.
 - Descripción con un carácter de escape (ESC, `\x1b`): se rechaza; con saltos de línea `\r\n` entre párrafos: se acepta (RF-4).
 - Precio `0`, `0.00`, `-5`, `100000` o `12.345`: se rechaza; `0.01` y `99999.99`: se acepta. `NaN`, `Infinity` y `12,50` con coma: se rechaza; también `1e2`, `1E2` y un `float` como `0.1` (RF-5).
+- Precio `12.340`: se acepta y se guarda como 12,34, porque los ceros finales no cuentan como decimales (RF-5).
 - Moneda `usd` o `eur` en minúsculas: se rechaza; solo vale `EUR` (RF-7).
 - Unidad `hour`, `day`, `week` o `month`: se acepta; `night`, `Day` en mayúscula o vacía: se rechaza (RF-8).
 - Radio `0`, `-500`, `1500` o `500.5`: se rechaza (RF-10).
@@ -141,6 +145,8 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Latitud 91 o longitud 181: se rechaza (RF-13).
 - Latitud o longitud `True` o `False` (en Python, `True` es 1): se rechaza (RF-13).
 - Latitud o longitud `NaN`, infinito o menos infinito: se rechaza (RF-13).
+- Latitud o longitud como texto (por ejemplo, `"40.4"`): se rechaza (RF-13).
+- Latitud 91 o longitud 181 escritas saltándose la validación: la base de datos no las rechaza, el tipo las ajusta (91 pasa a 89); `NaN` escrito saltándose la validación sí lo rechaza la base de datos (RF-13, RF-36).
 - Coordenada en Lisboa, Andorra o Toulouse: está dentro de la caja y se acepta (RF-14).
 - Coordenada exactamente en un límite de la caja: se acepta, porque los límites están incluidos (RF-14).
 - Coordenada en una esquina de la caja cuyo centro de celda cae fuera de ella: la función devuelve ese centro igualmente, porque solo la validación del bien comprueba la caja; la pública guardada puede quedar fuera de la caja y solo debe no estar vacía (RF-23, RF-29, RF-36).
@@ -150,10 +156,11 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Dos bienes con la misma celda y el mismo radio: comparten ubicación pública; agruparlos es cosa del mapa (RF-28).
 - El anunciante mueve la exacta dentro de la misma celda: la pública no cambia y no se revela nada nuevo (RF-34).
 - El anunciante mueve la exacta a otra celda o cambia el radio: con el bien `paused`, la pública cambia en el mismo guardado (RF-33) y la interfaz debe avisar (Reglas para specs posteriores); con el bien `active`, se rechaza (RF-39).
-- Se pide al servicio guardar un bien con una pública manipulada: se sustituye por la derivada (RF-33).
+- Se intenta indicar una ubicación pública al servicio de escritura: el servicio no la admite y falla con un error de programación; la pública guardada solo cambia cuando cambian la exacta o el radio (RF-33).
 - Dos modificaciones simultáneas del mismo bien, una de la exacta y otra del radio: la segunda espera al bloqueo y la pública final deriva de los valores finales (RF-35).
 - Se intenta cambiar el propietario de un bien: se rechaza (RF-20).
 - Pausar un bien y cambiar su exacta en la misma modificación: se rechaza, porque cuenta el estado guardado antes de la modificación (RF-39).
+- Activar un bien pausado y cambiar su exacta o su radio en la misma modificación: se rechaza, para que el anunciante no publique una zona nueva sin revisarla (RF-39).
 - Activar un bien ya activo, o pausar uno ya pausado: no cambia nada y no es un error (RF-19).
 - Modificar un bien sin indicar el radio: conserva el que tenía (RF-18).
 - Modificar un bien sin cambiar ningún valor: no toca ninguna fecha (RF-16).
@@ -167,6 +174,8 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Otras monedas y otras unidades de precio (noche).
 - Disponibilidad, calendario, reservas, fianzas y precios por temporada (spec de reservas).
 - Búsqueda por radio, filtros, ordenación, distancia redondeada, radio mínimo de búsqueda y agrupación de marcadores (spec de búsqueda).
+- Límite del tamaño del texto recibido antes de normalizarlo: lo pondrá la spec de API con el límite del cuerpo de la petición.
+- Verificar el bloqueo de RF-35 con dos conexiones simultáneas: el aislamiento de red de los tests no permite abrir una segunda conexión, y no se hace ninguna excepción.
 - Geocodificación de direcciones: el sistema recibe coordenadas ya resueltas.
 - Restringir las ubicaciones por país o por frontera administrativa: la caja de coherencia no lo hace y no está en el MVP.
 - Radio de privacidad personalizado, spec de profesionales (tipo de cuenta, verificación, DAC7 y ubicación exacta pública) y cualquier otra excepción a la regla de privacidad.
@@ -191,19 +200,20 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 
 ## Criterios de finalización
 - Cada RF tiene un test automático. Esta spec no tiene interfaz, así que no hay comprobaciones en navegador.
-- RF-23 a RF-31 se cubren con tests de propiedades sobre un conjunto de coordenadas que incluye las cuatro esquinas de la caja de coherencia, Canarias, Baleares, puntos en bordes y esquinas de celda y puntos aleatorios con semilla fija, para los tres radios. RF-31 se cubre además con coordenadas fuera de la caja cuya proyección no da un valor finito. RF-26 se justifica con el margen de RF-25 y RF-27 (0,71 × 1,05 ≈ 0,75, por debajo del radio); el muestreo lo comprueba, no lo demuestra para todos los puntos.
+- RF-23 a RF-31 se cubren con tests de propiedades sobre un conjunto de coordenadas que incluye las cuatro esquinas de la caja de coherencia, Canarias, Baleares, puntos en bordes y esquinas de celda y puntos aleatorios con semilla fija, para los tres radios. RF-31 se cubre además con el antípoda del origen de la proyección, donde GDAL falla (T2), y la sustitución por infinito. RF-26 se justifica con el margen de RF-25 y RF-27 (0,71 × 1,05 ≈ 0,75, por debajo del radio); el muestreo lo comprueba, no lo demuestra para todos los puntos.
 - Un test fija el centro de celda de coordenadas concretas (al menos una por radio, incluidas Canarias y Baleares) con valores calculados una vez; si fallan tras actualizar PROJ o GDAL, se aplica el riesgo aceptado sobre los valores de referencia.
 - RF-27 se verifica midiendo en el terreno (distancia geodésica) el lado real de la celda en varios puntos de la caja, incluidos Canarias y Baleares, para los tres radios, y exigiendo entre el 95 % y el 105 % del radio nominal. Así se demuestra que EPSG:3035 sirve.
 - Un test comprueba, tras crear y modificar bienes con el servicio de escritura, que la ubicación pública guardada coincide con la derivada de la exacta y el radio guardados (RF-33, RF-34).
 - Un test comprueba que la representación textual de un bien contiene su título y su identificador y ninguna coordenada (RF-17).
 - Un test paramétrico de fugas, como el de la spec 004, provoca cada rechazo (validación del bien, función de aproximación, CHECK de la base de datos y borrado protegido de RF-21 y RF-22) con coordenadas centinela, el log en DEBUG y el cursor de depuración activo. Comprueba que ni `str()`, `repr()`, el traceback, el detalle del error ni el log capturado contienen las coordenadas, ni en decimales ni como EWKB hexadecimal, y que la causa y el contexto del error son `None` (RF-37, RF-38).
-- Las restricciones de base de datos se verifican con tests que guardan saltándose la validación y esperan un error de integridad.
+- Las restricciones de base de datos se verifican con tests que guardan saltándose la validación y esperan un error de integridad; la excepción es el rango de latitud y longitud, que la base de datos no rechaza sino que ajusta, y un test fija ese comportamiento (RF-13).
+- RF-35 se verifica comprobando que el bloqueo de la fila es la primera lectura del bien y precede a su escritura dentro de la misma transacción, con una prueba de mecanismo que lo rompe. No hay prueba con dos conexiones simultáneas.
 - Un test revierte la semilla de la spec 004 con un bien que usa una de sus categorías y comprueba que falla sin borrar ninguna (RF-22).
 - Un test estático comprueba que la migración que crea los bienes no depende de la migración de la semilla de categorías (RF-22).
 - La suite de tests, el análisis estático y la comprobación de migraciones (RF-7 de la 002) están en verde.
 
 ## Dudas abiertas
 - Clarificada con los revisores (/sdd-clarify). Recoge las decisiones tomadas durante la clarificación de la 004, antes de partirla.
-- Para el plan: el método de test de RF-35, la verificación de RF-32, y el catálogo, el formato y el mapeo de los códigos de error (de la base de datos a código y campo, varios errores a la vez y tipo de error de RF-31).
+- Resueltas en el plan: método de test de RF-35 y verificación de RF-32 (D10) y catálogo de códigos (D8).
 - Para la spec de reservas: qué pasa con el acceso a la exacta del arrendatario con reserva confirmada si el propietario pausa el bien.
 - Para un /sdd-change de la 004: el dominio del email con caracteres de formato (Cf).

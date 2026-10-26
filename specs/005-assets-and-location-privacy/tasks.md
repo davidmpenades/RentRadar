@@ -3,9 +3,9 @@ Requisitos previos:
 - Rama `feature/005-assets-and-location-privacy`, creada desde `dev`.
 - Spec aprobada; plan aprobado con D1 a D10 elegidas, D3 y D10 con los cambios de la aprobación.
 - Puerta antes de T4:
-  - `/sdd-change` aplicado con D1, D4, D5, D6 y D7 y con los resultados de T1 y T2;
+  - `/sdd-change` aplicado con D1, D4 (b), D5, D6, D7, el cambio A de T1 (CHECK de coordenadas finitas) y D10 (b), con los resultados de T1 y T2;
   - si un resultado contradice el plan, el plan y estas tareas se corrigen antes de T4.
-- Tras T2 se decide si la spec se parte en 005a (T1 a T5) y 005b (T6 a T10).
+- La spec no se parte (decidido tras T2).
 
 Antes de cada commit:
 - `docker compose exec backend pytest -q` y `docker compose exec backend sh -c "ruff check . && ruff format --check ."` en verde.
@@ -15,7 +15,7 @@ Antes de cada commit:
 
 Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, órdenes de git que descarten o reescriban cambios, push. Se pregunta antes de crear la migración de T6.
 
-- [ ] **T1. Comportamiento de PostgreSQL y PostGIS que el plan supone.** RF-5, RF-13, RF-36 (parte de BD); prepara RF-2, RF-22, RF-34, RF-35
+- [x] **T1. Comportamiento de PostgreSQL y PostGIS que el plan supone.** RF-5, RF-13, RF-36 (parte de BD); prepara RF-2, RF-22, RF-34, RF-35
   - Cómo se prueba (`apps/core/tests/test_database_platform.py`; cada test fija lo observado):
     1. Geography con latitud 91, longitud 181 y NaN, por texto y por WKB en parámetro: ¿falla (y con qué clase de error), ajusta con un NOTICE o guarda tal cual?
     2. `POINT EMPTY` en geography; `ST_IsEmpty` y `ST_Y` tras el cast a geometry.
@@ -38,7 +38,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `test(core): pin postgis behaviour assumed by assets`
   - Hecho cuando: los tests pasan y describen lo observado; `validation.md` tiene la sección "Plataforma" con fecha, orden y resultado; ningún fichero de producción cambia.
 
-- [ ] **T2. Comportamiento de GDAL y PROJ que el plan supone.** RF-24, RF-27, RF-31, RF-37 (preparación)
+- [x] **T2. Comportamiento de GDAL y PROJ que el plan supone.** RF-24, RF-27, RF-31, RF-37 (preparación)
   - Cómo se prueba (`apps/core/tests/test_projection_platform.py`):
     1. Fija las versiones de GDAL y PROJ (avisan si cambia la imagen).
     2. Orden de ejes: Madrid en EPSG:4326 da x = Este e y = Norte en EPSG:3035, con valores de referencia para Madrid, Las Palmas y Palma calculados una vez.
@@ -68,14 +68,14 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     - Los dos tests de `_codes_for_constraint` pasan a core.
     - Siguen sin cambios: `users/tests/test_services.py:174-185` y `:397-411`, y `categories/tests/test_services.py:340-350` y `:359-369`.
     - Mecanismo: capturar fuera del atomic hace fallar el test de conexión usable; quitar `or ""` hace fallar el de sin diagnóstico; quitar `SET CONSTRAINTS ALL DEFERRED` hace fallar el de restricciones diferidas; quitar `SET CONSTRAINTS ALL IMMEDIATE` hace fallar el de la FK violada dentro del bloque.
-  - Qué toca revisar: que los `raise` siguen fuera del `except`; que `change_user_email` restaura el email igual que antes; el orden de las dos sentencias `SET CONSTRAINTS` y que van dentro del `atomic`.
+  - Qué toca revisar: que los `raise` siguen fuera del `except`; que `change_user_email` restaura el email igual que antes; el orden de las dos sentencias `SET CONSTRAINTS` y que van dentro del `atomic`; que el comentario de `run_guarded` dice que, al terminar bien, deja las restricciones diferidas sea cual sea el modo de entrada (y que tras una reversión no ejecuta `ALL DEFERRED`, porque el savepoint restaura el modo de entrada).
   - Commit: `refactor(core): extract guarded database write`
   - Hecho cuando: el recuento cuadra (más los nuevos de core, menos los dos movidos); ruff en verde; no queda ninguna copia de `_save_guarded`; la suite de users y categories pasa sin cambios, salvo los dos tests movidos.
 
 - [ ] **T4. App de bienes y función de aproximación.** RF-23, RF-24, RF-25, RF-26, RF-27, RF-28, RF-29, RF-30, RF-31
   - Cómo se prueba:
     - `apps/assets` con `AssetsConfig` en `INSTALLED_APPS` y `docker compose restart backend`.
-    - `test_location.py`: muestra con las cuatro esquinas, Canarias, Baleares, bordes y esquinas de celda y `random.Random(5)`, para los tres radios; sin `django_db`.
+    - `test_location.py`: muestra con las cuatro esquinas, Canarias, Baleares, bordes y esquinas de celda y `random.Random(5)`, para los tres radios; sin `django_db`. El antípoda (−52, −170), cuya `GDALException` es real (T2), da `projection_failed`.
     - `test_location_reference.py`: centros literales.
     - `test_location_geodesic.py`: `ST_Distance` sobre geography.
     - Mecanismo: `round` a 5 decimales hace fallar la referencia; `ceil` en vez de `floor` hace fallar el borde; quitar la comprobación de finito tras `_unproject` hace fallar el caso de infinito.
@@ -94,7 +94,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     - `test_rules.py`, con los casos de la Estrategia de tests; los invisibles se escriben con `chr()`.
     - Mecanismo: contar visibles sin excluir U+200D; patrón del precio con `\d`; contar los ceros finales; comparar la caja con `<` en vez de `<=`; radio sin excluir `bool`. Cada mutación hace fallar su test.
   - Qué toca revisar, línea a línea:
-    - el orden tipo → sustituto → tope → recorte → NFC;
+    - el orden tipo → sustituto → recorte → NFC, sin tope bruto del texto recibido;
     - la definición de carácter visible;
     - los Cc admitidos en la descripción;
     - `PRICE_PATTERN` y el recuento de decimales;
@@ -110,6 +110,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
       - sin `auto_now`;
       - `str()` y `repr()`;
       - cada CHECK con `save()` directo dentro de `atomic` espera `IntegrityError` con su nombre exacto;
+      - coordenada NaN (latitud o longitud) en la exacta y en la pública, y exacta vacía, dan `IntegrityError`; latitud 91 y longitud 181 no dan error, porque el tipo las ajusta;
       - pública vacía y nula;
       - `ProtectedError` al borrar un usuario y una categoría con bienes.
     - `test_architecture.py`: la migración no depende de `categories.0002` (grafo).
@@ -120,7 +121,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     - `max_digits=8`;
     - `spatial_index=False` en la exacta;
     - la ausencia de `default=`;
-    - el SQL de los CHECK (cast y `NOT ST_IsEmpty`);
+    - el SQL de los CHECK (cast, `NOT ST_IsEmpty` y los límites de `ST_X` y `ST_Y`, que son «coordenadas finitas» y no un rango);
     - la dependencia editada a `categories.0001`.
   - Commit: `feat(assets): add asset model`
   - Hecho cuando: `pytest -q`, ruff, `manage.py check` y `makemigrations --check --dry-run` en verde; los nombres de las FK están anotados para `CONSTRAINT_CODES`.
@@ -145,13 +146,10 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
 - [ ] **T8. Modificación de bienes con bloqueo de fila.** RF-12, RF-16, RF-18, RF-19, RF-20, RF-33, RF-34, RF-35, RF-39
   - Cómo se prueba:
     - `test_update.py`, con los casos de la Estrategia de tests, incluidos D6 (espía en `approximate_location`) y D7.
-    - `test_concurrency.py`:
-      - orden de consultas con `CaptureQueriesContext`;
-      - el test de la segunda conexión con `django_db(transaction=True, serialized_rollback=True)`: la segunda conexión comprueba primero que ve la fila y después hace `FOR UPDATE NOWAIT`;
-      - se comprueba que al empezar hay once categorías.
+    - `test_concurrency.py`: orden de consultas con `CaptureQueriesContext` (D10 (b), sin segunda conexión): el primer SQL sobre `assets_asset` es `SELECT … FOR UPDATE`, antes de cualquier otra lectura del bien, y el UPDATE va después dentro del mismo atomic.
     - Mecanismo:
-      - sin `select_for_update` fallan los tests de RF-35;
-      - con el test de la segunda conexión marcado como `django_db` normal, falla la aserción de visibilidad en lugar de pasar en vacío;
+      - sin `select_for_update` falla el test de RF-35;
+      - con una lectura del bien antes del bloqueo, falla el test de RF-35;
       - comparar con el estado recibido en vez del guardado hace fallar el de pausar y mover;
       - guardar sin `update_fields` hace fallar el de no pisar columnas.
   - Qué toca revisar:
@@ -160,13 +158,13 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     - la condición de RF-39 y de D7 sobre el estado guardado;
     - la rama sin cambios;
     - la lista de `update_fields`;
-    - que la fila del test transaccional queda confirmada y que la conexión se cierra.
+    - que el bloqueo se verifica por su SQL y no por su efecto con dos conexiones (D10 (b)).
   - Commit: `feat(assets): add asset update service`
-  - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde; la suite sigue con las once categorías tras los tests transaccionales.
+  - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
 - [ ] **T9. Borrado protegido completo, fugas y única vía de escritura.** RF-21, RF-22, RF-32, RF-37, RF-38
   - Cómo se prueba:
-    - `test_deletion.py`: `DELETE` por SQL con `SET CONSTRAINTS ALL IMMEDIATE` y reversión real de la semilla con un bien.
+    - `test_deletion.py`: `DELETE` por SQL con `SET CONSTRAINTS ALL IMMEDIATE` y reversión real de la semilla con un bien, dentro de `atomic` con `set_rollback(True)` (T1), sin `transaction=True`.
     - `test_leaks.py`: los casos y las formas de la Estrategia de tests.
     - `test_architecture.py`: la regla AST.
     - Mecanismo:
