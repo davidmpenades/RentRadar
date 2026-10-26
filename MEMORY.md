@@ -6,7 +6,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Arnés montado (AGENTS.md, MEMORY.md, MCPs Context7 y Chrome DevTools, skills de terceros) con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo. Constitución aprobada en docs/constitution.md.
 - 001-backend-skeleton y 002-quality-gates (CI mínimo) completadas y validadas; PR #3 mergeada en dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior. 003-health-checks aplazada hasta la spec de despliegue.
 - 004 (usuarios y categorías) implementada y validada (specs/004-users-and-categories/validation.md); mergeada en dev (PR #5).
-- 005 (assets y privacidad de ubicación) en borrador, pendiente de /sdd-clarify. Para el clarify: su RF-3 remite a la 004, donde "carácter de control" es solo la categoría Cc; decidir qué caracteres Cf se rechazan en títulos y en el dominio del email, que hoy los acepta (p. ej. U+202E, que invierte el texto; cuidado con los legítimos, como U+200D).
+- 005 (assets y privacidad de ubicación) aprobada; siguiente: /sdd-plan. Pendiente un /sdd-change de la 004: el dominio del email, que hoy acepta caracteres Cf (p. ej. U+202E).
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
@@ -44,7 +44,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 ## Próximos pasos
 - Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT o sesión web + JWT móvil), errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web.
 - Ajuste manual del propietario: protección de rama de dev en GitHub (el CI ya está en verde); aprobación de workflows de forks.
-- Spec 005: /sdd-clarify. En su plan: protección PROTECT de categorías y usuarios con bienes y su test (la parte de RF-22 que la 004 dejó), extraer el guardado protegido a apps/core. Los tests de modelos nuevos exigen su migración (config/tests/test_migrations.py).
+- Spec 005: /sdd-plan. En su plan: protección PROTECT de categorías y usuarios con bienes y su test (la parte de RF-22 que la 004 dejó), extraer el guardado protegido a apps/core. Los tests de modelos nuevos exigen su migración (config/tests/test_migrations.py).
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
 - Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico, DB_PASSWORD de 16 caracteres como mínimo en producción (cambio de spec con /sdd-change); nivel de detalle del log de PostgreSQL (sus errores de unicidad incluyen el valor); localización de la BD de producción (LC_CTYPE UTF-8: con la C, Jardín y JARDÍN no chocarían); borrado o anonimización de cuentas (RGPD, art. 17) obligatorio antes de abrir a usuarios reales.
