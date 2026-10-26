@@ -10,7 +10,7 @@ Antes de cada commit: `docker compose exec backend pytest -q` y `docker compose 
     2. Para ver que falla por la razón esperada, crea un `backend/apps/core/models.py` temporal y sin commitear con un modelo mínimo, sin migración. Ejecuta `docker compose exec backend pytest -q config/tests/test_migrations.py`. Debe fallar con el mensaje propio, y no con `RuntimeError`, `TypeError` ni `CommandError`.
     3. Borra el fichero temporal con `rm` (nunca con git), comprueba con `git status` que solo queda el test nuevo y que pasa en vacío.
     4. Sin `makemigrations` real ni `migrate`.
-  - Qué toca revisar: que el kwarg es `check_changes`, que se captura `SystemExit`, que lleva `django_db` y que el mensaje de fallo no filtra datos. Se explica línea a línea antes de que lo aceptes (regla local).
+  - Qué toca revisar: que el kwarg es `check_changes`, que se captura `SystemExit`, que lleva `django_db` y que el mensaje de fallo no filtra datos.
   - Commit: `test(core): fail the suite on missing migrations`
   - Hecho cuando: el modelo temporal hace fallar el test con el mensaje propio; sin él, el test pasa; `pytest -q` completo y `ruff check . && ruff format --check .` en verde; el modelo temporal ya no está en el árbol de trabajo y `git status` solo muestra el test nuevo.
 

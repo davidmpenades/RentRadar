@@ -26,7 +26,6 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - La evidencia de las comprobaciones manuales de cada spec se registra en specs/NNN/validation.md, con fecha, orden y resultado.
 - git push está denegado a los agentes en .claude/settings.json; los push los hace el usuario.
 - Errores de dominio: DomainValidationError lleva solo campos y códigos, y los servicios lo lanzan fuera del except. El guardado protegido está copiado en users y categories: se extrae a apps/core en la tercera repetición (la 005). Las categorías solo cambian por migración.
-- Los modelos y su validación de dominio los escribe el usuario (o su tutor); Claude escribe tests, servicios, migraciones y core, y revisa el código ajeno línea a línea.
 
 ## Riesgos conocidos (detalle en la skill indicada)
 - Una sesión en segundo plano no puede editar dev; para implementar, sesión en primer plano.
