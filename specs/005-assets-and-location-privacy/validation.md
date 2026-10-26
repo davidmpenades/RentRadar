@@ -45,3 +45,51 @@ Mutaciones sobre copias del fichero, borradas después. sha256 de `test_database
 ### Límites
 - Los tests usan cursores crudos con texto y WKB en parámetro. El adaptador de GEOS de Django solo funciona a través del ORM, así que el camino por modelo se cubre en T6 (`test_models.py`).
 - Con el bloqueo de red levantado (sondeo sin commitear), la segunda conexión abre, ve `rentradar_test`, solo ve las filas confirmadas y se cierra; con `serialized_rollback=True` las once categorías siguen en el test posterior.
+
+## Proyección (T2)
+Fecha: 2026-10-26 · Fichero: `backend/apps/core/tests/test_projection_platform.py` · Ningún fichero de producción cambia. Las comprobaciones se hacen con el GDAL y el PROJ del backend (GDAL 3.10.3, PROJ 9.6.0 con `proj-data` 9.6.0); la imagen de PostGIS lleva PROJ 9.8.1 y no interviene.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests de proyección | `docker compose exec backend pytest -q apps/core/tests/test_projection_platform.py` | 24 passed |
+| Suite completa | `docker compose exec backend pytest -q` | 502 passed (478 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 72 ficheros formateados |
+
+### Lo observado
+| # | Comprobación | Observado | Cambio de spec que dispara |
+|---|---|---|---|
+| 1 | Versiones | GDAL 3.10.3 y PROJ 9.6.0, leída esta última con `OSRGetPROJVersion`. El test falla si cambia cualquiera de las dos, parche incluido | Sin cambio |
+| 2 | Orden de ejes | Con `AxisOrder.TRADITIONAL`, `Point(lon, lat)` en EPSG:4326 da x = Este e y = Norte en EPSG:3035. Con `AxisOrder.AUTHORITY` los dos ejes salen intercambiados. Referencias al milímetro: Madrid (3159390,356; 2029850,920), Las Palmas (1816110,911; 984556,390), Palma (3686979,431; 1861579,356) | Sin cambio |
+| 3 | Contraste con la fórmula LAEA elipsoidal de la guía EPSG 7-2 | La fórmula escrita en el test reproduce el ejemplo publicado (50 N 5 E → 3962799,45; 2999718,85) con diferencia menor de 5 mm. PROJ coincide con ella en 11 puntos de España (Península, Baleares y Canarias) con diferencia menor de 0,000001 mm: PROJ no aplica ningún desplazamiento de datum entre EPSG:4326 y ETRS89 | Sin cambio: no se dispara `/sdd-change` C |
+| 4a | Proyectar el antípoda del origen (-52, -170) y su equivalente (-52, 190) y (-52,0000001, -170) | `GDALException("OGR failure.")`. El registro de `django.contrib.gis` recibe un único mensaje de nivel ERROR, `GDAL_ERROR 1: b'Point outside of projection domain'`, sin coordenadas | Sin cambio de spec ni de `test_logging.py`: no hace falta configurar `django.contrib.gis` |
+| 4b | Puntos próximos (-51,999, -170), (-52, -169,99) y (-60, -170) | Valores finitos (por ejemplo, norte de 15946597 m en el primero) | Sin cambio |
+| 4c | Desproyectar (-10 000 000, 0) | La misma `GDALException` y el mismo mensaje de registro | Sin cambio |
+| 4d | ¿Algún valor no finito sin excepción? | No se ha observado ninguno | RF-31 se cubre con el antípoda real (`GDALException` capturada como `projection_failed`) y con la sustitución por infinito, que sigue siendo la única forma de probar el no finito |
+| 5 | Coste de NFC y de `Decimal()` | Lineal en todos los casos (tabla siguiente) | D4 (b): sin tope bruto |
+
+### Mediciones (sin commitear)
+Una ejecución por tamaño en esta máquina, con cada medida en su propio proceso. Tamaños en puntos de código o dígitos.
+
+| Caso | Tamaño | Tiempo |
+|---|---|---|
+| NFC, marcas combinantes alternas (U+0301, U+0323) | 8 000 / 160 000 / 2 500 000 | 0,31 ms / 5,89 ms / 95 ms |
+| NFC, todas las marcas de una clase y luego de otra (peor caso de reordenación) | 8 000 / 160 000 / 2 500 000 | 0,26 ms / 5,69 ms / 92 ms |
+| NFC, «a» más acento que se compone | 8 000 / 625 000 / 2 500 000 | 0,13 ms / 11 ms / 45 ms |
+| `Decimal()` de 2 500 000 dígitos | 2 500 000 | 10 ms |
+| `Decimal("1." + "0" * n)` | 2 500 000 | 9,9 ms |
+
+### Pruebas de mecanismo
+Mutaciones sobre copias del fichero, borradas después. sha256 de `test_projection_platform.py`, `conftest.py` y `test_database_platform.py` idéntico antes y después.
+
+| Mutación | Tests que fallan | Razón |
+|---|---|---|
+| Falso norte de la fórmula +2 mm | 11 de contraste y el del ejemplo publicado | La diferencia supera 1 mm |
+| Meridiano de origen 9 en vez de 10 | 11 de contraste y el del ejemplo publicado | La fórmula se aleja de PROJ y del ejemplo |
+| Versión de GDAL 3.10.4 | Versiones | `b'3.10.3' == b'3.10.4'` |
+| Referencia de Madrid con este y norte cambiados | Orden de ejes de Madrid y el de AUTHORITY | Los ejes salen intercambiados |
+| Orden de ejes por defecto AUTHORITY en el ayudante | 20 de 24 | Todos los resultados salen intercambiados |
+| El antípoda en la lista de puntos finitos | Finitos del antípoda | `GDALException: OGR failure.` |
+
+### Límites
+- El coste se midió una vez por tamaño; el resultado que importa es la forma (lineal), no los milisegundos.
+- La función de aproximación usará el PROJ del backend (9.6.0). Las distancias de los tests de RF-26 y RF-27 las calcula `ST_Distance` sobre geography en PostGIS, que no proyecta a EPSG:3035.
