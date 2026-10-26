@@ -165,12 +165,6 @@ def test_concurrent_duplicate_is_translated_to_email_taken(
     assert User.objects.count() == 1
 
 
-def test_unknown_constraint_is_reported_without_details():
-    assert services._codes_for_constraint("other_constraint") == {
-        "__all__": ["constraint_violated"]
-    }
-
-
 @pytest.mark.django_db
 @CREATE_FUNCTIONS
 def test_integrity_error_without_details_is_not_swallowed(monkeypatch, create):

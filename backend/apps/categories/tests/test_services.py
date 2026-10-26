@@ -350,12 +350,6 @@ def test_renaming_a_deleted_category_fails_instead_of_reinserting_it():
     assert not Category.objects.filter(pk=category.pk).exists()
 
 
-def test_unknown_constraint_is_reported_without_details():
-    assert services._codes_for_constraint("other_constraint") == {
-        "__all__": ["constraint_violated"]
-    }
-
-
 @pytest.mark.django_db
 def test_integrity_error_without_details_is_not_swallowed(monkeypatch):
     def fail(self, *args, **kwargs):

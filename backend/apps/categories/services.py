@@ -1,7 +1,7 @@
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
-from django.db import IntegrityError, transaction
 
 from apps.categories.models import Category
+from apps.core.db import CONSTRAINT_VIOLATED, run_guarded
 from apps.core.errors import (
     UNMAPPED_ERROR,
     DomainValidationError,
@@ -18,7 +18,6 @@ NAME_INVALID = "name_invalid"
 NAME_CONTROL_CHAR = "name_control_char"
 NAME_TOO_LONG = "name_too_long"
 NAME_TAKEN = "name_taken"
-CONSTRAINT_VIOLATED = "constraint_violated"
 VALIDATION_FAILED = UNMAPPED_ERROR[1]
 
 ERROR_CODES = frozenset(
@@ -73,7 +72,9 @@ def save_category(category):
     errors.update(_validation_errors(category, exclude=exclude))
     if not errors:
         update_fields = None if category._state.adding else ["name"]
-        errors = _save_guarded(category, update_fields=update_fields)
+        _, errors = run_guarded(
+            lambda: category.save(update_fields=update_fields), CONSTRAINT_CODES
+        )
     if errors:
         raise DomainValidationError(errors)
     return category
@@ -94,26 +95,3 @@ def _validation_errors(category, *, exclude):
     except ValidationError as exc:
         return translate_validation_error(exc, DJANGO_CODES)
     return {}
-
-
-def _save_guarded(instance, update_fields=None):
-    violated = None
-    try:
-        with transaction.atomic():
-            instance.save(update_fields=update_fields)
-    except IntegrityError as exc:
-        violated = _constraint_name(exc)
-    # Devuelve códigos para lanzar fuera del except: el IntegrityError lleva el valor
-    if violated is None:
-        return {}
-    return _codes_for_constraint(violated)
-
-
-def _constraint_name(error):
-    diag = getattr(error.__cause__, "diag", None)
-    return getattr(diag, "constraint_name", None) or ""
-
-
-def _codes_for_constraint(name):
-    field, code = CONSTRAINT_CODES.get(name, (NON_FIELD_ERRORS, CONSTRAINT_VIOLATED))
-    return {field: [code]}
