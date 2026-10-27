@@ -193,3 +193,52 @@ Mutaciones sobre `rules.py`, que es un fichero nuevo de la tarea, restauradas en
 - Las reglas dejan fuera lo que decide el servicio: qué significa «no indicado» (`*_required`), la existencia del propietario y de la categoría, y RF-39. Esas partes se cubren en T7 y T8.
 - Un carácter invisible que no es espacio, ni de control ni de formato (por ejemplo U+3164 o U+2800) cuenta como visible en el título. Es un riesgo aceptado de la spec.
 - `.5` y `5.` se aceptan como precios porque el patrón los admite. Son un riesgo aceptado de la spec, junto a `+5` y `007.50`, y los fijan tests.
+
+## Modelo de bien (T6)
+Fecha: 2026-10-27 · Ficheros: `backend/apps/assets/models.py`, `backend/apps/assets/migrations/0001_initial.py` y, en `backend/apps/assets/tests/`, `conftest.py` (fixtures `owner`, `category` y `make_asset`), `test_models.py` y `test_architecture.py`.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Rojo previo | `docker compose exec backend pytest -q apps/assets/tests/test_models.py apps/assets/tests/test_architecture.py` sin `models.py` | `ModuleNotFoundError: No module named 'apps.assets.models'` al cargar `conftest.py` |
+| Recuento previo | `docker compose exec backend pytest -q` | 800 passed |
+| Sin migración | las mismas dos rutas con `models.py` y sin migración | 1 failed, 11 passed y 28 errors: los tests de BD no encuentran la tabla y el de arquitectura no encuentra la migración |
+| Dry-run | `docker compose exec backend python manage.py makemigrations assets --dry-run -v 3` | Una sola operación, `Create model Asset`, con 9 CHECK, 2 FK y los dos campos de ubicación; ninguna otra app |
+| Tests de `apps/assets` | `docker compose exec backend pytest -q --create-db apps/assets` | 327 passed (75 de ubicación, 212 de reglas y 40 nuevos) |
+| Suite completa, BD de test recreada | `docker compose exec backend pytest -q --create-db` | 840 passed (800 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 89 ficheros formateados |
+| Django | `manage.py check` y `manage.py makemigrations --check --dry-run` | Sin incidencias; no hay cambios |
+| Dependencias | `git diff dev --stat -- backend/requirements*.txt` | Vacío |
+
+### Migración
+La migración se generó con `docker compose exec -u "$(id -u)" backend python manage.py makemigrations assets`. Se corrigió a mano la dependencia `("categories", "0002_seed_categories")` por `("categories", "0001_initial")`, conservando `swappable_dependency(settings.AUTH_USER_MODEL)`, y se pasó `ruff format`. `migrate` no se ha ejecutado en la BD de desarrollo.
+
+`sqlmigrate assets 0001` (solo lectura) muestra:
+- `CREATE TABLE "assets_asset"` con todas las columnas `NOT NULL`, `price numeric(8, 2)`, `exact_location` y `public_location` como `geography(POINT,4326)` y los nueve CHECK con su nombre;
+- `LENGTH("title") BETWEEN 3 AND 100`, `LENGTH("description") BETWEEN 20 AND 2000` y `"price" BETWEEN 0.01 AND 99999.99`;
+- los CHECK de ubicación como `NOT (ST_IsEmpty((col)::geometry(GEOMETRY,4326))) AND ST_X(…) BETWEEN -180.0 AND 180.0 AND ST_Y(…) BETWEEN -90.0 AND 90.0`, que son «coordenadas finitas» y no un rango;
+- las dos FK `DEFERRABLE INITIALLY DEFERRED`: `assets_asset_owner_id_23c9aaf7_fk_users_user_id` y `assets_asset_category_id_b30c6baf_fk_categories_category_id` (nombres anotados para `CONSTRAINT_CODES`);
+- un índice GiST solo sobre `public_location` (`assets_asset_public_location_bccabc5d_id`) y los dos índices B-tree que Django crea por defecto sobre `category_id` y `owner_id`.
+
+### Lo cerrado de las afirmaciones no verificadas
+| Afirmación | Observado |
+|---|---|
+| La forma de la expresión del CHECK | `Cast`, `IsEmpty`, `Func` y `Range` compilan y se serializan en la migración; `title__length` no existe en `TextField`, así que el CHECK usa `Length("title")` |
+| `char_length` cuenta puntos de código | Un título de 100 emojis (400 bytes) se acepta y uno de 101 se rechaza con `assets_asset_title_length` |
+| NaN y ubicación vacía a través del adaptador de GEOS de Django | El ORM los envía sin rechazarlos y los CHECK los rechazan por su nombre, en la exacta y en la pública; no hizo falta el SQL crudo |
+| Latitud 91 y longitud 181 a través del ORM | No dan error y se leen ajustadas a (−179, 89), en las dos ubicaciones |
+
+### Pruebas de mecanismo
+Mutaciones sobre `models.py` y sobre `0001_initial.py`, ficheros nuevos de la tarea, restauradas en el mismo comando. Las dos de la migración se ejecutaron con `--create-db`, y se hizo una pasada final de la suite completa con `--create-db` tras restaurar. sha256 de `models.py` (`34c1ce00fcb6`) y de la migración (`107d46d41a45`), y de `location.py`, `rules.py` y los ficheros de `tests/`, idéntico antes y después.
+
+| Mutación | Tests que fallan |
+|---|---|
+| `__str__` que añade la ubicación exacta | `test_str_and_repr_show_the_title_and_the_id_and_no_coordinates` (1) |
+| `on_delete=CASCADE` en el propietario | `test_deleting_an_owner_with_assets_is_protected` y `test_foreign_keys_protect_and_have_no_reverse_accessor[owner-User]` |
+| `on_delete=CASCADE` en la categoría | `test_deleting_a_category_with_assets_is_protected` y `test_foreign_keys_protect_and_have_no_reverse_accessor[category-Category]` |
+| Sin `NOT ST_IsEmpty` en el CHECK de la exacta (migración) | `test_a_non_finite_or_empty_location_is_rejected_by_name[empty-exact_location-…]` (1) |
+| Sin el rango de `ST_X` y `ST_Y` en el CHECK de la pública (migración) | `test_a_non_finite_or_empty_location_is_rejected_by_name[nan_latitude-public_location-…]` y `[nan_longitude-public_location-…]` |
+
+### Límites
+- Los tests de BD no usan `full_clean`: los bienes no pasan por la validación de modelos de Django, que consultaría la BD para cada CHECK. La validación es la de `rules.py` (T5) y, después, el servicio (T7).
+- Los CHECK no repiten el mínimo de caracteres visibles del título: la BD solo cuenta puntos de código.
+- La migración congela los límites como literales. Cambiar una constante de `rules.py` o `location.py` exige una migración nueva, y `makemigrations --check` lo detecta.

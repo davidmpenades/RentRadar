@@ -1,9 +1,17 @@
 import math
 import random
+from datetime import UTC, datetime
+from decimal import Decimal
 
 import pytest
+from django.contrib.gis.geos import Point
 
 from apps.assets.location import _project, _unproject
+from apps.assets.models import Asset
+from apps.categories.models import Category
+from apps.users.models import User
+
+NOW = datetime(2026, 10, 27, 12, 0, tzinfo=UTC)
 
 BOX_CORNERS = [(27.5, -18.5), (27.5, 5.0), (44.0, -18.5), (44.0, 5.0)]
 CITIES_AND_ISLANDS = [
@@ -55,3 +63,37 @@ def sample_points():
         for point in points_around_cell_edges(*reference)
     ]
     return tuple(BOX_CORNERS + CITIES_AND_ISLANDS + edge_points + random_points)
+
+
+@pytest.fixture
+def owner(db):
+    return User.objects.create(email="owner@correo.es")
+
+
+@pytest.fixture
+def category(db):
+    return Category.objects.get(slug="pool")
+
+
+@pytest.fixture
+def make_asset(owner, category):
+    # Un bien válido sin guardar; cada test sobrescribe solo lo que quiere romper
+    def build(**overrides):
+        fields = {
+            "owner": owner,
+            "category": category,
+            "title": "Taladro",
+            "description": "Taladro de percusion en buen estado",
+            "price": Decimal("12.34"),
+            "currency": "EUR",
+            "price_unit": "day",
+            "exact_location": Point(-3.7038, 40.4168, srid=4326),
+            "public_location": Point(-3.7052, 40.4157, srid=4326),
+            "privacy_radius": 1000,
+            "status": "paused",
+            "created_at": NOW,
+            "updated_at": NOW,
+        }
+        return Asset(**{**fields, **overrides})
+
+    return build
