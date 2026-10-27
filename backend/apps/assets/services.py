@@ -269,7 +269,7 @@ def _insert(*, values, moment):
         price_unit=values["price_unit"],
         privacy_radius=values["privacy_radius"],
         status=values["status"],
-        exact_location=Point(x=longitude, y=latitude, srid=4326),
+        exact_location=_point(latitude=latitude, longitude=longitude),
         public_location=public_location,
         created_at=moment,
         updated_at=moment,
@@ -296,7 +296,12 @@ def _public_location(*, latitude, longitude, radius):
         )
     except ApproximationError:
         return None
-    return Point(x=public_longitude, y=public_latitude, srid=4326)
+    return _point(latitude=public_latitude, longitude=public_longitude)
+
+
+# Un punto WGS84 a partir de latitud y longitud
+def _point(*, latitude, longitude):
+    return Point(x=longitude, y=latitude, srid=4326)
 
 
 # Limpia solo lo indicado, todo a la vez: los errores de forma se devuelven juntos
@@ -414,4 +419,4 @@ def _model_value(field, value):
     if field != "location":
         return value
     latitude, longitude = value
-    return Point(x=longitude, y=latitude, srid=4326)
+    return _point(latitude=latitude, longitude=longitude)
