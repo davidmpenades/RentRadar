@@ -102,21 +102,23 @@ def create_asset(
 ):
     moment = _aware_utc(now)
     values, errors = _clean_for_creation(
-        owner_id,
-        category_id,
-        title,
-        description,
-        price,
-        currency,
-        price_unit,
-        latitude,
-        longitude,
-        privacy_radius,
-        status,
+        owner_id=owner_id,
+        category_id=category_id,
+        title=title,
+        description=description,
+        price=price,
+        currency=currency,
+        price_unit=price_unit,
+        latitude=latitude,
+        longitude=longitude,
+        privacy_radius=privacy_radius,
+        status=status,
     )
     if errors:
         raise DomainValidationError(errors)
-    asset, errors = run_guarded(lambda: _insert(values, moment), CONSTRAINT_CODES)
+    asset, errors = run_guarded(
+        lambda: _insert(values=values, moment=moment), CONSTRAINT_CODES
+    )
     if errors:
         raise DomainValidationError(errors)
     return asset
@@ -131,6 +133,7 @@ def _aware_utc(now):
 
 # Limpia todos los campos a la vez: los errores de forma se devuelven juntos
 def _clean_for_creation(
+    *,
     owner_id,
     category_id,
     title,
@@ -145,23 +148,31 @@ def _clean_for_creation(
 ):
     results = {
         "owner": _required(
-            "owner", owner_id, lambda raw: clean_reference(raw, "owner")
+            field="owner",
+            raw=owner_id,
+            clean=lambda raw: clean_reference(raw, "owner"),
         ),
         "category": _required(
-            "category", category_id, lambda raw: clean_reference(raw, "category")
+            field="category",
+            raw=category_id,
+            clean=lambda raw: clean_reference(raw, "category"),
         ),
-        "title": _required("title", title, clean_title),
-        "description": _required("description", description, clean_description),
-        "price": _required("price", price, clean_price),
-        "price_unit": _required("price_unit", price_unit, clean_price_unit),
-        "currency": clean_currency(_default(currency, CURRENCY)),
+        "title": _required(field="title", raw=title, clean=clean_title),
+        "description": _required(
+            field="description", raw=description, clean=clean_description
+        ),
+        "price": _required(field="price", raw=price, clean=clean_price),
+        "price_unit": _required(
+            field="price_unit", raw=price_unit, clean=clean_price_unit
+        ),
+        "currency": clean_currency(_default(raw=currency, default=CURRENCY)),
         "privacy_radius": clean_privacy_radius(
-            _default(privacy_radius, DEFAULT_PRIVACY_RADIUS)
+            _default(raw=privacy_radius, default=DEFAULT_PRIVACY_RADIUS)
         ),
         "status": clean_status(
-            _default(status, DEFAULT_STATUS), allowed=STATUSES_ON_CREATE
+            _default(raw=status, default=DEFAULT_STATUS), allowed=STATUSES_ON_CREATE
         ),
-        "location": _clean_coordinates(latitude, longitude),
+        "location": _clean_coordinates(latitude=latitude, longitude=longitude),
     }
     values = {field: value for field, (value, _) in results.items()}
     errors = {field: codes for field, (_, codes) in results.items() if codes}
@@ -169,31 +180,35 @@ def _clean_for_creation(
 
 
 # Un campo obligatorio: no indicado o None es «required»; si no, lo valida su regla
-def _required(field, raw, clean):
+def _required(*, field, raw, clean):
     if raw is _UNSET or raw is None:
         return None, [f"{field}_required"]
     return clean(raw)
 
 
 # El valor por defecto solo vale si no se indicó nada; None cuenta como indicado
-def _default(raw, default):
+def _default(*, raw, default):
     return default if raw is _UNSET else raw
 
 
 # Las dos coordenadas juntas: si falta alguna es «required»
-def _clean_coordinates(latitude, longitude):
+def _clean_coordinates(*, latitude, longitude):
     if any(value is _UNSET or value is None for value in (latitude, longitude)):
         return None, ["location_required"]
     return clean_location(latitude, longitude)
 
 
 # Dentro de la transacción: existencia, ubicación pública y guardado
-def _insert(values, moment):
-    missing = _missing_references(values["owner"], values["category"])
+def _insert(*, values, moment):
+    missing = _missing_references(
+        owner_id=values["owner"], category_id=values["category"]
+    )
     if missing:
         raise DomainValidationError(missing)
     latitude, longitude = values["location"]
-    public_location = _public_location(latitude, longitude, values["privacy_radius"])
+    public_location = _public_location(
+        latitude=latitude, longitude=longitude, radius=values["privacy_radius"]
+    )
     if public_location is None:
         raise DomainValidationError({NON_FIELD_ERRORS: [APPROXIMATION_FAILED]})
     asset = Asset(
@@ -206,7 +221,7 @@ def _insert(values, moment):
         price_unit=values["price_unit"],
         privacy_radius=values["privacy_radius"],
         status=values["status"],
-        exact_location=Point(longitude, latitude, srid=4326),
+        exact_location=Point(x=longitude, y=latitude, srid=4326),
         public_location=public_location,
         created_at=moment,
         updated_at=moment,
@@ -216,7 +231,7 @@ def _insert(values, moment):
 
 
 # Los campos cuya referencia no existe, con su código
-def _missing_references(owner_id, category_id):
+def _missing_references(*, owner_id, category_id):
     missing = {}
     if not get_user_model().objects.filter(pk=owner_id).exists():
         missing["owner"] = ["owner_not_found"]
@@ -226,11 +241,11 @@ def _missing_references(owner_id, category_id):
 
 
 # La ubicación pública, o None si la función de aproximación falla
-def _public_location(latitude, longitude, radius):
+def _public_location(*, latitude, longitude, radius):
     try:
         public_latitude, public_longitude = approximate_location(
             latitude, longitude, radius
         )
     except ApproximationError:
         return None
-    return Point(public_longitude, public_latitude, srid=4326)
+    return Point(x=public_longitude, y=public_latitude, srid=4326)
