@@ -103,7 +103,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `feat(assets): add asset field rules`
   - Hecho cuando: los tests pasan; las reglas no importan modelos ni tocan la BD.
 
-- [ ] **T6. Modelo de bien y migración inicial.** RF-1, RF-3 a RF-13 (parte de BD), RF-15, RF-17, RF-21 y RF-22 (parte del ORM), RF-36
+- [x] **T6. Modelo de bien y migración inicial.** RF-1, RF-3 a RF-13 (parte de BD), RF-15, RF-17, RF-21 y RF-22 (parte del ORM), RF-36
   - Cómo se prueba:
     - `test_models.py`, en rojo antes del modelo:
       - campos;
@@ -112,9 +112,13 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
       - cada CHECK con `save()` directo dentro de `atomic` espera `IntegrityError` con su nombre exacto;
       - coordenada NaN (latitud o longitud) en la exacta y en la pública, y exacta vacía, dan `IntegrityError`; latitud 91 y longitud 181 no dan error, porque el tipo las ajusta;
       - pública vacía y nula;
-      - `ProtectedError` al borrar un usuario y una categoría con bienes.
+      - `ProtectedError` al borrar un usuario y una categoría con bienes;
+      - con `SET CONSTRAINTS ALL IMMEDIATE`, un propietario o una categoría inexistentes dan `IntegrityError` con el nombre exacto de su FK, que T7 copia a `CONSTRAINT_CODES`;
+      - la longitud cuenta puntos de código: 100 emojis se aceptan y 101 se rechazan;
+      - esquema: un único índice GiST, el de `public_location`, y los tipos de columna (`numeric(8,2)`, `geography(Point,4326)`).
     - `test_architecture.py`: la migración no depende de `categories.0002` (grafo).
     - `sqlmigrate assets 0001` revisado.
+    - Mecanismo: `__str__` con la ubicación exacta; `on_delete=CASCADE` en el propietario y en la categoría; sin `NOT ST_IsEmpty` en el CHECK de la exacta y sin el rango de `ST_X` y `ST_Y` en el de la pública, las dos últimas sobre la migración y con `pytest --create-db`, más una pasada final de la suite también con `--create-db`.
   - Qué toca revisar:
     - `PROTECT` y `related_name="+"`;
     - `TextField` con CHECK;

@@ -81,7 +81,7 @@ Restricciones (`CheckConstraint(condition=..., name=...)`; los nombres tienen me
 | `assets_asset_public_location_valid` | Lo mismo sobre `public_location` (RF-36) |
 
 - Un CHECK que da NULL se cumple, y `ST_Y(POINT EMPTY)` es NULL. Por eso el `NOT ST_IsEmpty` va explícito.
-- La expresión hace un cast de geography a geometry (`Cast` + `Func`). Su forma exacta se confirma con `sqlmigrate` [NV].
+- La expresión hace un cast de geography a geometry con `Cast`, `IsEmpty`, `Func` (`ST_X` y `ST_Y`) y `Range` [V, T6]. El cast sale como `::geometry(GEOMETRY,4326)` en `sqlmigrate`. Las longitudes usan `Range(Length(...))`, porque `title__length` no existe en `TextField`.
 - Los límites del CHECK de `ST_X` y `ST_Y` no son un rango:
   - T1 mostró que geography ajusta lo fuera de rango (91 pasa a 89) y que guarda NaN tal cual, así que ningún valor fuera de rango llega a la comprobación;
   - en PostgreSQL NaN es mayor que cualquier número, por lo que no cumple el `BETWEEN` y el CHECK lo rechaza (T1 lo fija en una tabla temporal con la misma expresión);
@@ -96,6 +96,7 @@ Restricciones (`CheckConstraint(condition=..., name=...)`; los nombres tienen me
   - el índice espacial solo en `public_location`;
   - las columnas `geography(Point,4326)`.
 - Los nombres de las dos FK (`assets_asset_owner_id_<hash>_fk_users_user_id` y el de la categoría) se copian a `CONSTRAINT_CODES` y los fija un test con `diag.constraint_name`.
+- Django crea además dos índices B-tree, sobre `owner_id` y `category_id`, como con cualquier `ForeignKey`; se quedan.
 - Nadie ejecuta `migrate` en la BD de desarrollo sin OK en el momento (T10). `test_migrations.py` vigila la app desde T6.
 
 ## Contrato de API
@@ -412,11 +413,11 @@ Cada test que protege un mecanismo lleva su prueba de mecanismo, que se registra
   - el antípoda (−52, −170) lanza `GDALException`, y su texto de registro es fijo y sin coordenadas;
   - el coste de NFC y de `Decimal()` sobre entradas de 2,5 millones de caracteres es lineal.
 - [V, sondeo sin test] El acceso de PROJ a la red está apagado en el backend: `OSRGetPROJEnableNetwork()` devuelve 0 y el entorno no tiene variables `PROJ*`.
-- [NV] El recolector aplica `PROTECT` con `related_name="+"` (relaciones ocultas incluidas). Lo cubren los tests de RF-21 y RF-22.
+- [V, T6: `ProtectedError` al borrar un usuario y una categoría con bienes] El recolector aplica `PROTECT` con `related_name="+"` (relaciones ocultas incluidas). Falta el borrado por SQL y la reversión de la semilla, que cubre T9 (RF-21 y RF-22).
 - [NV] Al revertir `categories.0002` con `migrate`, el estado histórico incluye `Asset`, así que `PROTECT` actúa. Lo cubre el test de RF-22.
-- [NV] La forma de la expresión del CHECK (`Cast`, `Func` y lookups como expresiones dentro de `condition`); se confirma con `sqlmigrate`.
+- [V, T6: `sqlmigrate assets 0001` y los tests de violación] La forma de la expresión del CHECK (`Cast`, `IsEmpty`, `Func` y `Range` dentro de `condition`): compila, se serializa en la migración y el cast sale como `::geometry(GEOMETRY,4326)`.
 - [NV] psycopg 3.3 entrega los NOTICE de PostgreSQL al logger `psycopg`.
-- [NV] `char_length` cuenta puntos de código en una BD UTF-8.
+- [V, T6: 100 emojis (400 bytes) se aceptan y 101 se rechazan] `LENGTH` cuenta puntos de código en una BD UTF-8.
 - [V, T4: 0,448 ms por llamada] Crear las `SpatialReference` y la transformación en cada llamada de `approximate_location` cuesta menos de un milisegundo.
 
 ## Skills que aplican
