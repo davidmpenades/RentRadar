@@ -9,6 +9,7 @@ from apps.assets.models import Asset, AssetStatus
 from apps.assets.rules import (
     CURRENCY,
     STATUSES_ON_CREATE,
+    STATUSES_ON_UPDATE,
     clean_currency,
     clean_description,
     clean_location,
@@ -63,8 +64,14 @@ ERROR_CODES = frozenset(
         "location_outside_bounds",
         APPROXIMATION_FAILED,
         CONSTRAINT_VIOLATED,
+        "asset_not_found",
+        "location_locked",
+        "privacy_radius_locked",
     }
 )
+
+# Campo del servicio -> atributo del modelo, cuando no se llaman igual
+ATTRIBUTES = {"category": "category_id", "location": "exact_location"}
 
 # Restricción de la BD -> (campo, código); la de la ubicación pública no se traduce
 CONSTRAINT_CODES = {
@@ -118,6 +125,47 @@ def create_asset(
         raise DomainValidationError(errors)
     asset, errors = run_guarded(
         lambda: _insert(values=values, moment=moment), CONSTRAINT_CODES
+    )
+    if errors:
+        raise DomainValidationError(errors)
+    return asset
+
+
+# Modifica solo los campos indicados; la pública se deriva si cambian exacta o radio
+def update_asset(
+    *,
+    now,
+    asset_id,
+    category_id=_UNSET,
+    title=_UNSET,
+    description=_UNSET,
+    price=_UNSET,
+    currency=_UNSET,
+    price_unit=_UNSET,
+    latitude=_UNSET,
+    longitude=_UNSET,
+    privacy_radius=_UNSET,
+    status=_UNSET,
+):
+    moment = _aware_utc(now)
+    asset_id, values, errors = _clean_for_update(
+        asset_id=asset_id,
+        category_id=category_id,
+        title=title,
+        description=description,
+        price=price,
+        currency=currency,
+        price_unit=price_unit,
+        latitude=latitude,
+        longitude=longitude,
+        privacy_radius=privacy_radius,
+        status=status,
+    )
+    if errors:
+        raise DomainValidationError(errors)
+    asset, errors = run_guarded(
+        lambda: _apply_update(asset_id=asset_id, values=values, moment=moment),
+        CONSTRAINT_CODES,
     )
     if errors:
         raise DomainValidationError(errors)
@@ -249,3 +297,121 @@ def _public_location(*, latitude, longitude, radius):
     except ApproximationError:
         return None
     return Point(x=public_longitude, y=public_latitude, srid=4326)
+
+
+# Limpia solo lo indicado, todo a la vez: los errores de forma se devuelven juntos
+def _clean_for_update(
+    *,
+    asset_id,
+    category_id,
+    title,
+    description,
+    price,
+    currency,
+    price_unit,
+    latitude,
+    longitude,
+    privacy_radius,
+    status,
+):
+    required = {
+        "category": (category_id, lambda raw: clean_reference(raw, "category")),
+        "title": (title, clean_title),
+        "description": (description, clean_description),
+        "price": (price, clean_price),
+        "price_unit": (price_unit, clean_price_unit),
+    }
+    # Aquí None no es «required» sino inválido, como al crear
+    direct = {
+        "currency": (currency, clean_currency),
+        "privacy_radius": (privacy_radius, clean_privacy_radius),
+        "status": (status, lambda raw: clean_status(raw, allowed=STATUSES_ON_UPDATE)),
+    }
+    results = {
+        field: _required(field=field, raw=raw, clean=clean)
+        for field, (raw, clean) in required.items()
+        if raw is not _UNSET
+    }
+    results |= {
+        field: clean(raw) for field, (raw, clean) in direct.items() if raw is not _UNSET
+    }
+    if latitude is not _UNSET or longitude is not _UNSET:
+        results["location"] = _clean_coordinates(latitude=latitude, longitude=longitude)
+    asset_id, asset_codes = clean_reference(asset_id, "asset")
+    values = {field: value for field, (value, _) in results.items()}
+    errors = {field: codes for field, (_, codes) in results.items() if codes}
+    if asset_codes:
+        errors["asset"] = asset_codes
+    return asset_id, values, errors
+
+
+# Dentro de la transacción: bloqueo, cambios, reglas de la BD y guardado
+def _apply_update(*, asset_id, values, moment):
+    # Es la primera lectura del bien: todo se compara con la fila ya bloqueada
+    asset = Asset.objects.select_for_update().filter(pk=asset_id).first()
+    if asset is None:
+        raise DomainValidationError({"asset": ["asset_not_found"]})
+    changes = _changed_values(asset=asset, values=values)
+    errors = _update_errors(asset=asset, values=values, changes=changes)
+    if errors:
+        raise DomainValidationError(errors)
+    if not changes:
+        return asset
+    for field, value in changes.items():
+        setattr(asset, ATTRIBUTES.get(field, field), _model_value(field, value))
+    update_fields = [ATTRIBUTES.get(field, field) for field in changes]
+    if "location" in changes or "privacy_radius" in changes:
+        public_location = _public_location(
+            latitude=asset.exact_location.y,
+            longitude=asset.exact_location.x,
+            radius=asset.privacy_radius,
+        )
+        if public_location is None:
+            raise DomainValidationError({NON_FIELD_ERRORS: [APPROXIMATION_FAILED]})
+        asset.public_location = public_location
+        update_fields.append("public_location")
+    asset.updated_at = moment
+    asset.save(update_fields=[*update_fields, "updated_at"])
+    return asset
+
+
+# Los valores indicados que difieren, con igualdad exacta, de los de la fila
+def _changed_values(*, asset, values):
+    stored = {
+        "category": asset.category_id,
+        "title": asset.title,
+        "description": asset.description,
+        "price": asset.price,
+        "currency": asset.currency,
+        "price_unit": asset.price_unit,
+        "privacy_radius": asset.privacy_radius,
+        "status": asset.status,
+        "location": (asset.exact_location.y, asset.exact_location.x),
+    }
+    return {field: value for field, value in values.items() if value != stored[field]}
+
+
+# Errores que exigen la fila: categoría inexistente y ubicación bloqueada
+def _update_errors(*, asset, values, changes):
+    errors = {}
+    if (
+        "category" in changes
+        and not Category.objects.filter(pk=values["category"]).exists()
+    ):
+        errors["category"] = ["category_not_found"]
+    # Bloquea si el bien está activo antes o va a estarlo después de la modificación
+    resulting_status = values.get("status", asset.status)
+    if AssetStatus.ACTIVE.value in (asset.status, resulting_status):
+        if "location" in changes:
+            errors["location"] = ["location_locked"]
+        if "privacy_radius" in changes:
+            errors["privacy_radius"] = ["privacy_radius_locked"]
+    return errors
+
+
+# La ubicación llega como (latitud, longitud) y el modelo la guarda como punto
+def _model_value(field, value):
+    if field != "location":
+        return value
+    latitude, longitude = value
+    return Point(x=longitude, y=latitude, srid=4326)

@@ -44,6 +44,9 @@ EXPECTED_ERROR_CODES = {
     "location_outside_bounds",
     "approximation_failed",
     "constraint_violated",
+    "asset_not_found",
+    "location_locked",
+    "privacy_radius_locked",
 }
 REQUIRED_ARGUMENTS = [
     ("owner_id", "owner"),

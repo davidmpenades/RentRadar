@@ -8,6 +8,7 @@ from django.contrib.gis.geos import Point
 
 from apps.assets.location import _project, _unproject
 from apps.assets.models import Asset
+from apps.assets.services import create_asset
 from apps.categories.models import Category
 from apps.users.models import User
 
@@ -113,3 +114,9 @@ def creation_arguments(owner, category):
         "latitude": 40.4168,
         "longitude": -3.7038,
     }
+
+
+@pytest.fixture
+def stored_asset(creation_arguments):
+    # Un bien creado por el servicio de alta: pausado, de 1000 m y en Madrid
+    return create_asset(**creation_arguments)

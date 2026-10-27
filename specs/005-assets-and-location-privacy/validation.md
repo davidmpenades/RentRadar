@@ -289,3 +289,55 @@ Seis mutaciones sobre `services.py`, que es un fichero nuevo de la tarea, restau
 - La restricción de la ubicación pública no se traduce: si salta, es un fallo del servicio y no una entrada del usuario.
 - `ERROR_CODES` crece por tarea: T8 añade los códigos de la modificación y su test.
 - Los errores de la capa de reglas, las coordenadas de los mensajes y los registros de log se prueban en T9 (`test_leaks.py`); aquí solo se comprueba que ni el `TypeError` ni el `DomainValidationError` incluyen coordenadas.
+
+## Modificación de bienes (T8)
+Fecha: 2026-10-27 · Ficheros: `backend/apps/assets/services.py`, y en `backend/apps/assets/tests/` `conftest.py` (fixture `stored_asset`), `test_update.py`, `test_concurrency.py` y `test_create.py` (catálogo).
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Rojo previo | `docker compose exec backend pytest -q apps/assets/tests/test_update.py apps/assets/tests/test_concurrency.py` sin `update_asset` | `ImportError: cannot import name 'update_asset' from 'apps.assets.services'` al recoger los dos ficheros |
+| Rojo previo del catálogo | `docker compose exec backend pytest -q apps/assets/tests/test_create.py` | 1 failed, 66 passed: faltan `asset_not_found`, `location_locked` y `privacy_radius_locked` |
+| Recuento previo | `docker compose exec backend pytest -q` | 907 passed |
+| Tests de la modificación | `docker compose exec backend pytest -q apps/assets/tests/test_update.py apps/assets/tests/test_concurrency.py apps/assets/tests/test_create.py` | 157 passed |
+| Suite completa | `docker compose exec backend pytest -q` | 997 passed (907 previos y 90 nuevos: 86 de `test_update.py` y 4 de `test_concurrency.py`) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 93 ficheros formateados |
+| Django | `manage.py check` y `manage.py makemigrations --check --dry-run` | Sin incidencias; no hay cambios |
+| Dependencias | `git diff dev --stat -- backend/requirements*.txt` | Vacío |
+
+### Lo observado
+| Comprobación | Observado |
+|---|---|
+| Fechas | Un cambio guarda `updated_at = now` en UTC (con `now` en UTC+2 llega con desplazamiento 0) y conserva `created_at` |
+| Sin cambios | Sin argumentos, o con valores iguales a los guardados (`"12.340"`, `"  Taladro  "`, las mismas coordenadas, el mismo radio, el mismo estado), no se captura ningún `UPDATE` y la fila queda igual; activar un bien activo o pausar uno pausado tampoco escribe |
+| Lo no indicado | Con el título cambiado, un bien activo de 2000 m conserva radio, estado y el resto de columnas |
+| Errores de forma | Cada campo inválido da su código con 0 consultas y la fila intacta; `None` en un obligatorio da `*_required`, y en moneda, radio o estado `*_invalid`; una sola coordenada da `location_required`; los errores salen juntos |
+| Estado | `deleted`, `Active` y `None` dan `status_invalid`; activar y pausar funcionan |
+| Propietario y categoría | `owner_id=` da `TypeError` y el propietario no cambia; la categoría cambia a `kayak`; una inexistente da `category_not_found` y nada cambia |
+| Errores de programación | `owner_id`, `public_location`, `exact_location`, `id`, `pk`, `created_at`, `updated_at`, `owner` y `category` dan `TypeError` sin coordenadas en el mensaje; los argumentos posicionales y la falta de `asset_id` o `now` también; `now` naive, `None`, texto o número dan `ValueError("now_not_aware")` con 0 consultas |
+| `asset_not_found` | Un id inexistente lo da sin cambios; `True`, `"5"` y `0` lo dan con 0 consultas |
+| Ubicación pública | Con el bien pausado, cambiar el radio (los tres) o mover la exacta deja la pública igual a `approximate_location(exacta, radio)`; tras una secuencia de seis modificaciones, cada pública guardada coincide con la derivada |
+| Misma celda y D6 | Mover la exacta al centro de su celda no cambia la pública; cambiar título, precio y estado no llama a `approximate_location` (espía), y cambiar el radio sí, una vez |
+| RF-39 y D7 | Con la fila intacta tras cada rechazo: activo y movido da `location_locked`; activo y otro radio, `privacy_radius_locked`; las dos cosas, los dos códigos; activo que se pausa y se mueve o cambia el radio, activado y movido o con otro radio, rechazados; con categoría inexistente salen `category_not_found` y `location_locked` juntos. Activo con los mismos valores y pausado con cambio se aceptan |
+| Columnas | El `UPDATE` nombra solo lo cambiado más `updated_at`: título, precio, estado y categoría solos; `exact_location` y `public_location` al mover; `privacy_radius` y `public_location` al cambiar el radio |
+| CHECK con una regla parcheada | `assets_asset_price_range` llega como `price_out_of_range`, sin causa ni contexto y sin cambios |
+| Aproximación fallida | Sale `{"__all__": ["approximation_failed"]}`, sin causa ni contexto y sin cambios |
+| Bloqueo (RF-35, D10 b) | Con `CaptureQueriesContext`, tanto al cambiar el título como al mover la exacta, la primera consulta sobre `assets_asset` es un `SELECT … FOR UPDATE` y va en orden `SAVEPOINT` < bloqueo < `UPDATE` < `RELEASE SAVEPOINT` |
+| Catálogo | `ERROR_CODES` es ahora el conjunto de 36 códigos: los 33 del alta y los tres de la modificación |
+
+### Pruebas de mecanismo
+Seis mutaciones sobre `services.py`, que es un fichero nuevo de la tarea, aplicadas sobre el propio fichero y restauradas desde una copia en el mismo comando. sha256 de `services.py` (`05f4ef3e4e15`) idéntico antes y después; `core/db.py` y el resto de ficheros no se tocaron.
+
+| Mutación | Tests que fallan |
+|---|---|
+| Sin `select_for_update` | `test_the_row_is_locked_before_anything_else_reads_the_asset` (2) y `test_the_update_comes_after_the_lock_in_the_same_transaction` (2) |
+| Una lectura del bien antes del bloqueo | `test_the_row_is_locked_before_anything_else_reads_the_asset` (2) |
+| La condición de bloqueo con el estado recibido en vez del guardado | `test_an_active_or_activated_asset_cannot_change_location_or_radius` (2: pausar y mover, pausar y cambiar el radio) |
+| `save()` sin `update_fields` | `test_only_the_changed_columns_are_written` (6) |
+| Sin la rama de D7 (solo el estado guardado) | `test_an_active_or_activated_asset_cannot_change_location_or_radius` (3: los activados) |
+| Derivar la pública en cada modificación | `test_changing_something_else_does_not_derive_the_public_location` (1) y `test_only_the_changed_columns_are_written` (4: título, precio, estado y categoría) |
+
+### Límites
+- El bloqueo se verifica por el orden del SQL y no por su efecto con dos conexiones (D10 b): los tests no prueban que una segunda modificación espere de verdad.
+- Un bien borrado mientras otra modificación espera el bloqueo da `asset_not_found` por la misma ruta que un id inexistente (`first()` devuelve `None`); no hay un test con el borrado concurrente.
+- La mutación «derivar en cada modificación» también hace fallar el test de columnas, porque `public_location` entraría en el `UPDATE` de cambios que no tocan la ubicación.
+- La parte de fugas de coordenadas en errores y registros (RF-37) se prueba en T9.
