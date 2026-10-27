@@ -192,4 +192,4 @@ Mutaciones sobre `rules.py`, que es un fichero nuevo de la tarea, restauradas en
 ### Límites
 - Las reglas dejan fuera lo que decide el servicio: qué significa «no indicado» (`*_required`), la existencia del propietario y de la categoría, y RF-39. Esas partes se cubren en T7 y T8.
 - Un carácter invisible que no es espacio, ni de control ni de formato (por ejemplo U+3164 o U+2800) cuenta como visible en el título. Es un riesgo aceptado de la spec.
-- `.5` y `5.` se aceptan como precios porque el patrón los admite; la spec no los menciona. Los fijan tests.
+- `.5` y `5.` se aceptan como precios porque el patrón los admite. Son un riesgo aceptado de la spec, junto a `+5` y `007.50`, y los fijan tests.

@@ -187,7 +187,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Pausar no es retroactivo: quien vio la zona antes la sigue conociendo.
 - La ubicación exacta queda en claro en la base de datos, en los backups y para los superusuarios hasta que llegue el borrado RGPD.
 - Varios bienes en la misma dirección con radios distintos: las celdas anidadas se intersecan y la privacidad efectiva es la del radio menor.
-- El precio con signo `+` o con ceros a la izquierda (`+5`, `007.50`) se acepta si el valor es válido y se guarda como el mismo número, sin RF propio.
+- El precio con signo `+`, con ceros a la izquierda o sin parte entera o sin parte decimal (`+5`, `007.50`, `.5`, `5.`) se acepta si el valor es válido y se guarda como el mismo número, sin RF propio.
 - Los decimales de las coordenadas no tienen límite: la exacta es privada y la pública se redondea a 6 decimales (RF-13, RF-23).
 - La ubicación pública de un bien situado en el borde de la caja de coherencia puede quedar fuera de ella (RF-23).
 - Si los valores de referencia de la función de aproximación fallan tras actualizar la imagen (PROJ o GDAL), no se actualizan sin más: hay que planificar el recálculo de las ubicaciones públicas guardadas, porque cambiarlas mueve celdas ya publicadas.
