@@ -54,7 +54,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `test(core): pin gdal projection behaviour`
   - Hecho cuando: los tests pasan; `validation.md` recoge los resultados y las mediciones; está redactado el `/sdd-change` de la puerta; se ha decidido si la spec se parte en 005a y 005b.
 
-- [ ] **T3. Guardado protegido en `apps/core`.** RF-38
+- [x] **T3. Guardado protegido en `apps/core`.** RF-38
   - Cómo se prueba:
     - Se anota el recuento de la suite antes del cambio.
     - `core/tests/test_db.py`:

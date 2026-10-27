@@ -6,7 +6,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Arnés montado (AGENTS.md, MEMORY.md, MCPs Context7 y Chrome DevTools, skills de terceros) con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo. Constitución aprobada en docs/constitution.md.
 - 001-backend-skeleton y 002-quality-gates (CI mínimo) completadas y validadas; PR #3 mergeada en dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior. 003-health-checks aplazada hasta la spec de despliegue.
 - 004 (usuarios y categorías) implementada y validada (specs/004-users-and-categories/validation.md); mergeada en dev (PR #5).
-- 005 (assets y privacidad de ubicación, 10 tareas en specs/005-assets-and-location-privacy/): puerta cumplida, con T1 y T2 hechas, el /sdd-change aplicado y la spec sin partir. Siguiente: T3 (extraer run_guarded), a la espera de orden. Pendiente un /sdd-change de la 004: el dominio del email, que hoy acepta caracteres Cf (p. ej. U+202E).
+- 005 (assets y privacidad de ubicación, 10 tareas en specs/005-assets-and-location-privacy/): puerta cumplida, con T1 a T3 hechas (suite en 513 tests), el /sdd-change aplicado y la spec sin partir. Siguiente: T4 (app assets y función de aproximación), a la espera de orden. Pendiente un /sdd-change de la 004: el dominio del email, que hoy acepta caracteres Cf (p. ej. U+202E).
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
@@ -25,7 +25,7 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
 - La evidencia de las comprobaciones manuales de cada spec se registra en specs/NNN/validation.md, con fecha, orden y resultado.
 - git push está denegado a los agentes en .claude/settings.json; los push los hace el usuario.
-- Errores de dominio: DomainValidationError lleva solo campos y códigos, y los servicios lo lanzan fuera del except. El guardado protegido está copiado en users y categories: se extrae a apps/core/db.py (run_guarded) en la T3 de la 005, la tercera repetición. Las categorías solo cambian por migración.
+- Errores de dominio: DomainValidationError lleva solo campos y códigos, y los servicios lo lanzan fuera del except. El guardado protegido vive en apps/core/db.py (run_guarded), extraído en la T3 de la 005 tras su tercera repetición; users y categories lo usan. Las categorías solo cambian por migración.
 
 ## Riesgos conocidos (detalle en la skill indicada)
 - Una sesión en segundo plano no puede editar dev; para implementar, sesión en primer plano.
