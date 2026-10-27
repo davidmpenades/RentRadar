@@ -89,17 +89,17 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `feat(assets): add location approximation function`
   - Hecho cuando: los tests de RF-23 a RF-31 pasan; `manage.py check` y `makemigrations --check --dry-run` en verde (la app aún no tiene modelos).
 
-- [ ] **T5. Reglas de los campos del bien.** RF-3, RF-4, RF-5, RF-7, RF-8, RF-10, RF-12, RF-13, RF-14
+- [ ] **T5. Reglas de los campos del bien.** RF-2 (forma de la referencia), RF-3, RF-4, RF-5, RF-7, RF-8, RF-10, RF-12, RF-13, RF-14
   - Cómo se prueba:
     - `test_rules.py`, con los casos de la Estrategia de tests; los invisibles se escriben con `chr()`.
-    - Mecanismo: contar visibles sin excluir U+200D; patrón del precio con `\d`; contar los ceros finales; comparar la caja con `<` en vez de `<=`; radio sin excluir `bool`. Cada mutación hace fallar su test.
+    - Mecanismo: contar la unión de ancho cero como visible (reutilizando el predicado de formato); patrón del precio con `\d`; contar los ceros finales; devolver el precio sin `quantize`; comparar la caja y el rango con `<` en vez de `<=`; radio sin `isinstance(int)`; referencia y coordenada sin excluir `bool`. Cada mutación hace fallar su test.
   - Qué toca revisar, línea a línea:
     - el orden tipo → sustituto → recorte → NFC, sin tope bruto del texto recibido;
     - la definición de carácter visible;
     - los Cc admitidos en la descripción;
-    - `PRICE_PATTERN` y el recuento de decimales;
+    - `PRICE_PATTERN`, el recuento de decimales y el `quantize` del valor devuelto;
     - el orden tipo → `float()` → finito → rango → caja en las coordenadas;
-    - que `bool` se descarta antes que `int`.
+    - que `bool` se descarta antes que `int` en la referencia y en la coordenada (en el radio no hace falta).
   - Commit: `feat(assets): add asset field rules`
   - Hecho cuando: los tests pasan; las reglas no importan modelos ni tocan la BD.
 

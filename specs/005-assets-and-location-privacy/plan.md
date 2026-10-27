@@ -140,22 +140,23 @@ Cada `clean_<campo>(raw)` devuelve `(valor_limpio | None, [códigos])`. El servi
      - `description_too_short`: menos de 20 puntos de código;
      - `*_too_long`: más de 100 o de 2000.
 - **Precio** (`clean_price`, D5):
-  1. Si es `bool` o no es `str` ni `Decimal`, `price_invalid`.
-  2. `text = raw if str else str(raw)`. Si no cumple `PRICE_PATTERN.fullmatch(text)` (`\A[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)\Z`), `price_invalid`. El patrón deja fuera exponente, `NaN`, `Infinity`, `sNaN`, dígitos no ASCII, `_`, espacios y coma.
+  1. Si no es `str` ni `Decimal` (un `bool` tampoco lo es), `price_invalid`.
+  2. `text = raw if str else str(raw)`. Si no cumple `PRICE_PATTERN.fullmatch(text)` (`[+-]?(?:[0-9]+(?:\.[0-9]*)?|\.[0-9]+)`), `price_invalid`. El patrón deja fuera exponente, `NaN`, `Infinity`, `sNaN`, dígitos no ASCII, `_`, espacios y coma.
   3. `value = Decimal(text)`.
   4. Si está fuera de [0.01, 99999.99], `price_out_of_range`.
-  5. Se cuentan los decimales sin los ceros finales (`fracción.rstrip("0")`). Si quedan más de 2, `price_too_precise`. No se usa `normalize()`, que redondea a 28 cifras.
+  5. Se cuentan los decimales sin los ceros finales (`fracción.rstrip("0")`). Si quedan más de 2, `price_too_precise`. No se usa `normalize()`, que redondea a 28 cifras. Los códigos de 4 y 5 se acumulan: `0.001` lleva los dos.
+  6. Sin errores, se devuelve `value.quantize(Decimal("0.01"))`, la forma canónica con 2 decimales: `12.340` da `12.34`, `+5` da `5.00` y `007.50` da `7.50`. Solo quita ceros, no redondea.
 - **Moneda**: solo la cadena `"EUR"`; cualquier otra cosa da `currency_invalid`.
 - **Unidad**: `hour`, `day`, `week` o `month`, exactos; si no, `price_unit_invalid`.
-- **Radio**: `int` que no sea `bool` y que esté en `PRIVACY_RADII`; si no, `privacy_radius_invalid` (500.0 y `Decimal(500)` se rechazan).
-- **Estado**: al crear solo vale `"paused"`, y al modificar `"active"` o `"paused"`. Si no, `status_invalid`.
+- **Radio**: `int` que esté en `PRIVACY_RADII`; si no, `privacy_radius_invalid` (500.0 y `Decimal(500)` se rechazan; `True` y `False` quedan fuera sin exclusión explícita porque no son radios).
+- **Estado** (`clean_status(raw, *, allowed)`): al crear solo vale `"paused"`, y al modificar `"active"` o `"paused"`. Si no, `status_invalid`.
 - **Ubicación** (`clean_location(latitude, longitude)`), por coordenada:
   1. Tipo `int`, `float` o `Decimal`, sin `bool` ni `str`.
   2. `float()`; `OverflowError` o `ValueError` (sNaN) dan `location_invalid`.
   3. `math.isfinite`; si no, `location_invalid`.
   4. Rango; si no, `location_out_of_range`.
   5. Caja de coherencia con límites incluidos (27.5, 44.0, -18.5 y 5.0 son exactos en binario); si no, `location_outside_bounds`.
-  - Da un solo código por campo `location`.
+  - Da un solo código por campo `location`, con esta precedencia: `location_invalid`, `location_out_of_range`, `location_outside_bounds`.
 - **Identificadores** (`clean_reference(raw, field)`): `int` que no sea `bool`, entre 1 y 2^63−1. Si no, `owner_invalid`, `category_invalid` o `asset_not_found`.
 - `contains_control_character` de `core.text` se reutiliza en el título. El recorte con NFC se repite aquí y en `Category.normalize_name`: son dos sitios, así que no se extrae.
 
@@ -345,7 +346,7 @@ Cambios de spec aplicados en el `/sdd-change` de la puerta, antes de T4:
 | RF-2 | `test_rules.py`: `clean_reference` con `None`, `True`, `"5"`, `0` y 2^63. `test_create.py`: propietario o categoría ausentes, `None`, no `int` o inexistentes dan `*_required`, `*_invalid` o `*_not_found`, y no se crea ninguna fila. BD (`test_models.py`): INSERT por SQL con una FK inexistente, tras `SET CONSTRAINTS ALL IMMEDIATE`, da `IntegrityError` con el nombre de la FK. Servicio con la comprobación de existencia anulada por `monkeypatch`: `owner_not_found` por traducción de la FK, gracias a la comprobación forzada de `run_guarded`. Prueba de mecanismo: sin la comprobación forzada, el test falla con `DID NOT RAISE`. |
 | RF-3 | `test_rules.py`, con los casos límite de la spec y escapes con `chr()`: solo espacios, 2, 3, 100 y 101 caracteres, solo U+200D, "a" con dos U+200D, la familia de tres emojis, NFD, U+202E, Cc, no `str` y sustituto suelto (D4). BD: 2 y 101 puntos de código por `save()` directo dan `IntegrityError` `assets_asset_title_length`. |
 | RF-4 | `test_rules.py`: 19, 20, 2000 y 2001 caracteres; ESC; `\r\n` aceptado; U+202E; U+200D dentro de un emoji aceptado; no `str`; sustituto suelto. BD: 19 y 2001 dan `IntegrityError` `assets_asset_description_length`. |
-| RF-5 | `test_rules.py`: `0.1` (`float`), `True`, `5` (`int`), `1e2`, `1E2`, `Decimal("1E+2")`, `NaN`, `Infinity`, `sNaN`, `12,50`, dígitos `chr(0x0661)`, `1_0`, `" 5"`, `0`, `0.00`, `-5`, `100000`, `12.345`, `0.01`, `99999.99`, `12.340` (D5), `+5` y `007.50`. Se comprueba que el valor guardado es el recibido, sin redondeo. BD: `0` y `100000` dan `IntegrityError` `assets_asset_price_range`. `test_database_platform.py` (T1): con `numeric(7,2)`, 100000 daría `DataError`. |
+| RF-5 | `test_rules.py`: `0.1` (`float`), `True`, `5` (`int`), `1e2`, `1E2`, `Decimal("1E+2")`, `NaN`, `Infinity`, `sNaN`, `12,50`, dígitos `chr(0x0661)`, `1_0`, `" 5"`, `0`, `0.00`, `-5`, `100000`, `12.345`, `0.01`, `99999.99`, `12.340` (D5), `+5` y `007.50`. Se comprueba que el valor devuelto es el canónico (`str(value)`): `12.340` da `12.34`, `+5` da `5.00` y `007.50` da `7.50`. BD: `0` y `100000` dan `IntegrityError` `assets_asset_price_range`. `test_database_platform.py` (T1): con `numeric(7,2)`, 100000 daría `DataError`. |
 | RF-6 | `test_create.py`: sin moneda se guarda `EUR`. |
 | RF-7 | `test_rules.py`: `usd`, `eur`, `USD`, `None` y `1` dan `currency_invalid`. BD: `USD` da `IntegrityError` `assets_asset_currency_eur`. |
 | RF-8 | `test_rules.py`: se aceptan las cuatro unidades; `night`, `Day` y `""` se rechazan. `test_create.py`: sin unidad, `price_unit_required`. BD: `night` da `IntegrityError`. |
@@ -416,7 +417,7 @@ Cada test que protege un mecanismo lleva su prueba de mecanismo, que se registra
 - [NV] La forma de la expresión del CHECK (`Cast`, `Func` y lookups como expresiones dentro de `condition`); se confirma con `sqlmigrate`.
 - [NV] psycopg 3.3 entrega los NOTICE de PostgreSQL al logger `psycopg`.
 - [NV] `char_length` cuenta puntos de código en una BD UTF-8.
-- [NV] Crear `SpatialReference(3035)` en cada llamada cuesta del orden del milisegundo.
+- [V, T4: 0,448 ms por llamada] Crear las `SpatialReference` y la transformación en cada llamada de `approximate_location` cuesta menos de un milisegundo.
 
 ## Skills que aplican
 - sdd.

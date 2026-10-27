@@ -193,6 +193,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Si los valores de referencia de la función de aproximación fallan tras actualizar la imagen (PROJ o GDAL), no se actualizan sin más: hay que planificar el recálculo de las ubicaciones públicas guardadas, porque cambiarlas mueve celdas ya publicadas.
 - Observar cuándo cambia la ubicación pública revela que la exacta cruzó el borde de una celda, y varios bienes del mismo propietario en celdas contiguas revelan más que un bien aislado.
 - El título y la descripción son texto libre público: pueden contener la dirección exacta, un teléfono o un email y anular la aproximación.
+- Un carácter invisible que no es espacio en blanco, ni de control ni de formato (por ejemplo U+3164 o U+2800) cuenta como carácter visible del título (RF-3).
 
 ## Restricciones de implementación pedidas por el usuario
 - El precio se guarda como DecimalField; las ubicaciones, como geography de PostGIS.
