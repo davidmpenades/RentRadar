@@ -93,3 +93,57 @@ Mutaciones sobre copias del fichero, borradas después. sha256 de `test_projecti
 ### Límites
 - El coste se midió una vez por tamaño; el resultado que importa es la forma (lineal), no los milisegundos.
 - La función de aproximación usará el PROJ del backend (9.6.0). Las distancias de los tests de RF-26 y RF-27 las calcula `ST_Distance` sobre geography en PostGIS, que no proyecta a EPSG:3035.
+
+## Aproximación (T4)
+Fecha: 2026-10-27 · Ficheros: `backend/apps/assets/location.py` y `backend/apps/assets/tests/` (`conftest.py`, `test_location.py`, `test_location_reference.py`, `test_location_geodesic.py`).
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Rojo previo | `docker compose exec backend pytest -q apps/assets` sin `location.py` | `ModuleNotFoundError: No module named 'apps.assets.location'` al cargar `conftest.py` |
+| Recuento previo | `docker compose exec backend pytest -q --ignore=apps/assets` | 513 passed |
+| Tests de la función | `docker compose exec backend pytest -q apps/assets` | 75 passed |
+| Suite completa | `docker compose exec backend pytest -q` | 588 passed (513 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 82 ficheros formateados |
+| Django | `manage.py check` y `manage.py makemigrations --check --dry-run` | Sin incidencias; no hay cambios |
+
+### Lo observado
+| Comprobación | Observado |
+|---|---|
+| Límites de la coordenada | (90, 0), (−90, 0), (0, 180) y (0, −180) dan un valor finito; ninguno da `projection_failed` |
+| Un ulp fuera de cada límite | Se rechazan con `coordinate_invalid` |
+| Coste de una llamada | 0,448 ms de media en 200 llamadas (Madrid, radio 1000), con sus dos transformaciones y sus SRS creadas en cada una; cierra la afirmación «del orden del milisegundo» del plan |
+| Contraste de los 9 centros literales con la fórmula LAEA | Desviación máxima 0,0438 m (Madrid, 2000); el resto entre 0,0119 m y 0,0425 m |
+
+Detalle del contraste: la desviación es la distancia, en la proyección, entre la fórmula LAEA aplicada al centro publicado (ya redondeado a 6 decimales) y el centro de la celda localizada con la misma fórmula, sin GDAL. Los centros se calcularon una vez con GDAL en un script fuera del repositorio.
+
+| Punto | 500 m | 1000 m | 2000 m |
+|---|---|---|---|
+| Madrid | 0,0119 | 0,0386 | 0,0438 |
+| Las Palmas | 0,0312 | 0,0425 | 0,0422 |
+| Palma | 0,0142 | 0,0147 | 0,0377 |
+
+### Pruebas de mecanismo
+Mutaciones sobre `location.py`, que es un fichero nuevo de la tarea, restauradas en el mismo comando. sha256 de `location.py`, de los ficheros de `tests/` y de `base.py` idéntico antes y después.
+
+| Mutación | Tests que fallan |
+|---|---|
+| `PUBLIC_DECIMALS = 5` | `test_the_cell_centre_matches_its_reference` (9) |
+| `(ceil(x / r) - 0.5) * r` en vez de `(floor(x / r) + 0.5) * r` | `test_a_point_on_the_lower_left_border_belongs_to_the_upper_right_cell` (3), y ningún otro |
+| Quitar la comprobación de finito de `_transform_or_none` | `test_a_non_finite_projection_fails_without_a_value` (2: el de `_project` y el de `_unproject`) |
+| Quitar la exclusión de `bool` en la coordenada | `test_an_invalid_coordinate_fails_without_a_value` (2: `True` y `False`) |
+| Quitar `isinstance(radius, int)` | `test_an_invalid_radius_fails_without_a_value` (1: `500.0`) |
+| Quitar el `try` del `OverflowError` | `test_an_invalid_coordinate_fails_without_a_value` (2: `10**400` en latitud y en longitud) |
+| `<` en vez de `<=` en el rango de la coordenada | `test_the_coordinate_limits_are_included` (4) |
+
+### Límites
+- Los tests de propiedades usan la propia proyección para localizar la celda del punto. La independencia la dan los 9 centros literales, contrastados con la fórmula LAEA, y las comprobaciones de plataforma.
+- RF-26 y RF-27 se verifican por muestreo (9 puntos de referencia, las 4 esquinas de la caja, 24 puntos junto a bordes de celda y 200 aleatorios), no se demuestran para todos los puntos de la caja.
+- Margen medido con la misma muestra (237 puntos) y la misma consulta de los tests, con un `SELECT` de solo lectura sobre literales y sin cambiar ningún test. Los tres radios dan prácticamente lo mismo:
+
+| Radio | RF-26: máximo de distancia / radio | RF-27: mínimo de lado / radio | RF-27: máximo de lado / radio |
+|---|---|---|---|
+| 500 m | 0,7324 en (28,141589; −15,421745), junto a una esquina de celda en Las Palmas | 0,9788 en la esquina (27,5; 5,0), lado inferior | 1,0218 en la misma esquina, lado izquierdo |
+| 1000 m | 0,7323 en (28,118337; −15,435930), junto a una esquina de celda en Las Palmas | 0,9788 en la esquina (27,5; 5,0), lado inferior | 1,0218 en la misma esquina, lado izquierdo |
+| 2000 m | 0,7324 en (28,118337; −15,435930), junto a una esquina de celda en Las Palmas | 0,9788 en la esquina (27,5; 5,0), lado inferior | 1,0218 en la misma esquina, lado izquierdo |
+
+  Los márgenes sobre la muestra son de 2,9 puntos porcentuales frente al límite inferior de RF-27 (95 %) y de 2,8 frente al superior (105 %), y de 0,27 × radio frente al límite de RF-26. Son los de estos 237 puntos, no los de toda la caja.
