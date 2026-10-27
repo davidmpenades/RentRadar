@@ -169,13 +169,14 @@ Firmas (solo con nombre; `_UNSET` es un centinela privado que significa "no indi
 Qué no aceptan:
 - `update_asset` no tiene `owner_id`: pasarlo da `TypeError` y no cambia nada (RF-20).
 - Ninguna acepta `public_location`, `id`, `created_at`, `updated_at` ni instancias. Cualquiera de ellos da `TypeError` (RF-33 por construcción).
-- `now` debe ser un `datetime` con zona horaria. Si no, `ValueError("now_not_aware")` antes de tocar la BD.
+- `now` debe ser un `datetime` con zona horaria. Si no, `ValueError("now_not_aware")` antes de tocar la BD. El servicio lo guarda en UTC (`astimezone(UTC)`).
+- Desde T8, las llamadas entre funciones privadas del módulo pasan los argumentos por nombre y no en posición, para que un cambio de orden no los intercambie en silencio.
 - `TypeError` y `ValueError` son errores de programación del llamador, no de la entrada del usuario: no llevan código de dominio, y su mensaje nombra el argumento y nunca su valor.
 
 Alta:
 1. **Fase de forma**, sin BD: se limpia cada campo.
    - `_UNSET` o `None` en `owner_id`, `category_id`, `title`, `description`, `price` y `price_unit` dan `*_required`.
-   - Si falta alguna coordenada, `location_required`.
+   - Si falta alguna coordenada (`_UNSET` o `None`), `location_required`.
    - `currency`, `privacy_radius` y `status` toman "EUR", 1000 y "paused" solo si son `_UNSET`; `None` cuenta como indicado e inválido.
    - Si hay errores, se lanza `DomainValidationError` sin consultar la BD.
 2. **Fase de BD**, dentro de `run_guarded(bloque, CONSTRAINT_CODES)`:
@@ -266,7 +267,7 @@ def check_deferred_constraints():
 - **Fases**:
   - Los errores de forma de todos los campos se devuelven juntos, y cada campo puede llevar varios códigos.
   - La existencia, el bien no encontrado y RF-39 se evalúan solo si la forma es válida, y se devuelven juntos.
-- `services.ERROR_CODES` contiene todos los códigos de la tabla, y un test lo compara con ella.
+- `services.ERROR_CODES` contiene los códigos de la tabla que puede lanzar el servicio, y un test lo compara con ella. Crece por tarea: T7 fija los 33 del alta y T8 añade `privacy_radius_locked`, `location_locked` y `asset_not_found`.
 - No son errores de dominio, porque la regla de la spec "cada rechazo lleva un código" se refiere a la validación de datos:
   - `ApproximationError` (RF-31), que se lanza solo fuera del servicio y lleva su propio `code`;
   - el `TypeError` de un argumento no admitido y el `ValueError("now_not_aware")`, que son errores de programación;

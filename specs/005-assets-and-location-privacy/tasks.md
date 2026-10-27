@@ -130,20 +130,23 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `feat(assets): add asset model`
   - Hecho cuando: `pytest -q`, ruff, `manage.py check` y `makemigrations --check --dry-run` en verde; los nombres de las FK están anotados para `CONSTRAINT_CODES`.
 
-- [ ] **T7. Alta de bienes.** RF-1, RF-2, RF-6, RF-9, RF-11, RF-12, RF-15, RF-33, RF-38
+- [x] **T7. Alta de bienes.** RF-1, RF-2, RF-6, RF-9, RF-11, RF-12, RF-15, RF-33, RF-38
   - Cómo se prueba:
     - `test_create.py`, con los casos de la Estrategia de tests;
     - el FK traducido con la comprobación de existencia anulada;
     - el CHECK traducido con una regla parcheada;
     - `public_location=` da `TypeError`;
     - `now` sin zona horaria da `ValueError`;
-    - `ERROR_CODES` coincide con la tabla del plan.
-    - Mecanismo: sin la comprobación forzada de `run_guarded` falla el test de la FK; con `from exc` falla el de causa y contexto.
+    - `ERROR_CODES` coincide con la tabla del plan, en el subconjunto que lanza el alta (33 códigos);
+    - los parches de los tests apuntan a los nombres de `apps.assets.services`, que es donde se usan.
+    - Mecanismo, seis sobre `services.py`: la pública es la exacta; `raise` dentro del `except` de la aproximación; el valor por defecto también para `None`; sin la comprobación de zona horaria de `now`; estado de alta permitido como en la modificación; título sin validar ni normalizar. Dos sobre `run_guarded`, sin editar `core/db.py`: un plugin de pytest de usar y tirar en el `/tmp` del contenedor, cargado con `pytest -p`, que quita la comprobación forzada o que lanza con `from exc` dentro del `except`.
   - Qué toca revisar:
     - que la comprobación forzada vive en `run_guarded` y el servicio no ejecuta `SET CONSTRAINTS`;
     - que los valores por defecto solo se aplican a `_UNSET` y no a `None`;
     - que la pública sale de la función;
-    - que el `raise` está fuera del `except`.
+    - que el `raise` está fuera del `except`;
+    - que un error de forma no consulta la BD;
+    - que `ERROR_CODES` es el subconjunto de la alta y T8 añade los suyos.
   - Commit: `feat(assets): add asset creation service`
   - Hecho cuando: los tests de RF-1, RF-2, RF-6, RF-9, RF-11, RF-12, RF-15, RF-33 y RF-38 pasan; `pytest -q` y ruff en verde.
 
@@ -162,7 +165,8 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     - la condición de RF-39 y de D7 sobre el estado guardado;
     - la rama sin cambios;
     - la lista de `update_fields`;
-    - que el bloqueo se verifica por su SQL y no por su efecto con dos conexiones (D10 (b)).
+    - que el bloqueo se verifica por su SQL y no por su efecto con dos conexiones (D10 (b));
+    - que las llamadas entre funciones privadas pasan los argumentos por nombre y no en posición, para que un cambio de orden no los intercambie en silencio.
   - Commit: `feat(assets): add asset update service`
   - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
@@ -187,6 +191,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     3. **Con OK en ese momento**, `migrate` en la BD de desarrollo; después `showmigrations assets categories`.
     4. `validation.md` RF por RF, con las pruebas de mecanismo de T3 a T9 y los riesgos aceptados del plan. Las de T3 no quedaron registradas en su commit: se repiten y se recogen aquí.
     5. `docs/architecture.md` con `core/db.py` y `assets`.
+    6. `AGENTS.md` con la nueva forma de hacer specs: verticales y pequeñas, cada una verificable en el navegador.
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
   - Commit: `docs(spec-005): record spec 005 validation`
-  - Hecho cuando: cada RF de RF-1 a RF-39 tiene su test en verde; la BD de desarrollo tiene `assets.0001` aplicada; `validation.md` termina con un veredicto.
+  - Hecho cuando: cada RF de RF-1 a RF-39 tiene su test en verde; la BD de desarrollo tiene `assets.0001` aplicada; `validation.md` termina con un veredicto; `AGENTS.md` recoge la nueva forma de hacer specs.
