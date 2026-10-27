@@ -150,15 +150,18 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `feat(assets): add asset creation service`
   - Hecho cuando: los tests de RF-1, RF-2, RF-6, RF-9, RF-11, RF-12, RF-15, RF-33 y RF-38 pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T8. Modificación de bienes con bloqueo de fila.** RF-12, RF-16, RF-18, RF-19, RF-20, RF-33, RF-34, RF-35, RF-39
+- [x] **T8. Modificación de bienes con bloqueo de fila.** RF-12, RF-16, RF-18, RF-19, RF-20, RF-33, RF-34, RF-35, RF-39
   - Cómo se prueba:
     - `test_update.py`, con los casos de la Estrategia de tests, incluidos D6 (espía en `approximate_location`) y D7.
     - `test_concurrency.py`: orden de consultas con `CaptureQueriesContext` (D10 (b), sin segunda conexión): el primer SQL sobre `assets_asset` es `SELECT … FOR UPDATE`, antes de cualquier otra lectura del bien, y el UPDATE va después dentro del mismo atomic.
-    - Mecanismo:
+    - `ERROR_CODES` pasa a los 36 códigos de la tabla del plan.
+    - Mecanismo, seis sobre `services.py`:
       - sin `select_for_update` falla el test de RF-35;
       - con una lectura del bien antes del bloqueo, falla el test de RF-35;
       - comparar con el estado recibido en vez del guardado hace fallar el de pausar y mover;
-      - guardar sin `update_fields` hace fallar el de no pisar columnas.
+      - guardar sin `update_fields` hace fallar el de no pisar columnas;
+      - sin la rama de D7 (solo el estado guardado) fallan los de activar y mover;
+      - derivar la pública en cada modificación hace fallar el espía de D6.
   - Qué toca revisar:
     - que el bloqueo es la primera lectura del bien;
     - las comparaciones de igualdad exacta;
