@@ -78,9 +78,9 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     - `test_location.py`: muestra con las cuatro esquinas, Canarias, Baleares, bordes y esquinas de celda y `random.Random(5)`, para los tres radios; sin `django_db`. El antípoda (−52, −170), cuya `GDALException` es real (T2), da `projection_failed`.
     - `test_location_reference.py`: centros literales.
     - `test_location_geodesic.py`: `ST_Distance` sobre geography.
-    - Mecanismo: `round` a 5 decimales hace fallar la referencia; `ceil` en vez de `floor` hace fallar el borde; quitar la comprobación de finito tras `_unproject` hace fallar el caso de infinito.
+    - Mecanismo: `round` a 5 decimales hace fallar la referencia; `(ceil(x / r) - 0.5) * r` en vez de `(floor(x / r) + 0.5) * r` mete el borde superior en la celda y hace fallar solo el test del borde; quitar la comprobación de finito de `_transform_or_none` hace fallar los dos casos de infinito.
   - Qué toca revisar:
-    - en `location.py`, que `bool` se descarta antes que `int`;
+    - en `location.py`, que `bool` se descarta antes que `int` en la coordenada;
     - `floor` y el `+ 0.5`;
     - la comprobación de finito tras cada transformación;
     - el redondeo a 6 decimales;
@@ -181,7 +181,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
     1. Suite completa, ruff, `manage.py check` y `makemigrations --check --dry-run`.
     2. `git diff dev -- backend/requirements*.txt` vacío (RNF Dependencias).
     3. **Con OK en ese momento**, `migrate` en la BD de desarrollo; después `showmigrations assets categories`.
-    4. `validation.md` RF por RF, con las pruebas de mecanismo de T3 a T9 y los riesgos aceptados del plan.
+    4. `validation.md` RF por RF, con las pruebas de mecanismo de T3 a T9 y los riesgos aceptados del plan. Las de T3 no quedaron registradas en su commit: se repiten y se recogen aquí.
     5. `docs/architecture.md` con `core/db.py` y `assets`.
   - Qué toca revisar: el veredicto de `validation.md` y los riesgos aceptados que quedan anotados.
   - Commit: `docs(spec-005): record spec 005 validation`

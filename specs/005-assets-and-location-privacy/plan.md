@@ -113,7 +113,7 @@ No aplica: la spec no expone endpoints, así que no hay anónimo, usuario ni pro
   - su mensaje es el propio código, y nunca lleva valores.
 - `grid_cell_centre(x, y, radius)` devuelve `((floor(x / radius) + 0.5) * radius, (floor(y / radius) + 0.5) * radius)`. `floor` hace que la celda incluya su borde inferior e izquierdo.
 - `approximate_location(latitude, longitude, radius) -> tuple[float, float]` devuelve (latitud, longitud):
-  1. Radio: `int` que no sea `bool` y que esté en `PRIVACY_RADII`. Si no, `radius_invalid`.
+  1. Radio: `int` que esté en `PRIVACY_RADII`. `True` y `False` (1 y 0) quedan fuera porque no son radios. Si no, `radius_invalid`.
   2. Coordenada: `int` o `float`, sin `bool`; `float()` convierte, y un `OverflowError` cuenta como inválida; finita y en rango. Si no, `coordinate_invalid`.
   3. `x, y = _project(latitude, longitude)` (x = Este, y = Norte). Si alguno no es finito, `projection_failed`.
   4. Calcula el centro con `grid_cell_centre`.
