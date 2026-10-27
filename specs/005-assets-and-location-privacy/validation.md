@@ -242,3 +242,50 @@ Mutaciones sobre `models.py` y sobre `0001_initial.py`, ficheros nuevos de la ta
 - Los tests de BD no usan `full_clean`: los bienes no pasan por la validación de modelos de Django, que consultaría la BD para cada CHECK. La validación es la de `rules.py` (T5) y, después, el servicio (T7).
 - Los CHECK no repiten el mínimo de caracteres visibles del título: la BD solo cuenta puntos de código.
 - La migración congela los límites como literales. Cambiar una constante de `rules.py` o `location.py` exige una migración nueva, y `makemigrations --check` lo detecta.
+
+## Alta de bienes (T7)
+Fecha: 2026-10-27 · Ficheros: `backend/apps/assets/services.py`, y en `backend/apps/assets/tests/` `conftest.py` (fixture `creation_arguments`) y `test_create.py`.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Rojo previo | `docker compose exec backend pytest -q apps/assets/tests/test_create.py` sin `services.py` | `ModuleNotFoundError: No module named 'apps.assets.services'` al recoger el fichero |
+| Recuento previo | `docker compose exec backend pytest -q` | 840 passed |
+| Tests del alta | `docker compose exec backend pytest -q apps/assets/tests/test_create.py` | 67 passed |
+| Suite completa, BD de test recreada | `docker compose exec backend pytest -q --create-db` | 907 passed (840 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 91 ficheros formateados |
+| Django | `manage.py check` y `manage.py makemigrations --check --dry-run` | Sin incidencias; no hay cambios |
+| Dependencias | `git diff dev --stat -- backend/requirements*.txt` | Vacío |
+
+### Lo observado
+| Comprobación | Observado |
+|---|---|
+| Ubicación pública | Para los tres radios, la pública guardada es igual a `approximate_location(exacta, radio)` y distinta de la exacta, tanto en el bien devuelto como en el leído de la BD |
+| Fechas | Con `now` en UTC+2, `created_at` y `updated_at` valen `now` y llegan con desplazamiento UTC 0 en el bien devuelto y en el leído |
+| Errores de forma | Se devuelven todos a la vez, sin ninguna consulta a la BD (`django_assert_num_queries(0)`) y sin crear filas |
+| Existencia | Un propietario o una categoría inexistentes, o los dos, dan `owner_not_found` y `category_not_found` y no crean filas |
+| FK con la comprobación de existencia anulada | La violación de la FK llega como `owner_not_found` o `category_not_found` por la comprobación forzada de `run_guarded`, con `__cause__` y `__context__` a `None` |
+| CHECK con una regla parcheada | `assets_asset_price_range` llega como `price_out_of_range`, sin causa ni contexto, y la conexión sigue usable |
+| Restricción de la pública | No se traduce a propósito: sale `{"__all__": ["constraint_violated"]}` |
+| Aproximación fallida | Sale `{"__all__": ["approximation_failed"]}`, sin fila y sin causa ni contexto |
+| Errores de programación | `public_location=`, `exact_location=`, `id=`, `pk=`, `created_at=`, `updated_at=`, un objeto `owner=` o `category=` y los argumentos posicionales dan `TypeError`; el mensaje nombra el argumento y no contiene las coordenadas. `now` ausente da `TypeError`; `now` naive, `None`, texto o número dan `ValueError("now_not_aware")` sin consultar la BD |
+| Catálogo | `ERROR_CODES` es el conjunto de 33 códigos de la tabla del plan que puede lanzar el alta; los tres de la modificación (`privacy_radius_locked`, `location_locked` y `asset_not_found`) los añade T8 |
+
+### Pruebas de mecanismo
+Seis mutaciones sobre `services.py`, que es un fichero nuevo de la tarea, restauradas en el mismo comando. Las dos que afectan a `run_guarded` (`apps/core/db.py`, de T3 y fuera del alcance) se hicieron sin editar nada del repositorio: con un plugin de pytest de usar y tirar escrito en el `/tmp` del contenedor, cargado con `pytest -p` y borrado después. sha256 de `services.py` (`0569632373e8`), de `core/db.py` (`c2099e7bed17`), de `models.py`, `rules.py`, `location.py`, la migración y los ficheros de `tests/` idéntico antes y después.
+
+| Mutación | Tests que fallan |
+|---|---|
+| La pública es la exacta | `test_the_public_location_is_derived_from_the_exact_one` (3) y `test_a_violation_of_the_public_location_is_an_unmapped_constraint` (1) |
+| `raise` dentro del `except` en `_public_location` | `test_a_failed_approximation_is_reported_and_nothing_is_created` (1: la causa y el contexto) |
+| El valor por defecto también para `None` | `test_an_explicit_none_does_not_take_the_default` (3: moneda, radio y estado) |
+| Sin la comprobación de zona horaria de `now` | `test_a_now_without_a_time_zone_is_a_programming_error` (1: el naive) |
+| Estado permitido al crear como al modificar | `test_an_invalid_field_gets_its_code_without_touching_the_database` (1: `active` al crear) y `test_several_invalid_fields_are_reported_together` (1) |
+| Título sin validar ni normalizar | `test_text_and_price_are_stored_normalised` (1), `test_an_invalid_field_gets_its_code_without_touching_the_database` (2) y `test_several_invalid_fields_are_reported_together` (1) |
+| `run_guarded` sin la comprobación forzada (plugin) | `test_a_foreign_key_violation_is_translated_by_the_forced_check` (2), más 2 errores de limpieza de pytest-django por las FK que quedan pendientes |
+| `run_guarded` que lanza con `from exc` dentro del `except` (plugin) | `test_a_foreign_key_violation_is_translated_by_the_forced_check` (2), `test_a_check_violation_is_translated_without_the_original_error` (1) y `test_a_violation_of_the_public_location_is_an_unmapped_constraint` (1) |
+
+### Límites
+- La mutación «título sin validar ni normalizar» es más amplia que «sin normalizar»: el título solo se normaliza dentro de su regla (`clean_title`), así que la forma de romper la normalización desde el servicio es saltarse la regla entera.
+- La restricción de la ubicación pública no se traduce: si salta, es un fallo del servicio y no una entrada del usuario.
+- `ERROR_CODES` crece por tarea: T8 añade los códigos de la modificación y su test.
+- Los errores de la capa de reglas, las coordenadas de los mensajes y los registros de log se prueban en T9 (`test_leaks.py`); aquí solo se comprueba que ni el `TypeError` ni el `DomainValidationError` incluyen coordenadas.

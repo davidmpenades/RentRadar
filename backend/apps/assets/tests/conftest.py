@@ -97,3 +97,19 @@ def make_asset(owner, category):
         return Asset(**{**fields, **overrides})
 
     return build
+
+
+@pytest.fixture
+def creation_arguments(owner, category):
+    # Lo mínimo para dar de alta un bien; el resto toma su valor por defecto
+    return {
+        "now": NOW,
+        "owner_id": owner.pk,
+        "category_id": category.pk,
+        "title": "Taladro",
+        "description": "Taladro de percusion en buen estado",
+        "price": "12.34",
+        "price_unit": "day",
+        "latitude": 40.4168,
+        "longitude": -3.7038,
+    }
