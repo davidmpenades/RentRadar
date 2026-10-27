@@ -72,7 +72,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `refactor(core): extract guarded database write`
   - Hecho cuando: el recuento cuadra (más los nuevos de core, menos los dos movidos); ruff en verde; no queda ninguna copia de `_save_guarded`; la suite de users y categories pasa sin cambios, salvo los dos tests movidos.
 
-- [ ] **T4. App de bienes y función de aproximación.** RF-23, RF-24, RF-25, RF-26, RF-27, RF-28, RF-29, RF-30, RF-31
+- [x] **T4. App de bienes y función de aproximación.** RF-23, RF-24, RF-25, RF-26, RF-27, RF-28, RF-29, RF-30, RF-31
   - Cómo se prueba:
     - `apps/assets` con `AssetsConfig` en `INSTALLED_APPS` y `docker compose restart backend`.
     - `test_location.py`: muestra con las cuatro esquinas, Canarias, Baleares, bordes y esquinas de celda y `random.Random(5)`, para los tres radios; sin `django_db`. El antípoda (−52, −170), cuya `GDALException` es real (T2), da `projection_failed`.
