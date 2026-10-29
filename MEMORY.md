@@ -5,12 +5,12 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 ## Estado actual
 - Arnés montado (AGENTS.md, MEMORY.md, MCPs Context7 y Chrome DevTools, skills de terceros) con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo. Constitución aprobada en docs/constitution.md.
 - 001-backend-skeleton, 002-quality-gates y 004 (usuarios y categorías, specs/004-users-and-categories/validation.md) completadas y validadas; PR #3 y #5 mergeadas en dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior. 003-health-checks aplazada hasta la spec de despliegue.
-- 005 (assets y privacidad de ubicación, rama feature/005-assets-and-location-privacy, 10 tareas en specs/005-assets-and-location-privacy/): puerta cumplida, con T1 a T9 hechas (suite en 1084 tests), el /sdd-change aplicado y la spec sin partir. Siguiente: T10 (validación y BD de desarrollo; ver tasks.md T10), a la espera de orden. Para T10: validation.md ya tiene las secciones de T1 a T9, y las pruebas de mecanismo de T3 se repiten allí. Fixtures en apps/assets/tests/conftest.py (owner, category, make_asset, creation_arguments, stored_asset, y coordinate_forms con los centinelas); los tests parchean los nombres en apps.assets.services; las funciones privadas de services.py son keyword-only y se llaman por nombre. update_asset bloquea la fila con select_for_update como primera lectura (RF-35 se vigila por el orden del SQL). La migración assets.0001 existe pero no está aplicada en la BD de desarrollo (migrate en T10, con OK). Al cerrar la 005 (commit de T10), AGENTS.md pasa a specs verticales y pequeñas, cada una verificable en el navegador. Pendiente un /sdd-change de la 004: el dominio del email, que hoy acepta caracteres Cf (p. ej. U+202E).
+- 005 (assets y privacidad de ubicación) completada y validada, specs/005-assets-and-location-privacy/validation.md; PR a dev pendiente.
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
 - Producto: alquiler de bienes (productos y espacios) entre particulares o profesionales.
-- Specs pequeñas (≤10 tareas): un cambio grande se parte en varias specs para revisarse bien.
+- Specs verticales y pequeñas (≤10 tareas; el tope de RF y la verificación en navegador, en AGENTS.md): un cambio grande se parte en varias para revisarse bien.
 - Solo el agente principal escribe MEMORY.md; los subagentes informan y el usuario valida.
 - Imágenes: Pillow a WebP en el backend; disco local en dev y Cloudflare R2 en producción.
 - Geocodificación detrás de una interfaz con un adaptador por proveedor; el Nominatim público no sirve para producción.
@@ -39,11 +39,13 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - El backend postgis de Django crea la extensión por su cuenta (prepare_database, llamado desde migrate); la migración 0001 sirve para BD gestionadas.
 - Las herramientas de edición convierten \uXXXX en el carácter literal: los escapes se escriben desde un script con chr(92). Los tests no llevan caracteres invisibles (NBSP, tildes descompuestas, ligaduras) escritos literales; se comprueba con una detección por categoría Unicode.
 - La semilla de categorías vive en la BD de test: un test con transaction=True la vaciaría para los siguientes (usar serialized_rollback).
-- Pruebas de mecanismo: se mutan los ficheros nuevos de la tarea, con sha256 antes y después; lo ajeno (p. ej. core/db.py) con un plugin de pytest de usar y tirar en el /tmp del contenedor (`pytest -p`, con PYTHONPATH=/tmp/x:/app); las mutaciones de migraciones, con `pytest --create-db`.
+- Pruebas de mecanismo: se mutan los ficheros nuevos de la tarea, con sha256 antes y después; lo ajeno (p. ej. core/db.py) con un plugin de pytest de usar y tirar en el /tmp del contenedor (`pytest -p`, con PYTHONPATH=/tmp/x:/app); las mutaciones de migraciones, con `pytest --create-db`; las reglas por AST, con un módulo temporal sin versionar bajo backend/apps, escrito desde el host y borrado en el mismo comando.
+- Tests de servicios: se parchean los nombres donde se usan (`apps.<app>.services`) y las funciones privadas son keyword-only; con la red bloqueada no hay segunda conexión, así que un `select_for_update` se verifica por el orden del SQL con `CaptureQueriesContext`.
 - Ruff aplica las 88 columnas también a los comentarios; para ver ficheros nuevos en `git diff` se usa `git add -N`.
 
 ## Próximos pasos
-- Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT o sesión web + JWT móvil), errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web.
+- Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT o sesión web + JWT móvil), errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web. Además, que la página de error de DEBUG no imprima las coordenadas de las variables locales de los servicios (`sensitive_variables`, o confirmar que producción nunca lo activa).
+- /sdd-change pendiente sobre caracteres de formato: el dominio del email de la 004 acepta Cf (p. ej. U+202E) y el título de la 005 acepta U+2028 y U+2029.
 - Ajuste manual del propietario: protección de rama de dev en GitHub (el CI ya está en verde); aprobación de workflows de forks.
 - Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
