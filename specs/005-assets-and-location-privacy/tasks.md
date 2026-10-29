@@ -173,16 +173,17 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `feat(assets): add asset update service`
   - Hecho cuando: los tests pasan; `pytest -q` y ruff en verde.
 
-- [ ] **T9. Borrado protegido completo, fugas y única vía de escritura.** RF-21, RF-22, RF-32, RF-37, RF-38
+- [x] **T9. Borrado protegido completo, fugas y única vía de escritura.** RF-21, RF-22, RF-32, RF-37, RF-38
   - Cómo se prueba:
     - `test_deletion.py`: `DELETE` por SQL con `SET CONSTRAINTS ALL IMMEDIATE` y reversión real de la semilla con un bien, dentro de `atomic` con `set_rollback(True)` (T1), sin `transaction=True`.
-    - `test_leaks.py`: los casos y las formas de la Estrategia de tests.
-    - `test_architecture.py`: la regla AST.
-    - Mecanismo:
+    - `test_leaks.py`: los casos y las formas de la Estrategia de tests, con 22 formas por punto (`coordinate_forms` vive en `conftest.py`), y un control del detector: cada forma en un mensaje o en el log hace fallar `assert_no_leak`.
+    - `test_architecture.py`: la regla AST, que cuenta la importación del nombre y la del módulo (absoluta, relativa y con alias), y la regla de que solo `services.py` obtiene `approximate_location`.
+    - Mecanismo, cinco:
       - `__str__` con la exacta hace fallar RF-17 y RF-37;
       - `django.db.backends` a DEBUG hace fallar `test_leaks`;
-      - un módulo temporal que importa `Asset` hace fallar RF-32;
-      - la dependencia de la migración puesta en `0002` hace fallar el test del grafo y el de la reversión.
+      - un módulo temporal que importa `Asset` (por el nombre o por el módulo `models`) hace fallar RF-32, y otro que importa el módulo `location` hace fallar la regla de `approximate_location`;
+      - la dependencia de la migración puesta en `0002` hace fallar el test del grafo y el de la reversión;
+      - un detector que no mira el log hace fallar el control.
   - Qué toca revisar: la lista de formas de las centinelas y las exclusiones del recorrido AST.
   - Commit: `test(assets): cover protected deletion, leaks and write path`
   - Hecho cuando: los tests pasan sin código de producción nuevo; si alguno exige código, se para y se revisa el plan.
