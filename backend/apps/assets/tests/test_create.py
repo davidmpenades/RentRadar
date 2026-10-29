@@ -7,8 +7,15 @@ from django.contrib.gis.geos import Point
 
 from apps.assets.location import PRIVACY_RADII, ApproximationError, approximate_location
 from apps.assets.models import Asset
+from apps.assets.rules import COHERENCE_LATITUDE, COHERENCE_LONGITUDE
 from apps.assets.services import ERROR_CODES, create_asset
 from apps.core.errors import DomainValidationError
+
+BOX_CORNERS = [
+    (latitude, longitude)
+    for latitude in COHERENCE_LATITUDE
+    for longitude in COHERENCE_LONGITUDE
+]
 
 EXPECTED_ERROR_CODES = {
     "owner_required",
@@ -197,6 +204,44 @@ def test_the_public_location_is_derived_from_the_exact_one(creation_arguments, r
         assert saved.exact_location.coords == (-3.7038, 40.4168)
         assert saved.public_location.coords == (public_longitude, public_latitude)
         assert saved.public_location.coords != saved.exact_location.coords
+
+
+def is_inside_the_box(latitude, longitude):
+    return (
+        COHERENCE_LATITUDE[0] <= latitude <= COHERENCE_LATITUDE[1]
+        and COHERENCE_LONGITUDE[0] <= longitude <= COHERENCE_LONGITUDE[1]
+    )
+
+
+@pytest.mark.parametrize("radius", PRIVACY_RADII)
+@pytest.mark.parametrize(("latitude", "longitude"), BOX_CORNERS)
+def test_an_asset_in_a_corner_keeps_its_derived_public_location(
+    creation_arguments, latitude, longitude, radius
+):
+    creation_arguments.update(
+        latitude=latitude, longitude=longitude, privacy_radius=radius
+    )
+
+    asset = create_asset(**creation_arguments)
+
+    public_latitude, public_longitude = approximate_location(
+        latitude, longitude, radius
+    )
+    saved = Asset.objects.get(pk=asset.pk)
+    assert saved.public_location.coords == (public_longitude, public_latitude)
+    assert not saved.public_location.empty
+
+
+def test_the_public_location_of_some_corners_falls_outside_the_box():
+    # Sin esto el test de las esquinas pasaría igual si la pública siempre cayera dentro
+    outside = [
+        (latitude, longitude, radius)
+        for latitude, longitude in BOX_CORNERS
+        for radius in PRIVACY_RADII
+        if not is_inside_the_box(*approximate_location(latitude, longitude, radius))
+    ]
+
+    assert outside
 
 
 @pytest.mark.parametrize(("argument", "code"), DEFAULTED_ARGUMENTS)
