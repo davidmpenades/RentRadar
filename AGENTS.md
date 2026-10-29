@@ -28,6 +28,9 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 - Una tarea cada vez: al terminarla, para y espera aprobación.
 - Antes de proponer un commit, enseña el diff de lo que vas a commitear, aunque sea pequeño.
 - Al terminar, resume qué ha cambiado y qué decisiones debo revisar.
+- Cada spec es vertical y pequeña: entrega una funcionalidad completa, de la BD a la pantalla, y su criterio de finalización incluye comprobarla en el navegador. Si la spec no tiene pantalla, se comprueba con una petición real de punta a punta.
+- Tope de unos 10 a 15 RF por spec; si salen más, se parte en dos funcionalidades.
+- Las pruebas de mecanismo y las mediciones se reservan para lo que toca privacidad o seguridad; en lo demás bastan los tests y la comprobación en el navegador.
 
 ## Límites
 - ✅ Siempre: `git log --oneline -3` después de cada commit; actualizar MEMORY.md al cerrar una fase o una spec (el progreso por tarea vive en tasks.md).

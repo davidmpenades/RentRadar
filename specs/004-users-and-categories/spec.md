@@ -119,7 +119,6 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
 - Normalización Unicode del slug: el slug solo admite ASCII y no se recorta ni se normaliza.
 
 ## Restricciones de implementación pedidas por el usuario
-- El usuario escribe los modelos, incluida la normalización del email (en el gestor de usuarios) y la del nombre de categoría (en la categoría); Claude escribe las migraciones, la semilla y los tests, también los de normalización, y revisa línea a línea el código del usuario.
 - El modelo de usuario se basa en AbstractUser, con el email como campo de acceso y sin username.
 - `django.contrib.auth` y `django.contrib.contenttypes` se instalan en esta spec, y AUTH_USER_MODEL se fija antes de la primera migración del usuario, en un único paso coherente.
 - El email se normaliza a NFKC y entero a minúsculas; la normalización estándar del framework (`normalize_email`) solo baja el dominio y no basta.

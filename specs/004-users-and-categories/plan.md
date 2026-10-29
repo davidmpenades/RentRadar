@@ -7,7 +7,6 @@ Se crean dos apps de dominio, `apps/users` y `apps/categories`, y dos módulos d
 - Categoría: slug único e inmutable, y nombre en castellano único sin distinguir mayúsculas. La semilla de once categorías es una migración de datos con `reverse_code` explícito.
 - Las escrituras pasan por servicios. Los servicios normalizan, validan con `full_clean`, traducen cualquier error a una lista cerrada de códigos sin valores y capturan el `IntegrityError` dentro de `transaction.atomic()`.
 - No hay endpoints, serializers, vistas ni interfaz. No hay dependencias nuevas.
-- Reparto del trabajo (restricción de la spec): el usuario escribe `models.py` en las dos apps, incluida la normalización (email en `UserManager.normalize_email`; nombre en `Category.normalize_name`). Claude escribe los tests (primero, también los de normalización), las migraciones, la semilla, los servicios y las funciones puras de `core`, y revisa línea a línea el código del usuario.
 - La spec ya recoge D1, D2 y D3 y el RF-23 (nombre de categoría normalizado), por `/sdd-change` del 2026-10-21.
 
 ## Archivos y responsabilidades
@@ -38,7 +37,7 @@ No se tocan `MIDDLEWARE` (no hace falta `AuthenticationMiddleware`; `test_http_h
 
 ## Modelo de datos y migraciones
 
-### Usuario (`users.User`, tabla `users_user`). Lo escribe el usuario
+### Usuario (`users.User`, tabla `users_user`)
 - Hereda de `AbstractUser`: `password` (el hash, `varchar(128)`, no la contraseña), `last_login`, `is_superuser`, `first_name`, `last_name`, `is_staff`, `is_active`, `date_joined`, `groups` y `user_permissions`.
 - `username = None`.
 - `email = EmailField(max_length=254, unique=True, validators=[reject_control_characters])`, sin `blank=True` (AbstractUser lo trae con `blank=True`).
@@ -49,7 +48,7 @@ No se tocan `MIDDLEWARE` (no hace falta `AuthenticationMiddleware`; `test_http_h
 - `Meta.constraints = [UniqueConstraint(Lower("email"), name="users_user_email_lower_unique", violation_error_code="email_taken")]`.
 - `__str__` devuelve `f"User {self.pk}"` (el de Django devuelve el email). Orden de miembros según DJ012.
 
-### Categoría (`categories.Category`, tabla `categories_category`). La escribe el usuario
+### Categoría (`categories.Category`, tabla `categories_category`)
 - `id` con `BigAutoField` (`DEFAULT_AUTO_FIELD`). La 005 apunta a él con `PROTECT`.
 - `slug = CharField(max_length=50, unique=True, validators=[RegexValidator(r"\A[a-z0-9]+(?:-[a-z0-9]+)*\Z", code="invalid")])`. No es `SlugField`, porque `validate_slug` admite mayúsculas y `_`. Se usa `[0-9]` y no `\d`, y `\Z` y no `$`.
 - `name = CharField(max_length=60, validators=[reject_control_characters])`.
@@ -158,7 +157,7 @@ if violated is not None:
 - No se registra en el log ni se encadena el error.
 - Una restricción desconocida da `constraint_violated`.
 
-`UserManager` (lo escribe el usuario):
+`UserManager`:
 - `get_by_natural_key(email)` aplica `self.normalize_email` y busca por igualdad exacta, no con `iexact`. Si el valor no es `str`, lanza `DoesNotExist`.
 - `create_user` y `create_superuser` solo delegan en el servicio, con un import diferido dentro del método para evitar el ciclo entre `models` y `services`.
 - `createsuperuser --noinput` sin `DJANGO_SUPERUSER_PASSWORD` llama a `create_superuser(email=..., password=None)`. El servicio responde `password_required` y el comando lo convierte en `CommandError` (RF-8).
@@ -194,7 +193,7 @@ Las filas marcadas necesitan su elección antes de aprobar el plan.
 | Unicidad del nombre de categoría | (a) `UniqueConstraint(Lower("name"), violation_error_code="name_taken")` y traducción por código. (b) Comprobación manual en `clean()`. | (a) | Duplicar la regla; `iexact` usa `UPPER` y no coincide con el índice. | El error llega en `__all__` y el mapa lo lleva a `name`. |
 | Formato del slug | (a) `CharField` + `RegexValidator` estricto. (b) `SlugField` + validador extra. | (a) | Dos validadores con reglas distintas sobre el mismo campo. | Ninguno relevante. |
 | Clave de `Category` | (a) `id` + `slug` único. (b) `slug` como clave primaria. | (a) | Que cambiar el slug cree otra fila; FK de la 005 sobre un texto. | Una columna más. |
-| Dónde van las reglas de usuario | (a) Servicios y manager fino que delega. (b) Lógica en el manager. (c) `save()` o `full_clean()` del modelo sobrescritos. | (a) | Reglas dentro del modelo que escribe el usuario; validación implícita en cada `save()`. | Import diferido en el manager. |
+| Dónde van las reglas de usuario | (a) Servicios y manager fino que delega. (b) Lógica en el manager. (c) `save()` o `full_clean()` del modelo sobrescritos. | (a) | Reglas dentro del modelo; validación implícita en cada `save()`. | Import diferido en el manager. |
 | Tipo del error de dominio | (a) Subclase de `ValidationError` que solo lleva códigos. (b) Excepción propia independiente. (c) El `ValidationError` crudo de `full_clean`. | (a) | (c) filtra `params={"value": ...}`; (b) haría que `createsuperuser` acabe en traceback. | Acopla el dominio a la excepción de Django (aceptable en este proyecto). |
 | Firma de `create_user` | (a) Solo con nombre, sin `**extra_fields`. (b) `**extra_fields` rechazando los permisos. | (a) | Conceder permisos por descuido; listas negras incompletas. | No se pueden pasar `first_name` ni `last_name` (la spec no los usa). |
 | Traducción del `IntegrityError` | (a) Por `diag.constraint_name`. (b) Analizando el mensaje. (c) Un código genérico siempre. | (a) | Leer un mensaje que contiene el valor; perder `email_taken`. | Los nombres automáticos de `unique=True` (`*_key`) quedan fijados por test. |

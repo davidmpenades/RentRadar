@@ -1,6 +1,6 @@
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
-from django.db import IntegrityError, transaction
 
+from apps.core.db import CONSTRAINT_VIOLATED, run_guarded
 from apps.core.errors import (
     UNMAPPED_ERROR,
     DomainValidationError,
@@ -16,7 +16,6 @@ EMAIL_TAKEN = "email_taken"
 PASSWORD_REQUIRED = "password_required"
 PASSWORD_INVALID = "password_invalid"
 PASSWORD_TOO_LONG = "password_too_long"
-CONSTRAINT_VIOLATED = "constraint_violated"
 VALIDATION_FAILED = UNMAPPED_ERROR[1]
 
 ERROR_CODES = frozenset(
@@ -72,7 +71,9 @@ def change_user_email(*, user, email):
         user.email = User.objects.normalize_email(email or "")
         errors.update(_validation_errors(user, exclude=NON_EMAIL_FIELDS))
         if not errors:
-            errors = _save_guarded(user, update_fields=["email"])
+            _, errors = run_guarded(
+                lambda: user.save(update_fields=["email"]), CONSTRAINT_CODES
+            )
     else:
         errors["email"] = [EMAIL_INVALID]
     if errors:
@@ -97,7 +98,7 @@ def _create_account(email, password, *, is_admin):
         errors["password"] = [password_code]
     if not errors:
         user.set_password(password)
-        errors = _save_guarded(user)
+        _, errors = run_guarded(user.save, CONSTRAINT_CODES)
     if errors:
         raise DomainValidationError(errors)
     return user
@@ -119,26 +120,3 @@ def _validation_errors(user, *, exclude):
     except ValidationError as exc:
         return translate_validation_error(exc, DJANGO_CODES)
     return {}
-
-
-def _save_guarded(instance, update_fields=None):
-    violated = None
-    try:
-        with transaction.atomic():
-            instance.save(update_fields=update_fields)
-    except IntegrityError as exc:
-        violated = _constraint_name(exc)
-    # Devuelve códigos para lanzar fuera del except: el IntegrityError lleva el email
-    if violated is None:
-        return {}
-    return _codes_for_constraint(violated)
-
-
-def _constraint_name(error):
-    diag = getattr(error.__cause__, "diag", None)
-    return getattr(diag, "constraint_name", None) or ""
-
-
-def _codes_for_constraint(name):
-    field, code = CONSTRAINT_CODES.get(name, (NON_FIELD_ERRORS, CONSTRAINT_VIOLATED))
-    return {field: [code]}
