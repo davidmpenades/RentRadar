@@ -94,6 +94,26 @@ Mutaciones sobre copias del fichero, borradas después. sha256 de `test_projecti
 - El coste se midió una vez por tamaño; el resultado que importa es la forma (lineal), no los milisegundos.
 - La función de aproximación usará el PROJ del backend (9.6.0). Las distancias de los tests de RF-26 y RF-27 las calcula `ST_Distance` sobre geography en PostGIS, que no proyecta a EPSG:3035.
 
+## Guardado protegido (T3)
+Fecha: 2026-10-29 (el commit de T3, `afed6b2`, no registró estas pruebas) · Ficheros: `backend/apps/core/db.py` y `backend/apps/core/tests/test_db.py`. En esta sección no cambia ningún fichero de producción.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests de `run_guarded` | `docker compose exec backend pytest -q apps/core/tests/test_db.py` | 13 passed |
+| Control del plugin, sin mutación | la misma orden con `-p mut_plugin` y `MUTATION=none` | 13 passed |
+
+### Pruebas de mecanismo
+Un plugin de pytest de usar y tirar, escrito en `/tmp/x` del contenedor (`PYTHONPATH=/tmp/x:/app` y `pytest -p`), sustituye la función en `apps.core.db` antes de recoger los tests, que la importan por nombre. No se edita ningún fichero versionado y el plugin se borra después. sha256 de `core/db.py` (`c2099e7bed17`), `test_db.py` (`baa18efbf68c`), `users/services.py` (`d17af2057e94`) y `categories/services.py` (`8568aa141aad`) idéntico antes y después.
+
+| Mutación | Tests que fallan |
+|---|---|
+| Capturar el `IntegrityError` dentro del `atomic` (la inversa del código: `tasks.md` decía «fuera», y el código ya captura fuera) | 6: `test_known_constraint_is_translated_and_the_whole_block_is_rolled_back`, `test_unknown_constraint_is_reported_without_details`, `test_violation_without_a_constraint_name_is_not_taken_for_success`, `test_connection_stays_usable_after_the_translated_error`, `test_violated_foreign_key_surfaces_inside_the_block_and_is_translated` y `test_constraints_are_deferred_again_after_the_block[violated]` |
+| `constraint_name` sin `or ""` | 3: `test_missing_constraint_name_is_an_empty_string`, `test_integrity_error_without_diagnostics_is_not_swallowed` y `test_violation_without_a_constraint_name_is_not_taken_for_success` |
+| `check_deferred_constraints` sin `SET CONSTRAINTS ALL DEFERRED` | 2: `test_constraints_are_deferred_again_after_the_block` (`saved` y `violated`) |
+| `check_deferred_constraints` sin `SET CONSTRAINTS ALL IMMEDIATE` | 1 fallo, `test_violated_foreign_key_surfaces_inside_the_block_and_is_translated` (`(None, {})` en vez de `{"parent": ["parent_not_found"]}`), y 1 error de limpieza (ver abajo) |
+
+El error adicional de la última mutación se repitió aislada y se leyó entero. Salta en el teardown de pytest-django, no en el test: `_fixture_teardown` llama a `connections[db].check_constraints()`, que ejecuta `SET CONSTRAINTS ALL IMMEDIATE`, y esa sentencia hace saltar `ForeignKeyViolation` de `guarded_children_parent_fk` (`Key (parent_id)=(-1) is not present in table "guarded_parents"`). Sin la sentencia dentro de `run_guarded`, la FK huérfana queda pendiente en la transacción exterior y la delata la limpieza, como en T7.
+
 ## Aproximación (T4)
 Fecha: 2026-10-27 · Ficheros: `backend/apps/assets/location.py` y `backend/apps/assets/tests/` (`conftest.py`, `test_location.py`, `test_location_reference.py`, `test_location_geodesic.py`).
 
@@ -387,7 +407,215 @@ Cinco mutaciones. Las cuatro primeras no editan ningún fichero versionado: tres
 - Mutación 2: solo falla el caso del CHECK porque es el único que llega a escribir coordenadas en un SQL; en los demás rechazos el servicio corta antes de la BD, o la consulta solo lleva identificadores.
 - Mutación 1: la reversión de la semilla no falla, porque usa los modelos históricos de las migraciones, que no tienen el `__str__` del modelo real.
 - El caso de proyección usa `projected=False`: el este y el norte del antípoda no se pueden calcular, porque `_project` falla.
-- El AST no ve `importlib.import_module("…")` con un texto, ni `import apps.assets` seguido de acceso por atributo. Es el mismo tipo de riesgo aceptado que `RunSQL` y `loaddata` en D10.
+- El AST no ve `importlib.import_module("…")` con un texto, ni `import apps.assets` seguido de acceso por atributo (lo segundo se cerró después, en `2f87c78` y `1792b54`). Lo primero es el mismo tipo de riesgo aceptado que `RunSQL` y `loaddata` en D10.
 - Regla de `approximate_location`: no figuraba en la Estrategia de tests de `plan.md`; sale de la segunda mitad de RF-32 («solo ellas calculan la ubicación pública») y se añadió con la aprobación del plan de T9.
 - `related_name="+"` de `owner` y `category` ya lo vigila `test_models.py` desde T6, y no se repite aquí.
 - El control del detector comprueba que `assert_no_leak` mira donde debe y que ninguna forma pasa en vacío, pero no que cada forma esté bien calculada: una forma incorrecta pero no vacía se detectaría a sí misma. Que las formas coincidan con lo que PostgreSQL escribe de verdad (`ST_AsHEXEWKB`, `ST_AsEWKT`) no se comprueba.
+
+## Validación final (T10)
+Fecha: 2026-10-29 · Rama: `feature/005-assets-and-location-privacy` · Entorno como al principio de este fichero. Esta spec no tiene interfaz: no hay verificación en navegador. La evidencia es la suite automática, las pruebas de mecanismo y las comprobaciones sobre la base de datos de desarrollo.
+
+### Ejecución
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Suite completa, BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1122 passed (1084 al empezar T10, 13 del test de las esquinas y 25 de las reglas de RF-32) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 95 ficheros formateados |
+| Configuración | `manage.py check` | Sin incidencias |
+| Migraciones al día | `manage.py makemigrations --check --dry-run` | `No changes detected` |
+| Dependencias | `git diff dev --stat -- backend/requirements*.txt` | Vacío |
+| Función pura y reglas sin BD | `grep -c django_db` en `test_location.py`, `test_location_reference.py` y `test_rules.py` | 0 en los tres |
+
+### Commits de la spec
+| Commit | Contenido |
+|---|---|
+| 3ec8b9d | T1: comportamiento de PostgreSQL y PostGIS |
+| 18134f8 | T2: comportamiento de GDAL y PROJ |
+| cb4f6f2 | Cambios de spec, plan y tareas de la puerta (`/sdd-change`) |
+| afed6b2 | T3: guardado protegido en `core` |
+| 3531b98 | T4: función de aproximación |
+| bea6202 | T5: reglas de los campos |
+| d9f153e | T6: modelo y migración inicial |
+| 23961c6 | T7: alta de bienes |
+| 7f42b03 | Refactor: los argumentos privados se pasan por nombre |
+| 6270a2e | T8: modificación con bloqueo de fila |
+| aa2a44e | Refactor: los puntos se construyen desde latitud y longitud |
+| e2ded51 | T9: borrado protegido, fugas y vía de escritura |
+| e44f530 | `/sdd-change`: RF-18 exige la ubicación exacta entera al modificar |
+| 505f3b0 | Limpieza de comentarios que repetían el nombre |
+| 5c698b9 | Test de los bienes en las esquinas de la caja |
+| 2f87c78 | Regla de RF-32 contra los usos del servicio y del registro de apps |
+| 1792b54 | La regla de RF-32 cubre también el acceso por atributo a `models` y `location` y los argumentos con nombre |
+
+Además de los commits de documentación (aprobación de la spec, plan y tareas, y cierres de tarea). La rama lleva otros dos ajenos a la spec: `448d1e6` (el agente planner pasa a `opus`) y `12a7e23` (memoria de la 004).
+
+### Base de datos de desarrollo
+`migrate` en desarrollo, con `docker compose exec backend python manage.py migrate`. Antes, `showmigrations assets categories` daba `assets [ ] 0001_initial` y `categories` con 0001 y 0002 aplicadas. Salida literal:
+
+```
+Operations to perform:
+  Apply all migrations: assets, auth, categories, contenttypes, core, sessions, users
+Running migrations:
+  Applying assets.0001_initial... OK
+```
+
+| Comprobación (solo lectura) | Resultado |
+|---|---|
+| `showmigrations assets categories` | `assets [X] 0001_initial`; `categories` `[X] 0001_initial` y `[X] 0002_seed_categories` |
+| `to_regclass('assets_asset')` | `assets_asset` existe |
+| CHECK en `pg_constraint` | Los 9 con su nombre: `assets_asset_currency_eur`, `_description_length`, `_exact_location_valid`, `_price_range`, `_price_unit_valid`, `_privacy_radius_valid`, `_public_location_valid`, `_status_valid` y `_title_length` |
+| Claves foráneas | `assets_asset_owner_id_23c9aaf7_fk_users_user_id` y `assets_asset_category_id_b30c6baf_fk_categories_category_id`, las dos `DEFERRABLE INITIALLY DEFERRED` |
+| Otras restricciones | La clave primaria y 13 `NOT NULL` (PostgreSQL 18 los lista como restricciones de tipo `n`) |
+| Índices | `assets_asset_public_location_bccabc5d_id` (GiST, solo sobre la pública), los dos B-tree de las FK y el de la clave primaria; ninguno sobre `exact_location` |
+| Tipos de columna | `price` `numeric(8,2)`; `exact_location` y `public_location` `geography` |
+| Datos | 0 bienes y 11 categorías |
+
+### Revisiones
+Dos revisiones en paralelo sobre `git diff dev...HEAD`, cada una por su cuenta y sin editar nada. Seguridad concluyó «cumple», sin bloqueantes. Calidad concluyó «no cumple» hasta resolver cuatro bloqueantes. Cada afirmación se contrastó con el código antes de actuar. Después se pasó `/ultrareview dev` sobre la rama (42 ficheros, 5947 inserciones y 169 borrados), con dos hallazgos de severidad `nit`. Las correcciones no se volvieron a pasar por los revisores: la suite, ruff y las pruebas de mecanismo de abajo son su comprobación.
+
+| Hallazgo | Comprobado | Decisión |
+|---|---|---|
+| Calidad 1: unos 50 comentarios en `assets` que repiten el nombre, frente a 1–2 por fichero en las otras apps | Cierto en el fondo; se revisó cada uno | Resuelto en `505f3b0`: 12 comentarios borrados y uno de dos líneas reducido a una. Se conservan los que dan un porqué o fijan un contrato (qué devuelve, cuándo falla) |
+| Calidad 2: una sola coordenada al modificar da `location_required` y la spec no lo dice | Confirmado en `services.py` y `test_update.py` | Resuelto en `e44f530`. La fila de RF-18 de la estrategia de tests de `plan.md` pasa a citarlo |
+| Calidad 3: la pública puede quedar fuera de la caja y ningún test de servicio lo ejerce | Calculado: 10 de las 12 combinaciones esquina/radio dan una pública fuera | Resuelto en `5c698b9` |
+| Calidad 4: T10 sin cerrar | Obsoleto: la revisión vio T10 a medias | Este documento |
+| Calidad 5: `srid=4326` escrito a mano en `models.py` (dos veces) y `services.py` aunque existe `GEOGRAPHIC_SRID` | Confirmado | Deuda aceptada |
+| Calidad 6 a 13 (opcionales) | Sin contrastar uno a uno | Deuda aceptada, en la lista de abajo |
+| Seguridad 1: el test de RF-32 se esquiva con `from apps.assets.services import Asset`, con `from apps.assets import services` o con el registro de apps | Confirmado: `obtains()` solo mira `apps.assets.models` y `apps.assets.location`, y `services.py` no tiene `__all__` | Resuelto en `2f87c78` con otro alcance: sin `__all__`, y fuera de `apps/assets` solo se importan por nombre `create_asset` y `update_asset`. Ampliado en `1792b54` (ver Ultrareview 1) |
+| Seguridad 2: con `DEBUG=True` la página de error de Django imprime las variables locales de los servicios | Confirmado: desarrollo lee `DJANGO_DEBUG`, producción lo fija a `False` y no hay `sensitive_variables`. Hoy no hay vistas | Requisito para la spec de API |
+| Seguridad 3: `run_guarded` atribuye a una escritura las violaciones diferidas de la transacción exterior | Ya recogido como coste de D3 | Aceptado |
+| Seguridad 4: el título admite U+2028 y U+2029 | Confirmado con un sondeo de `clean_title`: los devuelve intactos | Aceptado; se decide con el `/sdd-change` pendiente sobre caracteres Cf |
+| Seguridad 5: `ProtectedError` en la reversión de la semilla depende del orden de las apps | Afirmación del revisor, sin contrastar | Nota; si el orden cambiara, el test fallaría en voz alta |
+| Seguridad 6: el commit `448d1e6` es ajeno a la spec | Confirmado | Se deja en la rama |
+| Ultrareview 1 (nit): la guarda de RF-32 se esquiva con `import apps.assets` y `apps.assets.models.Asset` (y con `location`), con `from apps import assets` y `assets.models…`, con `get_model(app_label="assets", model_name="Asset")` y con `importlib` | Sondeado: las cuatro formas de atributo daban `False` en `obtains`, y `get_model` con argumentos con nombre también; la regla de `get_app_config` de `2f87c78` tampoco veía `app_label="assets"`. Ningún módulo de producción las usa. En Django 5.2 el parámetro con nombre de `get_model` y de `get_app_config` es `app_label` | Resuelto en `1792b54`: acceso por atributo a `models` y `location`, y `app_label` con nombre en las dos funciones. `importlib` con texto y las etiquetas que son variables siguen aceptados |
+| Ultrareview 2 (nit): la validación de coordenadas está escrita dos veces (`rules._coordinate_as_float` y `location._valid_coordinate`) y las copias difieren | Confirmado: `rules` acepta `Decimal` y captura `ValueError`; `location` solo acepta `int` y `float` y captura `OverflowError`. Hoy no produce un fallo: `services` convierte con `clean_location` y solo pasa `float` a `approximate_location` | Deuda aceptada: son dos copias y se extrae en la tercera repetición |
+
+### Validación por RF
+Los tests son de `backend/apps/assets/tests/` (`test_<nombre>.py`, abreviados) salvo los de `core/tests/`. Los nombres van sin el prefijo `test_` y sin parámetros.
+
+| RF | Tests que lo cubren | Resultado |
+|---|---|---|
+| RF-1 | `create`: `a_valid_asset_is_created_paused_with_the_defaults`, `text_and_price_are_stored_normalised`. `models`: `the_model_has_exactly_these_fields`, `a_valid_asset_is_saved_and_read_back` | Cumple |
+| RF-2 | `rules`: `an_invalid_reference_gets_the_code_of_its_field`, `a_reference_in_range_is_accepted`. `create`: `a_missing_reference_is_reported_and_nothing_is_created`, `both_missing_references_are_reported_together`, `a_missing_required_field_gets_its_required_code`, `a_foreign_key_violation_is_translated_by_the_forced_check`. `models`: `a_missing_reference_violates_its_foreign_key_by_name` | Cumple |
+| RF-3 | `rules`: `a_title_with_one_problem_gets_that_code`, `a_title_with_several_problems_gets_all_codes_in_order`, `a_title_that_is_not_valid_text_is_invalid`, `a_composed_emoji_counts_each_emoji_and_not_the_joiners`, `a_title_is_normalised_before_it_is_measured`, `titles_of_three_to_one_hundred_characters_are_accepted`, `a_valid_title_is_returned_trimmed`. `models`: `the_length_checks_count_code_points_and_not_bytes`, `each_check_rejects_its_violation_by_name` | Cumple |
+| RF-4 | `rules`: `a_description_with_one_problem_gets_that_code`, `a_description_admits_line_breaks_and_tabs`, `a_description_admits_a_composed_emoji`, `a_description_counts_code_points_and_not_visible_characters`, `a_description_is_returned_trimmed_and_normalised`, `a_description_that_is_not_valid_text_is_invalid`, `descriptions_of_twenty_to_two_thousand_characters_are_accepted`. `models`: `the_length_checks_count_code_points_and_not_bytes`, `each_check_rejects_its_violation_by_name` | Cumple |
+| RF-5 | `rules`: `a_price_that_is_not_a_plain_decimal_is_invalid`, `a_price_out_of_range_or_too_precise_gets_every_code_that_applies`, `a_valid_price_is_returned_with_two_decimals`. `models`: `price_has_eight_digits_and_two_decimals`, `each_check_rejects_its_violation_by_name`. `core/test_database_platform`: `numeric_7_2_overflow_is_a_data_error_without_the_value`, `numeric_8_2_admits_one_hundred_thousand` | Cumple |
+| RF-6 | `create`: `a_valid_asset_is_created_paused_with_the_defaults`, `explicit_values_equal_to_the_defaults_are_accepted`, `an_explicit_none_does_not_take_the_default` | Cumple |
+| RF-7 | `rules`: `any_other_currency_is_invalid`, `the_currency_is_euro`. `models`: `each_check_rejects_its_violation_by_name` | Cumple |
+| RF-8 | `rules`: `any_other_price_unit_is_invalid`, `the_four_price_units_are_accepted`. `create`: `a_missing_required_field_gets_its_required_code`. `models`: `each_check_rejects_its_violation_by_name` | Cumple |
+| RF-9 | `create`: `a_valid_asset_is_created_paused_with_the_defaults`, `an_explicit_none_does_not_take_the_default` | Cumple |
+| RF-10 | `rules`: `any_other_privacy_radius_is_invalid`, `the_three_privacy_radii_are_accepted`. `models`: `each_check_rejects_its_violation_by_name` | Cumple |
+| RF-11 | `create`: `a_valid_asset_is_created_paused_with_the_defaults`, `explicit_values_equal_to_the_defaults_are_accepted`, `an_invalid_field_gets_its_code_without_touching_the_database` | Cumple |
+| RF-12 | `rules`: `a_new_asset_can_only_be_paused`, `any_other_status_on_creation_is_invalid`, `an_asset_can_be_active_or_paused_on_update`, `any_other_status_on_update_is_invalid`. `update`: `a_status_outside_active_and_paused_is_invalid`. `models`: `each_check_rejects_its_violation_by_name` | Cumple |
+| RF-13 | `rules`: `a_coordinate_that_is_not_a_finite_number_is_invalid`, `a_coordinate_beyond_the_range_is_out_of_range`, `the_coordinates_come_back_as_floats`. `create`: `a_missing_coordinate_gets_the_location_required_code`. `models`: `a_non_finite_or_empty_location_is_rejected_by_name`, `out_of_range_coordinates_are_adjusted_by_the_type_and_not_rejected`. `core/test_database_platform`: `geography_coerces_out_of_range_coordinates_with_a_fixed_notice`, `geography_stores_nan_as_is_without_notice`, `range_check_rejects_nan_coordinates` | Cumple |
+| RF-14 | `rules`: `a_point_inside_the_coherence_box_is_accepted`, `a_point_outside_the_coherence_box_is_rejected`, `the_range_limits_are_included_and_fall_to_the_box_check` | Cumple |
+| RF-15 | `create`: `the_dates_are_the_received_now_in_utc`, `a_now_without_a_time_zone_is_a_programming_error`, `now_is_required`. `models`: `dates_are_set_by_the_caller_and_not_by_the_model` | Cumple |
+| RF-16 | `update`: `a_change_sets_updated_at_in_utc_and_keeps_created_at`, `a_modification_without_changes_writes_nothing` | Cumple |
+| RF-17 | `models`: `str_and_repr_show_the_title_and_the_id_and_no_coordinates`. `leaks`: `the_text_of_an_asset_does_not_leak` | Cumple |
+| RF-18 | `update`: `a_title_change_keeps_the_rest_of_an_active_asset`, `the_changed_values_are_stored_normalised`, `none_in_a_required_field_gets_its_required_code`, `none_in_currency_radius_or_status_is_invalid_not_required`, `an_invalid_field_gets_its_code_without_touching_the_database`, `several_invalid_fields_are_reported_together`, `a_single_coordinate_gets_the_location_required_code` (la regla de la coordenada única, añadida a la spec en `e44f530`) | Cumple |
+| RF-19 | `update`: `an_asset_can_be_activated_and_paused`, `activating_an_active_asset_and_pausing_a_paused_one_writes_nothing` | Cumple |
+| RF-20 | `update`: `the_owner_cannot_be_changed`, `an_argument_outside_the_whitelist_is_a_programming_error`, `the_category_can_be_changed_to_another_one` | Cumple |
+| RF-21 | `deletion`: `deleting_a_referenced_row_by_sql_violates_the_foreign_key`. `models`: `deleting_an_owner_with_assets_is_protected`, `foreign_keys_protect_and_have_no_reverse_accessor`. `leaks`: `deleting_the_owner_of_an_asset_does_not_leak` | Cumple |
+| RF-22 | `deletion`: `deleting_a_referenced_row_by_sql_violates_the_foreign_key`, `reverting_the_seed_with_an_asset_is_rejected_and_deletes_nothing`. `models`: `deleting_a_category_with_assets_is_protected`. `architecture`: `the_asset_migration_does_not_depend_on_the_category_seed`. `leaks`: `deleting_the_category_of_an_asset_does_not_leak`, `reverting_the_seed_with_an_asset_does_not_leak` | Cumple |
+| RF-23 | `location`: `result_is_the_centre_of_the_cell_that_contains_the_point`, `a_valid_point_outside_the_coherence_box_gives_a_value`, `negative_coordinates_round_down_to_the_cell_below`, `the_coordinate_limits_are_included`, `a_point_on_the_lower_left_border_belongs_to_the_upper_right_cell`, `a_point_just_below_the_border_belongs_to_the_previous_cell`. `create`: `an_asset_in_a_corner_keeps_its_derived_public_location`, `the_public_location_of_some_corners_falls_outside_the_box` | Cumple |
+| RF-24 | `location`: `same_point_and_radius_give_the_same_result` (sin `django_db`). `location_reference`: `the_cell_centre_matches_its_reference` | Cumple. Ver el límite de abajo |
+| RF-25 | `location`: `result_is_within_071_radius_of_the_point_in_the_projection` | Cumple, por muestreo |
+| RF-26 | `location_geodesic`: `the_exact_point_stays_within_the_radius_of_the_public_one` | Cumple, por muestreo |
+| RF-27 | `location_geodesic`: `cell_sides_measure_between_95_and_105_percent_of_the_radius` | Cumple, por muestreo |
+| RF-28 | `location`: `two_points_of_the_same_cell_give_the_same_result` | Cumple |
+| RF-29 | `location`: `applying_the_function_to_its_result_gives_the_same_result` | Cumple |
+| RF-30 | `location`: `the_fine_result_is_in_the_same_coarse_cell_as_the_point` | Cumple |
+| RF-31 | `location`: `an_invalid_radius_fails_without_a_value`, `an_invalid_coordinate_fails_without_a_value`, `a_non_finite_projection_fails_without_a_value`, `a_point_outside_the_projection_domain_fails_without_a_value`. `core/test_projection_platform`: `projecting_the_antipode_raises_gdal_exception_with_a_fixed_log` | Cumple |
+| RF-32 | `architecture`: `only_the_asset_modules_get_the_asset_model`, `nobody_looks_the_asset_model_up_by_name`, `the_model_and_the_selectors_do_not_write`, `the_only_public_functions_of_the_service_are_the_two_writers`, `only_the_service_gets_the_approximation`, `outside_the_asset_app_the_service_is_used_only_through_its_two_writers`, `nobody_outside_the_asset_app_reaches_it_through_the_app_registry`, y los tests de los detectores. `models`: `foreign_keys_protect_and_have_no_reverse_accessor` | Cumple. Ver los límites de abajo |
+| RF-33 | `create`: `the_public_location_is_derived_from_the_exact_one`, `an_argument_outside_the_whitelist_is_a_programming_error`. `update`: `moving_the_exact_location_derives_a_new_public_one`, `a_new_radius_derives_the_public_location_from_the_stored_exact_one`, `after_creations_and_modifications_every_public_location_is_derived` | Cumple |
+| RF-34 | `update`: `moving_inside_the_same_cell_leaves_the_public_location_alone`, `changing_something_else_does_not_derive_the_public_location`, `the_spy_sees_the_derivation_when_the_radius_changes` | Cumple |
+| RF-35 | `concurrency`: `the_row_is_locked_before_anything_else_reads_the_asset`, `the_update_comes_after_the_lock_in_the_same_transaction` | Cumple por el orden del SQL, no por dos conexiones (riesgo aceptado) |
+| RF-36 | `models`: `locations_are_geography_points_and_only_the_public_one_is_indexed`, `a_non_finite_or_empty_location_is_rejected_by_name`, `a_null_location_is_rejected_as_not_null`, `columns_have_the_expected_types_and_none_is_nullable`. `create`: `a_violation_of_the_public_location_is_an_unmapped_constraint`, `an_asset_in_a_corner_keeps_its_derived_public_location` | Cumple |
+| RF-37 | `leaks`: todos (59 casos), entre ellos `a_creation_rejected_by_validation_does_not_leak`, `a_modification_rejected_by_validation_does_not_leak`, `a_failed_approximation_in_the_service_does_not_leak`, `a_failure_of_the_approximation_does_not_leak`, `a_location_locked_modification_does_not_leak`, `a_check_violation_does_not_leak_and_leaves_the_connection_usable`, y el control `the_detector_catches_every_form_in_every_place_it_looks`. `models`: `str_and_repr_show_the_title_and_the_id_and_no_coordinates` | Cumple |
+| RF-38 | `core/test_db`: los 12 tests de `run_guarded`. `create`: `a_check_violation_is_translated_without_the_original_error`, `a_foreign_key_violation_is_translated_by_the_forced_check`. `update`: `a_check_violation_is_translated_without_the_original_error`. `leaks`: `a_check_violation_does_not_leak_and_leaves_the_connection_usable` | Cumple |
+| RF-39 | `update`: `an_active_or_activated_asset_cannot_change_location_or_radius`, `an_active_asset_accepts_the_same_location_and_radius`, `a_paused_asset_accepts_a_new_location_and_radius`. `leaks`: `a_location_locked_modification_does_not_leak` | Cumple |
+| Errores (RNF) | `create`: `the_error_codes_are_the_ones_of_the_catalog` (los 36 códigos de la tabla del plan) | Cumple |
+| Rendimiento (RNF) | Los tests de `location`, `location_reference` y `rules` no llevan `django_db` (0 apariciones) y corren con la red bloqueada | Cumple |
+| Dependencias (RNF) | `git diff dev --stat -- backend/requirements*.txt` vacío | Cumple |
+| Migraciones (RNF) | `architecture`: `the_asset_migration_does_not_depend_on_the_category_seed`; `makemigrations --check --dry-run` sin cambios | Cumple |
+| Fechas (RNF) | `create`: `the_dates_are_the_received_now_in_utc`; `update`: `a_change_sets_updated_at_in_utc_and_keeps_created_at`; `models`: `dates_are_set_by_the_caller_and_not_by_the_model` | Cumple |
+
+### Pruebas de mecanismo de la revisión
+**Regla de RF-32.** Un módulo temporal sin versionar, `backend/apps/core/zz_temporary_mutation.py`, escrito desde el host y borrado tras cada pasada (ya no existe). Se ejecutaron los dos tests reales de la regla. sha256 de `test_architecture.py` (`ab5cbb6d2d11`), `services.py` (`ad17a3e668ba`) y `core/db.py` (`c2099e7bed17`) idéntico antes y después, y la suite del fichero queda en 46 passed sin el módulo.
+
+| Contenido del módulo temporal | Resultado |
+|---|---|
+| `from apps.assets.services import Asset` | Falla `test_outside_the_asset_app_the_service_is_used_only_through_its_two_writers` |
+| `from apps.assets import services` | Falla el mismo test |
+| `apps.get_app_config("assets")` | Falla `test_nobody_outside_the_asset_app_reaches_it_through_the_app_registry` |
+| Control: `from apps.assets.services import create_asset, update_asset` | Pasan los dos tests |
+| Extra: `import apps.assets` y `apps.assets.services.Asset` | Falla el test del servicio |
+
+**Ampliación de la regla (`1792b54`).** El mismo método y el mismo módulo temporal, borrado tras cada pasada (ya no existe). Se ejecutaron los cinco tests reales que reaccionan: `only_the_asset_modules_get_the_asset_model`, `only_the_service_gets_the_approximation`, `nobody_looks_the_asset_model_up_by_name`, `outside_the_asset_app_the_service_is_used_only_through_its_two_writers` y `nobody_outside_the_asset_app_reaches_it_through_the_app_registry`. sha256 de `test_architecture.py` (`ed098188113c`), `services.py` (`ad17a3e668ba`), `location.py` (`3a36eed06663`) y `core/db.py` (`c2099e7bed17`) idéntico antes y después, y la suite del fichero queda en 51 passed sin el módulo.
+
+| Contenido del módulo temporal | Resultado |
+|---|---|
+| `import apps.assets` y `apps.assets.models.Asset` | Falla solo `test_only_the_asset_modules_get_the_asset_model` |
+| `import apps.assets` y `apps.assets.location.approximate_location` | Falla solo `test_only_the_service_gets_the_approximation` |
+| `apps.get_model(app_label="assets", model_name="Asset")` | Falla solo `test_nobody_looks_the_asset_model_up_by_name` |
+| `apps.get_app_config(app_label="assets")` | Falla solo `test_nobody_outside_the_asset_app_reaches_it_through_the_app_registry` |
+| Control: las dos escrituras y `categories.models.Category` | Pasan los cinco tests |
+
+**Test de las esquinas.** Nace en verde porque el código ya cumple, como T9. No se ejecutó ninguna mutación; por razonamiento, una mutación del servicio que recortara la pública a la caja haría fallar `test_an_asset_in_a_corner_keeps_its_derived_public_location`. El control `test_the_public_location_of_some_corners_falls_outside_the_box` llama a `approximate_location` directamente: protege contra que el test de las esquinas pase en vacío si la función dejara de sacar la pública de la caja, no contra el servicio.
+
+### Desviaciones respecto al plan
+- Las pruebas de mecanismo de T3 se registran aquí, en T10, como preveía `tasks.md`.
+- La regla de `approximate_location` de `test_architecture.py` salió de T9 y no estaba en la estrategia de tests del plan.
+- T9 no tuvo rojo previo, y tampoco el test de las esquinas ni la regla de RF-32 posteriores: el código ya cumplía y solo se añadieron tests.
+- Los refactors `7f42b03` y `aa2a44e` no estaban en las tareas.
+- La regla de la coordenada única de RF-18 se añadió a la spec después de implementarla (`e44f530`), al detectarse en la revisión; el código y el test eran anteriores.
+- La regla de RF-32 va más allá de lo que fijaba el plan (D10): además de los imports de `apps.assets.models` y `apps.assets.location`, prohíbe los usos del servicio distintos de importar por nombre sus dos escrituras y el acceso por `get_app_config("assets")`.
+- Sin `selectors.py`, el test de la estructura conserva una rama que hoy no se ejecuta.
+
+### Riesgos aceptados
+De la spec (sección «Riesgos aceptados por el usuario»):
+- La incertidumbre real es el cuadrado de la celda, y en zonas rurales una celda puede contener una sola vivienda.
+- Pausar no es retroactivo.
+- La ubicación exacta queda en claro en la BD, en los backups y para los superusuarios hasta el borrado RGPD.
+- Varios bienes en la misma dirección con radios distintos: la privacidad efectiva es la del radio menor.
+- El precio `+5`, `007.50`, `.5` y `5.` se acepta si el valor es válido.
+- Los decimales de las coordenadas no tienen límite.
+- La pública de un bien en el borde de la caja puede quedar fuera de ella.
+- Si los valores de referencia fallan tras actualizar PROJ o GDAL, hay que planificar el recálculo de las públicas guardadas.
+- Observar cuándo cambia la pública revela que la exacta cruzó el borde de una celda.
+- El título y la descripción son texto libre público y pueden contener la dirección.
+- Un carácter invisible que no es espacio, de control ni de formato cuenta como visible en el título.
+
+Del plan (sección «Aceptado como riesgo»):
+- Escrituras que el test estático no ve: `RunSQL`, migraciones de datos, `loaddata`, shell y SQL de superusuario.
+- `PROTECT` sobre usuarios bloqueará el futuro borrado RGPD.
+- `str(ProtectedError)` incluye el título y el id de los bienes, sin coordenadas.
+- Un bien borrado mientras otra modificación espera el bloqueo da `asset_not_found`; no hay un test con el borrado concurrente.
+- El log del servidor PostgreSQL (STATEMENT con literales y DETAIL con la fila) queda para la spec de despliegue.
+- RF-35 se verifica por el orden del SQL y no con dos conexiones simultáneas.
+- No hay tope de tamaño del texto en el servicio: lo pondrá el límite del cuerpo en la spec de API.
+
+De la revisión y de las tareas:
+- **Regla de RF-32, falso positivo:** la regla por atributo marca cualquier `x.assets.services`, `assets.services`, `assets.models` o `assets.location`. Una variable llamada `assets` con uno de esos atributos saltaría sin ser un uso indebido; habría que renombrarla.
+- **Regla de RF-32, etiqueta que es una variable:** `get_app_config(nombre)` y `get_model(nombre, ...)` con una etiqueta que no es un literal no se detectan. Con el literal, en posición o como `app_label=`, sí.
+- **Regla de RF-32, `importlib`:** `importlib.import_module("...")` con un texto no se detecta.
+- **Regla de RF-32, cerrada:** la regla AST se da por cerrada con `1792b54`. Una forma nueva de esquivarla se anota como riesgo salvo que aparezca en código real.
+- **RF-37:** las formas de las coordenadas no se contrastan con lo que PostgreSQL escribe de verdad (`ST_AsHEXEWKB`, `ST_AsEWKT`). El control del detector comprueba que mira donde debe, no que cada forma esté bien calculada.
+- **RF-37, página de error:** con `DEBUG=True` y una excepción inesperada en un servicio, la página técnica de Django imprimiría las variables locales (`latitude`, `longitude`, `values`). Es requisito para la spec de API (`sensitive_variables`, o confirmar que producción nunca usa `DEBUG`).
+- **`run_guarded`:** comprueba todas las restricciones diferidas pendientes de la transacción exterior, no solo las de su escritura, y las deja diferidas al salir. Con un `ATOMIC_REQUESTS` futuro, una violación ajena saldría como `constraint_violated`.
+- **Título:** acepta U+2028 y U+2029 (categorías Zl y Zp). Se decide con el `/sdd-change` pendiente sobre los caracteres de formato.
+- **RF-22:** según el revisor, la reversión de la semilla produce `ProtectedError` por el orden de las apps en el grafo; si cambiara, la FK lo rechazaría igual con `IntegrityError` y el test fallaría en voz alta. No contrastado.
+- **RF-24:** `same_point_and_radius_give_the_same_result` compara dos llamadas. Que no dependa de la hora ni del azar lo cubren la ausencia de `django_db` y la lectura del código, no un `monkeypatch` de `time` y `random`.
+- **Medición:** los márgenes de RF-25 a RF-27 son los de la muestra de 237 puntos (ver T4), no los de toda la caja.
+- **Cobertura de RF-23 a RF-31:** por muestreo, no por demostración.
+- **Deuda de calidad, sin contrastar uno a uno:**
+  - `srid=4326` escrito a mano tres veces aunque existe `GEOGRAPHIC_SRID`.
+  - `_public_location` devuelve `None` y sus dos llamadores repiten el `raise`.
+  - `_apply_update` hace varias cosas.
+  - `FORBIDDEN_ARGUMENTS` e `INVALID_FIELDS` duplicados entre `test_create.py` y `test_update.py`, y coordenadas escritas a mano aunque existen las centinelas.
+  - `ERROR_CODES` se compara con una copia dentro del test y no con la tabla del plan.
+  - `ATTRIBUTES` es interno con un nombre vago, y `check_deferred_constraints` solo se usa dentro de su módulo.
+  - El plan dice que `rules.py` lleva constantes de códigos y usa literales.
+  - La validación de coordenadas está en `rules._coordinate_as_float` y en `location._valid_coordinate`, con tipos admitidos y excepciones capturadas distintos (ver Ultrareview 2).
+
+### Veredicto
+Cumple. Los RF-1 a RF-39 y los RNF tienen su test automático en verde (1122 passed con la BD de test recreada), ruff, `check` y `makemigrations --check` están limpios, `requirements*.txt` no tiene diff y la BD de desarrollo tiene `assets.0001` aplicada, con sus 9 CHECK, sus 2 FK y su único índice GiST. Los bloqueantes de las dos revisiones están resueltos en `e44f530`, `505f3b0`, `5c698b9` y `2f87c78`, y el primer hallazgo de `/ultrareview` en `1792b54`; el segundo queda como deuda aceptada. Los riesgos de arriba están aceptados, con tres pendientes de cerrar fuera de esta spec: la protección de variables locales en la spec de API, el `/sdd-change` sobre los caracteres de formato (Cf, U+2028 y U+2029) y los de despliegue. La spec pasa a «implementada» con este veredicto.

@@ -1,5 +1,5 @@
 # Spec 005 — Bienes y privacidad de la ubicación
-Estado: aprobada
+Estado: implementada
 Depende de: spec 001 (RF-5: base de datos capaz de calcular distancias geodésicas en metros; RF-29 y RF-30: fechas con zona horaria y UTC como referencia), spec 002 (RF-7: los cambios de modelos sin migración hacen fallar los tests) y spec 004 (usuarios, categorías y semilla; RF-12: `django.db.backends` fijado a INFO, para que el SQL con parámetros no llegue al log; RF-22 se cierra aquí).
 
 ## Contexto y objetivo

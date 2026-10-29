@@ -361,7 +361,7 @@ Cambios de spec aplicados en el `/sdd-change` de la puerta, antes de T4:
 | RF-15 | `test_create.py`: `created_at == updated_at == now`, con zona horaria y desplazamiento UTC 0. Un `now` sin zona horaria da `ValueError` y no escribe nada. `test_models.py`: `auto_now` y `auto_now_add` son `False`. |
 | RF-16 | `test_update.py`: un cambio pone `updated_at = now2` y conserva `created_at`. Sin cambios, o con valores iguales (precio `"12.3"` frente a 12.30, mismas coordenadas), no hay UPDATE en `CaptureQueriesContext` ni cambian las fechas. |
 | RF-17 | `test_models.py`: `str()` y `repr()` contienen el título y el id y ninguna forma de las coordenadas centinela (repr, 6 decimales, EWKT, EWKB). |
-| RF-18 | `test_update.py`: los campos no indicados se conservan (radio 2000, estado `active`, moneda). Las validaciones se aplican al valor indicado. Los valores por defecto no se aplican al modificar. |
+| RF-18 | `test_update.py`: los campos no indicados se conservan (radio 2000, estado `active`, moneda). Las validaciones se aplican al valor indicado. Los valores por defecto no se aplican al modificar. Una sola coordenada se rechaza con `location_required`. |
 | RF-19 | `test_update.py`: activar y pausar funcionan; activar un bien activo y pausar uno pausado no dan error, no hacen UPDATE ni tocan fechas. |
 | RF-20 | `test_update.py`: `update_asset(owner_id=...)` da `TypeError` y el propietario no cambia. Cambiar la categoría se acepta. |
 | RF-21 | `test_deletion.py`: `user.delete()` da `ProtectedError` y el usuario sigue existiendo. `DELETE` por SQL tras `SET CONSTRAINTS ALL IMMEDIATE`, dentro de `atomic`, da `IntegrityError` (ForeignKeyViolation) con el nombre de la FK. |

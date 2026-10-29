@@ -188,7 +188,7 @@ Prohibido sin OK explícito en ese momento: `migrate` en la BD de desarrollo, ó
   - Commit: `test(assets): cover protected deletion, leaks and write path`
   - Hecho cuando: los tests pasan sin código de producción nuevo; si alguno exige código, se para y se revisa el plan.
 
-- [ ] **T10. Validación y BD de desarrollo.** Todos
+- [x] **T10. Validación y BD de desarrollo.** Todos
   - Cómo se prueba:
     1. Suite completa, ruff, `manage.py check` y `makemigrations --check --dry-run`.
     2. `git diff dev -- backend/requirements*.txt` vacío (RNF Dependencias).
