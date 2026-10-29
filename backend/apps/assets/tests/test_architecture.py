@@ -10,6 +10,8 @@ SERVICES = "apps/assets/services.py"
 MODELS = "apps/assets/models.py"
 SELECTORS = "apps/assets/selectors.py"
 ASSET_MODULES = {MODELS, SELECTORS, SERVICES}
+ASSET_PACKAGE = "apps/assets/"
+SERVICES_MODULE = "apps.assets.services"
 WRITE_METHODS = {
     "save",
     "create",
@@ -43,6 +45,69 @@ LOCATION_FORMS = {
     "module_with_alias": ("from apps.assets import location as place", True),
     "dotted_module_with_alias": ("import apps.assets.location as place", True),
     "constants_only": ("from apps.assets.location import PRIVACY_RADII", False),
+}
+# (código, paquete del fichero, ¿usa los servicios de bienes de forma no permitida?)
+SERVICE_FORMS = {
+    "writers": (
+        "from apps.assets.services import create_asset, update_asset",
+        "apps.users",
+        False,
+    ),
+    "writer_with_alias": (
+        "from apps.assets.services import create_asset as create",
+        "apps.users",
+        False,
+    ),
+    "model": ("from apps.assets.services import Asset", "apps.users", True),
+    "approximation": (
+        "from apps.assets.services import approximate_location",
+        "apps.users",
+        True,
+    ),
+    "writer_and_model": (
+        "from apps.assets.services import create_asset, Asset",
+        "apps.users",
+        True,
+    ),
+    "private_function": (
+        "from apps.assets.services import _public_location",
+        "apps.users",
+        True,
+    ),
+    "star": ("from apps.assets.services import *", "apps.users", True),
+    "module": ("from apps.assets import services", "apps.users", True),
+    "module_with_alias": ("from apps.assets import services as s", "apps.users", True),
+    "dotted_module": ("import apps.assets.services", "apps.users", True),
+    "dotted_module_with_alias": (
+        "import apps.assets.services as s",
+        "apps.users",
+        True,
+    ),
+    "attribute_of_the_package": (
+        "import apps.assets\nmodel = apps.assets.services.Asset",
+        "apps.users",
+        True,
+    ),
+    "attribute_of_the_app": (
+        "from apps import assets\nmodel = assets.services.Asset",
+        "apps.users",
+        True,
+    ),
+    "services_of_another_app": (
+        "from apps.categories.services import save_category",
+        "apps.users",
+        False,
+    ),
+    "relative_services_of_another_app": (
+        "from .services import save_category",
+        "apps.categories",
+        False,
+    ),
+    "other_module_of_assets": (
+        "from apps.assets.rules import clean_title",
+        "apps.users",
+        False,
+    ),
 }
 
 
@@ -100,6 +165,16 @@ def gets_an_assets_model(source):
     )
 
 
+def gets_the_assets_app_config(source):
+    return any(
+        name == "get_app_config"
+        and node.args
+        and isinstance(node.args[0], ast.Constant)
+        and node.args[0].value == "assets"
+        for node, name in called_names(source)
+    )
+
+
 def write_calls(source):
     return {name for _, name in called_names(source) if name in WRITE_METHODS}
 
@@ -119,6 +194,34 @@ def holders(module, names):
         for relative, source in source_files().items()
         if obtains(source, package_of(relative), module, names)
     }
+
+
+def outside_the_asset_app():
+    return {
+        relative: source
+        for relative, source in source_files().items()
+        if not relative.startswith(ASSET_PACKAGE)
+    }
+
+
+# Si usa los servicios de bienes de otra forma que importando por nombre las escrituras
+def misuses_the_service(source, package):
+    for node in ast.walk(ast.parse(source)):
+        if isinstance(node, ast.Import):
+            if any(alias.name == SERVICES_MODULE for alias in node.names):
+                return True
+        elif isinstance(node, ast.ImportFrom):
+            origin = origin_of(node, package)
+            imported = {alias.name for alias in node.names}
+            if origin == SERVICES_MODULE and not imported <= WRITE_FUNCTIONS:
+                return True
+            if origin == "apps.assets" and "services" in imported:
+                return True
+        elif isinstance(node, ast.Attribute) and node.attr == "services":
+            owner = getattr(node.value, "attr", getattr(node.value, "id", None))
+            if owner == "assets":
+                return True
+    return False
 
 
 def test_the_asset_migration_does_not_depend_on_the_category_seed():
@@ -144,6 +247,20 @@ def test_the_detector_sees_every_way_to_get_the_approximation(source, expected):
     )
 
     assert found is expected
+
+
+@pytest.mark.parametrize(
+    ("source", "package", "expected"), SERVICE_FORMS.values(), ids=SERVICE_FORMS
+)
+def test_the_detector_sees_every_way_to_misuse_the_service(source, package, expected):
+    assert misuses_the_service(source, package) is expected
+
+
+def test_the_detector_sees_the_app_config_lookup():
+    assert gets_the_assets_app_config('apps.get_app_config("assets")')
+    assert gets_the_assets_app_config('get_app_config("assets").get_model("Asset")')
+    assert not gets_the_assets_app_config('apps.get_app_config("users")')
+    assert not gets_the_assets_app_config("apps.get_app_configs()")
 
 
 def test_the_detector_sees_a_model_lookup_by_name_and_a_write_call():
@@ -198,3 +315,30 @@ def test_only_the_service_gets_the_approximation():
     found = holders("apps.assets.location", {"approximate_location"})
 
     assert found == {SERVICES}
+
+
+def test_the_scan_outside_the_asset_app_sees_the_other_apps():
+    files = outside_the_asset_app()
+
+    assert "apps/users/services.py" in files
+    assert not [relative for relative in files if relative.startswith(ASSET_PACKAGE)]
+
+
+def test_outside_the_asset_app_the_service_is_used_only_through_its_two_writers():
+    offenders = [
+        relative
+        for relative, source in outside_the_asset_app().items()
+        if misuses_the_service(source, package_of(relative))
+    ]
+
+    assert offenders == []
+
+
+def test_nobody_outside_the_asset_app_reaches_it_through_the_app_registry():
+    offenders = [
+        relative
+        for relative, source in outside_the_asset_app().items()
+        if gets_the_assets_app_config(source)
+    ]
+
+    assert offenders == []
