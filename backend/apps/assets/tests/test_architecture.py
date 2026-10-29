@@ -34,6 +34,21 @@ IMPORT_FORMS = {
     "dotted_module_with_alias": ("import apps.assets.models as m", "apps.core", True),
     "relative_name": ("from .models import Asset", "apps.assets", True),
     "relative_module": ("from . import models", "apps.assets", True),
+    "attribute_of_the_package": (
+        "import apps.assets\nmodel = apps.assets.models.Asset",
+        "apps.core",
+        True,
+    ),
+    "attribute_of_the_app": (
+        "from apps import assets\nmodel = assets.models.Asset",
+        "apps.core",
+        True,
+    ),
+    "attribute_of_another_app": (
+        "from apps import categories\nmodel = categories.models.Category",
+        "apps.core",
+        False,
+    ),
     "enum_only": ("from apps.assets.models import AssetStatus", "apps.core", False),
     "other_module": ("from apps.assets.rules import clean_title", "apps.core", False),
     "other_app": ("from apps.categories import models", "apps.core", False),
@@ -44,6 +59,14 @@ LOCATION_FORMS = {
     "module": ("from apps.assets import location", True),
     "module_with_alias": ("from apps.assets import location as place", True),
     "dotted_module_with_alias": ("import apps.assets.location as place", True),
+    "attribute_of_the_package": (
+        "import apps.assets\nplace = apps.assets.location.approximate_location",
+        True,
+    ),
+    "attribute_of_the_app": (
+        "from apps import assets\nplace = assets.location.approximate_location",
+        True,
+    ),
     "constants_only": ("from apps.assets.location import PRIVACY_RADII", False),
 }
 # (código, paquete del fichero, ¿usa los servicios de bienes de forma no permitida?)
@@ -132,6 +155,19 @@ def origin_of(node, package):
     return ".".join([*parts, *([node.module] if node.module else [])])
 
 
+def name_of(node):
+    return getattr(node, "attr", getattr(node, "id", None))
+
+
+# El acceso `dueño.atributo`, donde el dueño puede ser un nombre o una cadena de puntos
+def is_attribute_of(node, attribute, owner):
+    return (
+        isinstance(node, ast.Attribute)
+        and node.attr == attribute
+        and name_of(node.value) == owner
+    )
+
+
 # Si el código obtiene alguno de los nombres del módulo, o el módulo entero
 def obtains(source, package, module, names):
     parent, _, last = module.rpartition(".")
@@ -146,31 +182,33 @@ def obtains(source, package, module, names):
                 return True
             if origin == parent and last in imported:
                 return True
+        elif is_attribute_of(node, last, parent.rpartition(".")[2]):
+            return True
     return False
 
 
 def called_names(source):
     for node in ast.walk(ast.parse(source)):
         if isinstance(node, ast.Call):
-            yield node, getattr(node.func, "attr", getattr(node.func, "id", None))
+            yield node, name_of(node.func)
+
+
+# La etiqueta de app si llega como literal, en posición o con su nombre
+def literal_label(call):
+    values = [*call.args[:1], *(k.value for k in call.keywords if k.arg == "app_label")]
+    return next((v.value for v in values if isinstance(v, ast.Constant)), None)
 
 
 def gets_an_assets_model(source):
     return any(
-        name == "get_model"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and str(node.args[0].value).startswith("assets")
+        name == "get_model" and str(literal_label(node)).startswith("assets")
         for node, name in called_names(source)
     )
 
 
 def gets_the_assets_app_config(source):
     return any(
-        name == "get_app_config"
-        and node.args
-        and isinstance(node.args[0], ast.Constant)
-        and node.args[0].value == "assets"
+        name == "get_app_config" and literal_label(node) == "assets"
         for node, name in called_names(source)
     )
 
@@ -217,10 +255,8 @@ def misuses_the_service(source, package):
                 return True
             if origin == "apps.assets" and "services" in imported:
                 return True
-        elif isinstance(node, ast.Attribute) and node.attr == "services":
-            owner = getattr(node.value, "attr", getattr(node.value, "id", None))
-            if owner == "assets":
-                return True
+        elif is_attribute_of(node, "services", "assets"):
+            return True
     return False
 
 
@@ -259,14 +295,20 @@ def test_the_detector_sees_every_way_to_misuse_the_service(source, package, expe
 def test_the_detector_sees_the_app_config_lookup():
     assert gets_the_assets_app_config('apps.get_app_config("assets")')
     assert gets_the_assets_app_config('get_app_config("assets").get_model("Asset")')
+    assert gets_the_assets_app_config('apps.get_app_config(app_label="assets")')
     assert not gets_the_assets_app_config('apps.get_app_config("users")')
+    assert not gets_the_assets_app_config('apps.get_app_config(app_label="users")')
     assert not gets_the_assets_app_config("apps.get_app_configs()")
 
 
 def test_the_detector_sees_a_model_lookup_by_name_and_a_write_call():
     assert gets_an_assets_model('apps.get_model("assets", "Asset")')
     assert gets_an_assets_model('get_model("assets.Asset")')
+    assert gets_an_assets_model(
+        'apps.get_model(app_label="assets", model_name="Asset")'
+    )
     assert not gets_an_assets_model('apps.get_model("users", "User")')
+    assert not gets_an_assets_model('apps.get_model(app_label="users", model_name="U")')
     assert write_calls("Asset.objects.filter(pk=1).update(title='x')") == {"update"}
     assert write_calls("asset.save(update_fields=['title'])") == {"save"}
     assert write_calls("Asset.objects.filter(pk=1)") == set()
