@@ -46,7 +46,6 @@ def approximate_location(latitude, longitude, radius):
     return round(centre[0], PUBLIC_DECIMALS), round(centre[1], PUBLIC_DECIMALS)
 
 
-# Centro, en la proyección, de la celda que contiene el punto
 def grid_cell_centre(easting, northing, radius):
     # floor deja en la celda su borde inferior e izquierdo
     return (
@@ -55,7 +54,6 @@ def grid_cell_centre(easting, northing, radius):
     )
 
 
-# Solo valen los radios admitidos, como enteros
 def _is_privacy_radius(radius):
     return isinstance(radius, int) and radius in PRIVACY_RADII
 
@@ -83,12 +81,10 @@ def _transform_or_none(transformation, first, second):
     return result if all(math.isfinite(value) for value in result) else None
 
 
-# De latitud y longitud a este y norte de la cuadrícula
 def _project(latitude, longitude):
     return _transform(longitude, latitude, GEOGRAPHIC_SRID, GRID_SRID)
 
 
-# De este y norte de la cuadrícula a latitud y longitud
 def _unproject(easting, northing):
     longitude, latitude = _transform(easting, northing, GRID_SRID, GEOGRAPHIC_SRID)
     return latitude, longitude

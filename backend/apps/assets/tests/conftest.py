@@ -69,8 +69,7 @@ def coordinate_forms(longitude, latitude, *, projected=True):
         for value in (latitude, longitude)
         for layout in ("<d", ">d")
     ]
-    # Este y norte de la cuadrícula, con los que trabaja la aproximación: bastan para
-    # reconstruir la exacta. No se pueden calcular donde la proyección falla (antípoda)
+    # Este y norte de la cuadrícula: reconstruyen la exacta; el antípoda no los tiene
     if projected:
         for value in _project(latitude, longitude):
             forms += [repr(value), str(round(value))]

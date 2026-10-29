@@ -76,17 +76,14 @@ def clean_price(raw):
     return (None, codes) if codes else (value.quantize(PRICE_QUANTUM), [])
 
 
-# Moneda: solo EUR
 def clean_currency(raw):
     return _clean_choice(raw, (CURRENCY,), "currency_invalid")
 
 
-# Unidad de precio de la lista cerrada
 def clean_price_unit(raw):
     return _clean_choice(raw, PRICE_UNITS, "price_unit_invalid")
 
 
-# Radio de privacidad: entero de los admitidos
 def clean_privacy_radius(raw):
     if not isinstance(raw, int):
         return None, ["privacy_radius_invalid"]
@@ -163,12 +160,10 @@ def _visible_length(text):
     )
 
 
-# El texto sin los caracteres que se admiten aunque sean de control
 def _without(text, allowed):
     return "".join(char for char in text if char not in allowed)
 
 
-# El valor si está en la lista cerrada; si no, el código
 def _clean_choice(raw, allowed, code):
     return (raw, []) if raw in allowed else (None, [code])
 
@@ -184,6 +179,5 @@ def _coordinate_as_float(value):
     return number if math.isfinite(number) else None
 
 
-# Si el valor está dentro de los límites, ambos incluidos
 def _inside(value, limits):
     return limits[0] <= value <= limits[1]

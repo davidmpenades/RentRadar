@@ -278,7 +278,6 @@ def _insert(*, values, moment):
     return asset
 
 
-# Los campos cuya referencia no existe, con su código
 def _missing_references(*, owner_id, category_id):
     missing = {}
     if not get_user_model().objects.filter(pk=owner_id).exists():
@@ -299,7 +298,6 @@ def _public_location(*, latitude, longitude, radius):
     return _point(latitude=public_latitude, longitude=public_longitude)
 
 
-# Un punto WGS84 a partir de latitud y longitud
 def _point(*, latitude, longitude):
     return Point(x=longitude, y=latitude, srid=4326)
 
