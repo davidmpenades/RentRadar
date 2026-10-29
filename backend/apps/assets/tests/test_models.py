@@ -11,6 +11,11 @@ from django.db.models import ProtectedError
 
 from apps.assets.models import Asset, AssetStatus, PriceUnit
 from apps.assets.rules import PRICE_UNITS, STATUSES_ON_UPDATE
+from apps.assets.tests.conftest import (
+    SENTINEL_LATITUDE,
+    SENTINEL_LONGITUDE,
+    coordinate_forms,
+)
 from apps.categories.models import Category
 from apps.users.models import User
 
@@ -90,23 +95,6 @@ EXPECTED_COLUMNS = {
     "updated_at": "timestamptz",
 }
 EMOJI = chr(0x1F600)
-SENTINEL_LATITUDE = 40.4168456
-SENTINEL_LONGITUDE = -3.7038123
-
-
-def coordinate_forms(longitude, latitude):
-    point = Point(longitude, latitude, srid=4326)
-    ewkb = bytes(point.ewkb).hex()
-    return [
-        repr(latitude),
-        repr(longitude),
-        f"{latitude:.6f}",
-        f"{longitude:.6f}",
-        point.ewkt,
-        point.wkt,
-        ewkb.upper(),
-        ewkb.lower(),
-    ]
 
 
 def violated_constraint(caught):

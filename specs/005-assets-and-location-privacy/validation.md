@@ -341,3 +341,53 @@ Seis mutaciones sobre `services.py`, que es un fichero nuevo de la tarea, aplica
 - Un bien borrado mientras otra modificación espera el bloqueo da `asset_not_found` por la misma ruta que un id inexistente (`first()` devuelve `None`); no hay un test con el borrado concurrente.
 - La mutación «derivar en cada modificación» también hace fallar el test de columnas, porque `public_location` entraría en el `UPDATE` de cambios que no tocan la ubicación.
 - La parte de fugas de coordenadas en errores y registros (RF-37) se prueba en T9.
+
+## Borrado, fugas y vía de escritura (T9)
+Fecha: 2026-10-27 · Ficheros: en `backend/apps/assets/tests/`, `test_deletion.py`, `test_leaks.py` y `test_architecture.py` (ampliado), más `conftest.py` (`SENTINEL_LATITUDE`, `SENTINEL_LONGITUDE` y `coordinate_forms`, movidos desde `test_models.py`) y el import de `test_models.py`. Ningún fichero de producción cambia.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Rojo previo | No existe: la tarea solo añade tests y el código ya cumple. Lo que demuestra que los tests pueden fallar son las pruebas de mecanismo de más abajo | n/a |
+| Recuento previo | `docker compose exec backend pytest -q` | 997 passed |
+| Tests nuevos | `docker compose exec backend pytest -q apps/assets/tests/test_deletion.py apps/assets/tests/test_leaks.py apps/assets/tests/test_architecture.py` | 88 passed (3 de borrado, 59 de fugas y 26 de arquitectura, uno de ellos el del grafo de T6) |
+| Suite completa, BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1084 passed (997 previos y 87 nuevos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 95 ficheros formateados |
+| Django | `manage.py check` y `manage.py makemigrations --check --dry-run` | Sin incidencias; no hay cambios |
+| Dependencias | `git diff dev --stat -- backend/requirements*.txt` | Vacío |
+| Producción | `git diff --stat` sobre `services.py`, `models.py`, `location.py` y `rules.py` | Vacío |
+
+### Lo observado
+| Comprobación | Observado |
+|---|---|
+| RF-21 por SQL | `DELETE` del propietario o de la categoría de un bien, tras `SET CONSTRAINTS ALL IMMEDIATE` y dentro de `atomic`, da `IntegrityError` cuya causa nombra la FK del bien (`assets_asset_owner_id_…` y `assets_asset_category_id_…`); la fila y el bien siguen existiendo |
+| RF-22 | Con un bien de `pool`, `migrate categories 0001_initial` dentro de `atomic` con `set_rollback(True)` da `ProtectedError`; quedan las once categorías, `0002` sigue registrada y el bien existe, dentro y fuera del bloque. Es la afirmación [NV] del plan: el estado histórico incluye `Asset` y `PROTECT` actúa |
+| Formas buscadas (RF-37) | `coordinate_forms` da 22 formas por punto (18 si no se proyecta): repr, 3, 4, 5 y 6 decimales, EWKT, WKT, EWKB en mayúsculas y minúsculas, el hexadecimal little y big endian de cada `double`, y el este y el norte de EPSG:3035 en repr y al metro. Con 3 decimales una coordenada ya es más precisa que la celda de 500 m. Las formas cortas no chocan con ningún texto legítimo de los tests: la suite sigue en verde al añadirlas. La búsqueda no distingue mayúsculas |
+| Control del detector | `assert_no_leak` falla con cada una de las 22 formas del centinela, tanto en el mensaje del error como en el log (44 casos), y no falla con un error y un log limpios (1). Con esto una forma que quedara vacía o no se buscara en un sitio no pasa en vacío |
+| Sitios buscados | `str()`, `repr()`, `traceback.format_exception()`, `message_dict` y `caplog.text`, con el log a DEBUG en la raíz, en `django.contrib.gis` y en `psycopg`, y `connection.force_debug_cursor` activo. Se buscan la exacta, la pública derivada y, según el caso, la exacta de destino o la intercambiada |
+| Casos sin fuga | Validación del alta y de la modificación, coordenadas intercambiadas, latitud fuera de rango, aproximación fallida en el servicio, `location_locked`, CHECK de la BD, la función por radio, por coordenada y por proyección (antípoda, con el `GDAL_ERROR` en el log), y el `ProtectedError` de propietario, categoría y reversión de la semilla |
+| Causa y contexto | `DomainValidationError` y `ApproximationError` los tienen a `None` en todos los casos |
+| Conexión usable | Tras el CHECK de la BD, `Asset.objects.count()` responde y vale 0 |
+| RF-32 (AST) | Sobre `apps` y `config`, sin `migrations/` ni `tests/`: solo `services.py` obtiene `Asset` (por nombre o por el módulo `models`) y solo `services.py` obtiene `approximate_location` (por nombre o por el módulo `location`); nadie busca un modelo de `assets` con `get_model`; `models.py` no llama a ningún método de escritura (`selectors.py` aún no existe, y el test lo comprobaría si existiera); las funciones públicas de `services.py` son exactamente `create_asset` y `update_asset` |
+| El detector | Tiene sus propios tests: ve `from … import Asset` (con alias y con `*`), `from apps.assets import models` (con y sin alias), `import apps.assets.models` (con y sin alias), y las dos formas relativas; no ve `AssetStatus` solo, otro módulo de `assets` ni `models` de otra app. Lo mismo para `location`. El escaneo comprueba que ve `models.py` y más de diez ficheros, y que detecta a `services.py` como importador conocido |
+
+### Pruebas de mecanismo
+Cinco mutaciones. Las cuatro primeras no editan ningún fichero versionado: tres con un plugin de pytest de usar y tirar en el `/tmp` del contenedor (`PYTHONPATH=/tmp/x:/app` y `-p`), borrado después, y la 3 con un módulo temporal sin versionar, borrado en el mismo comando. La 5 edita `test_leaks.py`, fichero nuevo de la tarea, con una copia aparte y restauración desde ella en el mismo comando. sha256 de los 11 ficheros implicados (`conftest.py`, los cuatro de tests, `models.py`, `services.py`, `location.py`, `assets.0001`, `categories.0002` y `settings/base.py`) idéntico antes y después. Tras la 4, `pytest -q --create-db` sin plugin: 1084 passed.
+
+| Mutación | Tests que fallan |
+|---|---|
+| 1. `Asset.__str__` con la exacta | `test_str_and_repr_show_the_title_and_the_id_and_no_coordinates` (RF-17), y en `test_leaks.py` `test_the_text_of_an_asset_does_not_leak`, `test_deleting_the_owner_of_an_asset_does_not_leak` y `test_deleting_the_category_of_an_asset_does_not_leak` |
+| 2. `django.db.backends` a DEBUG | `test_a_check_violation_does_not_leak_and_leaves_the_connection_usable` (1) |
+| 3a. Módulo temporal con `from apps.assets.models import Asset` | `test_only_the_asset_modules_get_the_asset_model` (1) |
+| 3b. Módulo temporal con `from apps.assets import models` | `test_only_the_asset_modules_get_the_asset_model` (1) |
+| 3c. Módulo temporal con `from apps.assets import location` | `test_only_the_service_gets_the_approximation` (1) |
+| 4. `assets.0001` depende de `categories.0002` (plugin, `--create-db`) | `test_the_asset_migration_does_not_depend_on_the_category_seed`, `test_reverting_the_seed_with_an_asset_is_rejected_and_deletes_nothing` (sin `ProtectedError`) y `test_reverting_the_seed_with_an_asset_does_not_leak` |
+| 5. `assert_no_leak` sin mirar `caplog.text` | `test_the_detector_catches_every_form_in_every_place_it_looks` en su variante del log (22, una por forma) |
+
+### Límites
+- Mutación 2: solo falla el caso del CHECK porque es el único que llega a escribir coordenadas en un SQL; en los demás rechazos el servicio corta antes de la BD, o la consulta solo lleva identificadores.
+- Mutación 1: la reversión de la semilla no falla, porque usa los modelos históricos de las migraciones, que no tienen el `__str__` del modelo real.
+- El caso de proyección usa `projected=False`: el este y el norte del antípoda no se pueden calcular, porque `_project` falla.
+- El AST no ve `importlib.import_module("…")` con un texto, ni `import apps.assets` seguido de acceso por atributo. Es el mismo tipo de riesgo aceptado que `RunSQL` y `loaddata` en D10.
+- Regla de `approximate_location`: no figuraba en la Estrategia de tests de `plan.md`; sale de la segunda mitad de RF-32 («solo ellas calculan la ubicación pública») y se añadió con la aprobación del plan de T9.
+- `related_name="+"` de `owner` y `category` ya lo vigila `test_models.py` desde T6, y no se repite aquí.
+- El control del detector comprueba que `assert_no_leak` mira donde debe y que ninguna forma pasa en vacío, pero no que cada forma esté bien calculada: una forma incorrecta pero no vacía se detectaría a sí misma. Que las formas coincidan con lo que PostgreSQL escribe de verdad (`ST_AsHEXEWKB`, `ST_AsEWKT`) no se comprueba.

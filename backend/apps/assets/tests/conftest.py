@@ -1,5 +1,6 @@
 import math
 import random
+import struct
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -39,6 +40,41 @@ EDGE_OFFSETS = [
     (CELL_SIDE + 0.01, 1000),
 ]
 RANDOM_POINTS = 200
+SENTINEL_LATITUDE = 40.4168456
+SENTINEL_LONGITUDE = -3.7038123
+
+
+# Cada forma en la que una coordenada podría aparecer en un texto, un log o un SQL
+def coordinate_forms(longitude, latitude, *, projected=True):
+    point = Point(longitude, latitude, srid=4326)
+    ewkb = bytes(point.ewkb).hex()
+    forms = [
+        repr(latitude),
+        repr(longitude),
+        f"{latitude:.6f}",
+        f"{longitude:.6f}",
+        point.ewkt,
+        point.wkt,
+        ewkb.upper(),
+        ewkb.lower(),
+    ]
+    # Con 3 decimales una coordenada ya es más precisa que la celda de 500 m
+    forms += [
+        f"{value:.{decimals}f}"
+        for value in (latitude, longitude)
+        for decimals in (3, 4, 5)
+    ]
+    forms += [
+        struct.pack(layout, value).hex()
+        for value in (latitude, longitude)
+        for layout in ("<d", ">d")
+    ]
+    # Este y norte de la cuadrícula, con los que trabaja la aproximación: bastan para
+    # reconstruir la exacta. No se pueden calcular donde la proyección falla (antípoda)
+    if projected:
+        for value in _project(latitude, longitude):
+            forms += [repr(value), str(round(value))]
+    return forms
 
 
 def points_around_cell_edges(latitude, longitude):
