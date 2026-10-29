@@ -60,7 +60,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - RF-17: EL SISTEMA representa un bien como texto solo con su título y su identificador, y nunca incluye coordenadas (ni exactas ni públicas).
 
 ### Modificación, estado y borrado
-- RF-18: CUANDO el servicio de escritura modifica un bien, EL SISTEMA conserva el valor de los campos que no se indican y aplica las validaciones de RF-2 a RF-14 al bien resultante. Los valores por defecto de RF-6, RF-9 y RF-11 solo valen al crear.
+- RF-18: CUANDO el servicio de escritura modifica un bien, EL SISTEMA conserva el valor de los campos que no se indican y aplica las validaciones de RF-2 a RF-14 al bien resultante. Los valores por defecto de RF-6, RF-9 y RF-11 solo valen al crear. La ubicación exacta se indica entera o no se indica: SI la modificación trae solo la latitud o solo la longitud, ENTONCES EL SISTEMA la rechaza.
 - RF-19: CUANDO se activa un bien pausado, EL SISTEMA lo deja en estado `active`; CUANDO se pausa un bien activo, lo deja en estado `paused`. Activar un bien activo o pausar uno pausado no cambia nada y no es un error.
 - RF-20: SI se intenta cambiar el propietario de un bien ya creado, ENTONCES EL SISTEMA rechaza el cambio. La categoría sí puede cambiarse.
 - RF-21: SI se intenta borrar un usuario que tiene bienes, ENTONCES EL SISTEMA rechaza el borrado: con el ORM, con un error de borrado protegido; con SQL directo, con un error de integridad de la clave foránea.
@@ -163,6 +163,7 @@ Esta spec define los datos del bien, la función que calcula la ubicación aprox
 - Activar un bien pausado y cambiar su exacta o su radio en la misma modificación: se rechaza, para que el anunciante no publique una zona nueva sin revisarla (RF-39).
 - Activar un bien ya activo, o pausar uno ya pausado: no cambia nada y no es un error (RF-19).
 - Modificar un bien sin indicar el radio: conserva el que tenía (RF-18).
+- Modificar un bien indicando solo la latitud o solo la longitud: se rechaza, aunque la otra coordenada ya esté guardada; la ubicación exacta se indica entera o no se indica (RF-18).
 - Modificar un bien sin cambiar ningún valor: no toca ninguna fecha (RF-16).
 - Borrar una categoría o un usuario con bienes, o revertir la semilla con bienes: se rechaza (RF-21, RF-22).
 - Un CHECK de la base de datos rechaza un bien: el error devuelto y el log no contienen la fila ni las coordenadas, y el error devuelto no conserva la excepción original (RF-37, RF-38).
