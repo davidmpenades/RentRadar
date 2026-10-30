@@ -1,5 +1,5 @@
 # Spec 006 — Mapa público: ver los bienes
-Estado: aprobada
+Estado: en curso
 Depende de: spec 001 (entornos; la depuración nunca está activa en producción), spec 004 (usuarios, alta con contraseña obligatoria y semilla de categorías) y spec 005 (bienes, servicio de escritura de bienes y "Reglas para specs posteriores").
 
 ## Contexto y objetivo

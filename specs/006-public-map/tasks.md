@@ -1,6 +1,6 @@
 # Tareas 006 — Mapa público: ver los bienes
 
-- [ ] **T1. DRF con su formato de errores y no-store.** RF-3, RF-5 (formato), RNF Errores, Dependencias
+- [x] **T1. DRF con su formato de errores y no-store.** RF-3, RF-5 (formato), RNF Errores, Dependencias
   - Dependencias de Python aprobadas (tabla del plan, con versiones exactas y hashes).
   - Qué: backend/requirements.in, requirements.txt (pip-compile con hashes, sin typing_extensions), config/settings/base.py (INSTALLED_APPS, REST_FRAMEWORK, SPECTACULAR_SETTINGS), apps/core/api.py (negociación, `ApiError`, manejador y tabla de códigos), apps/core/tests/test_api.py, config/tests/test_api_settings.py.
   - Por qué: el manejador de DRF da el formato único y `no-store` sin tocar Django. Los handlers globales se descartan: son de la 011.

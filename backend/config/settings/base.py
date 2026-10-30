@@ -11,6 +11,8 @@ INSTALLED_APPS = [
     "django.contrib.auth",
     "django.contrib.sessions",
     "django.contrib.gis",
+    "rest_framework",
+    "drf_spectacular",
     "apps.core",
     "apps.users",
     "apps.categories",
@@ -33,6 +35,29 @@ CSRF_COOKIE_HTTPONLY = False
 CSRF_USE_SESSIONS = False
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
+
+REST_FRAMEWORK = {
+    "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
+    "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
+    "DEFAULT_CONTENT_NEGOTIATION_CLASS": "apps.core.api.JSONOnlyNegotiation",
+    "URL_FORMAT_OVERRIDE": None,
+    "DEFAULT_VERSIONING_CLASS": None,
+    # Sin autenticación por defecto y denegar por defecto: cada vista declara lo suyo
+    "DEFAULT_AUTHENTICATION_CLASSES": [],
+    "DEFAULT_PERMISSION_CLASSES": ["rest_framework.permissions.IsAuthenticated"],
+    "DEFAULT_THROTTLE_CLASSES": [],
+    # Sin proxy de confianza: la IP del límite es siempre REMOTE_ADDR
+    "NUM_PROXIES": 0,
+    "EXCEPTION_HANDLER": "apps.core.api.api_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "SCHEMA_PATH_PREFIX": r"/api/v[0-9]+",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
+    "VERSION": "1.0.0",
+}
 
 ROOT_URLCONF = "config.urls"
 WSGI_APPLICATION = "config.wsgi.application"
