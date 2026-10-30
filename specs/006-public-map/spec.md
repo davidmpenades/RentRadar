@@ -33,7 +33,7 @@ La interacción entre la lista y el mapa (agrupación, selección en las dos dir
 - **Cuadro pedido**: la zona visible ampliada 2 km por cada lado (el radio de privacidad máximo) y redondeada hacia fuera a una cuadrícula fija de latitud y longitud cuyo paso fija el plan. Los 2 km se pasan a grados de longitud con la latitud de la zona más alejada del ecuador, para que la ampliación cubra al menos 2 km en todo el cuadro. Ni la latitud ni la longitud se recortan: si el cuadro sale de −85…85 de latitud o de −180…180 de longitud, el cliente no pide (RF-12). El servidor sigue aceptando latitudes de −90 a 90. Mientras el mapa se mueve dentro del mismo cuadro, las peticiones son idénticas y pueden servirse desde la caché.
 - **Lista incompleta**: respuesta que no incluye todos los bienes visibles del cuadro pedido porque se ha alcanzado el tope.
 - **Círculo de un bien**: círculo centrado en la ubicación pública con un radio igual al radio de privacidad, medido sobre el terreno.
-- **Página del mapa**: página propia de RentRadar, con la dirección definitiva `/map`. Desde la 006 vive en esa dirección; la raíz redirige a ella sin añadir una entrada al historial.
+- **Página del mapa**: página propia de RentRadar, con la dirección definitiva `/map`. Desde la 006 vive en esa dirección; la raíz y la dirección con barra final (`/map/`) se normalizan a ella sin añadir una entrada al historial.
 - **Vista inicial**: centro en 39,4699 N y 0,3763 O (Valencia) con zoom 11. En esa zona crea sus bienes el comando de demostración.
 - **Mapa base**: el estilo "positron" de OpenFreeMap, con su estilo, sus teselas, sus glifos y sus sprites, sin recolorear.
 - **Panel de resultados**: lista de bienes que acompaña al mapa.
@@ -84,7 +84,7 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - RF-7: SI el comando de demostración se ejecuta en un entorno distinto de `development` o `test`, o sin entorno definido, ENTONCES EL SISTEMA termina con un error y un mensaje fijo, sin escribir nada en la base de datos.
 
 ### Mapa
-- RF-8: CUANDO un visitante abre la raíz de RentRadar o la página del mapa, EL SISTEMA lo lleva a la página del mapa (la raíz redirige a ella) y muestra el mapa a pantalla completa en la vista inicial, con el mapa base, el panel de resultados, el aviso de ubicación aproximada y la atribución del mapa base. El aviso y la atribución quedan visibles en todo momento, sin que el panel los tape.
+- RF-8: CUANDO un visitante abre la raíz de RentRadar, la página del mapa o la página del mapa con barra final (`/map/`), EL SISTEMA lo lleva a la página del mapa (la raíz y la dirección con barra final se normalizan a ella, sin añadir una entrada al historial) y muestra el mapa a pantalla completa en la vista inicial, con el mapa base, el panel de resultados, el aviso de ubicación aproximada y la atribución del mapa base. El aviso y la atribución quedan visibles en todo momento, sin que el panel los tape.
 - RF-9: CUANDO el mapa lleva quieto el tiempo de espera, EL SISTEMA calcula el cuadro pedido. Si su latitud está dentro de −85…85, su longitud dentro de −180…180 y su área no supera el máximo menos el margen del cliente, pide sus bienes; si no, aplica RF-12. Cancela cualquier petición anterior sin terminar y nunca muestra su respuesta. El mapa queda quieto tras abrirlo, desplazarlo, acercarlo o alejarlo y tras redimensionar la ventana.
 - RF-10: EL SISTEMA dibuja cada bien de la última respuesta como su círculo, a cualquier zoom, sin marcador ni punto central. Los bienes con la misma ubicación pública y el mismo radio comparten un solo círculo.
 - RF-11: CUANDO llega una respuesta válida, EL SISTEMA hace lo siguiente:
@@ -100,7 +100,7 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
   Según lo que falle:
   - si falla el estilo, el mensaje sustituye al mapa;
   - si falla la petición de bienes, el panel sustituye la lista por el mensaje y el mapa deja de mostrar círculos.
-- RF-14: CUANDO un visitante abre una dirección de la web que no es la raíz ni la página del mapa, EL SISTEMA muestra una página «Página no encontrada» con un enlace «Ir al mapa» a la página del mapa.
+- RF-14: CUANDO un visitante abre una dirección de la web que no es la raíz, la página del mapa ni su versión con barra final, EL SISTEMA muestra una página «Página no encontrada» con un enlace «Ir al mapa» a la página del mapa.
 
 ## Requisitos no funcionales
 - **Permisos (constitución, punto 5)**:
@@ -186,7 +186,8 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - La respuesta trae una categoría que el cliente no conoce: se muestra su nombre y la imagen de «Otros» (Definiciones: tarjeta).
 - El servidor del estilo no responde o devuelve algo que no es un estilo: se muestra el mensaje en lugar del mapa (RF-13). Si fallan teselas sueltas, el mapa base queda incompleto sin aviso (Fuera de alcance).
 - El visitante abre la raíz: llega a la página del mapa, y el botón Atrás no le devuelve a la raíz (RF-8).
-- El visitante abre una dirección que no es la raíz ni `/map`: ve «Página no encontrada» con el enlace «Ir al mapa» (RF-14).
+- El visitante abre `/map/`: la dirección se normaliza a `/map` sin añadir una entrada al historial, igual que la raíz (RF-8).
+- El visitante abre una dirección que no es la raíz, `/map` ni `/map/`: ve «Página no encontrada» con el enlace «Ir al mapa» (RF-14).
 - El comando de demostración se ejecuta dos veces: la segunda no crea nada (RF-6). Si falla a mitad, no queda nada creado (RF-6, una transacción). Fuera de `development` y `test`, o sin entorno definido, se niega sin escribir nada (RF-7).
 - La base de datos está vacía y el visitante está en la vista inicial: ve «No hay bienes en esta zona», sin el botón (RF-12).
 
@@ -258,7 +259,7 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - El control de desfase entre la descripción de la API y los tipos generados está en verde (Contrato).
 - Comprobación de punta a punta con el comando de demostración: en la vista inicial, el panel muestra 24 tarjetas, ninguna la del bien pausado, y el mapa dibuja sus círculos (RF-1, RF-6).
 - Verificación en navegador con Chrome DevTools a 375 y 1280 px, registrada en validation.md:
-  - redirección de la raíz a `/map` sin entrada en el historial, página «Página no encontrada», círculos sin marcador, lista del panel, vacío y su salida, error del mapa base y de la API (simulados), y aviso y atribución visibles;
+  - redirección de la raíz y de `/map/` a `/map` sin entrada en el historial, página «Página no encontrada», círculos sin marcador, lista del panel, vacío y su salida, error del mapa base y de la API (simulados), y aviso y atribución visibles;
   - recorrido con teclado de los controles (mapa, zoom, «Reintentar», «Volver a la zona inicial» y «Ir al mapa») y consola sin errores;
   - red solo hacia el propio origen y el proveedor del mapa base, este siempre por https, con aciertos de caché al mover el mapa dentro del mismo cuadro;
   - la dirección de la página no cambia al mover el mapa.
