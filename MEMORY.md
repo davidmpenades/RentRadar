@@ -4,8 +4,8 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 
 ## Estado actual
 - Arnés montado (AGENTS.md, MEMORY.md, MCPs Context7 y Chrome DevTools, skills de terceros) con subagentes: planner, implementer y tres revisores (quality, security, docs) en paralelo. Constitución aprobada en docs/constitution.md.
-- 001-backend-skeleton, 002-quality-gates y 004 (usuarios y categorías, specs/004-users-and-categories/validation.md) completadas y validadas; PR #3 y #5 mergeadas en dev. Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior. 003-health-checks aplazada hasta la spec de despliegue.
-- 005 (assets y privacidad de ubicación) completada y validada, specs/005-assets-and-location-privacy/validation.md; PR a dev pendiente.
+- 001-backend-skeleton, 002-quality-gates, 004 (usuarios y categorías) y 005 (assets y privacidad de ubicación) completadas, validadas (specs/NNN-*/validation.md) y mergeadas en dev (PR #3, #5 y #6). Pre-commit, detección de secretos y escaneo del historial pasan a una spec posterior. 003-health-checks aplazada hasta la spec de despliegue.
+- 006 (mapa público) con la spec aprobada tras la clarificación, specs/006-public-map/spec.md; siguiente paso, la fase 3 con /sdd-plan. Hoja de ruta: 007 portada y búsqueda, 008 autenticación, 009 publicar bien, 010 despliegue, 011 búsqueda por municipio.
 
 ## Decisiones (y por qué)
 - SDD desde el primer commit: cada funcionalidad nace como spec, plan y tareas aprobados.
@@ -16,12 +16,10 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Geocodificación detrás de una interfaz con un adaptador por proveedor; el Nominatim público no sirve para producción.
 - Recurso ajeno: 404 si el usuario no puede verlo (no revela que existe), 403 si puede verlo pero no modificarlo.
 - Lanzamiento en España (castellano, euros); objetivo Europa. i18n desde el día 1.
-- Web y móvil (Expo) como objetivo; autenticación válida para ambos y API versionada.
-- Mapa con MapLibre (web y nativo), a validar en la spec del frontend.
+- Web y móvil (Expo) como objetivo; autenticación válida para ambos y API versionada. Mapa con MapLibre (web y nativo), a validar en la 006.
 - Backend: apps en backend/apps/<app>/; solo config/env.py lee el entorno; PostGIS 18-3.6 (fuera del rango declarado por Django 5.2, lo vigila el test de RF-5).
-- Ubicaciones en PostGIS geography; precios con importe y moneda.
-- Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
-- Una rama feature/NNN-slug por spec, creada desde dev; la spec se escribe en dev para que quede aunque no se implemente.
+- Ubicaciones en PostGIS geography; precios con importe y moneda. Backend en capas: servicios (escrituras y reglas), selectores (lecturas), serializers y vistas solo traducen.
+- La spec se escribe y commitea en la rama de su feature y entra en dev con el PR de la implementación, para que spec y código viajen juntos y se revisen juntos.
 - La evidencia de las comprobaciones manuales de cada spec se registra en specs/NNN/validation.md, con fecha, orden y resultado.
 - git push está denegado a los agentes en .claude/settings.json; los push los hace el usuario.
 - Errores de dominio: DomainValidationError lleva solo campos y códigos, y los servicios lo lanzan fuera del except. El guardado protegido vive en apps/core/db.py (run_guarded), extraído en la T3 de la 005 tras su tercera repetición; users y categories lo usan. Las categorías solo cambian por migración.
@@ -44,10 +42,9 @@ Lo que se vuelva permanente se mueve a AGENTS.md, a una skill o a docs/constitut
 - Ruff aplica las 88 columnas también a los comentarios; para ver ficheros nuevos en `git diff` se usa `git add -N`.
 
 ## Próximos pasos
-- Antes del primer endpoint, decidir para web y móvil (Expo): autenticación (JWT o sesión web + JWT móvil), errores con códigos que traduce el cliente, OpenAPI con drf-spectacular y CORS para la web. Además, que la página de error de DEBUG no imprima las coordenadas de las variables locales de los servicios (`sensitive_variables`, o confirmar que producción nunca lo activa).
-- /sdd-change pendiente sobre caracteres de formato: el dominio del email de la 004 acepta Cf (p. ej. U+202E) y el título de la 005 acepta U+2028 y U+2029.
-- Ajuste manual del propietario: protección de rama de dev en GitHub (el CI ya está en verde); aprobación de workflows de forks.
-- Escribir las skills react-ts y testing a partir de Riesgos conocidos.
-- Spec del frontend (Vite): en su plan, decidir Zod o guardas de tipo a mano para validar las respuestas de la API.
+- Autenticación para web y móvil (JWT o sesión web + JWT móvil): spec 008. El plan de la 006 fija, antes del endpoint, el formato de errores con códigos, OpenAPI y el mismo origen sin CORS; las dependencias nuevas (maplibre-gl, drf-spectacular, openapi-typescript, zod, tipografía OFL) se listan con versión exacta para aprobación; maplibre-gl 6.14.0 se verificó en los prototipos y reviewer-docs lo confirma en el plan.
+- Con volumen real, por encima del tope o a zoom bajo, el endpoint público devolverá recuentos por celda en vez de bienes sueltos (no entra en la 006). /sdd-change pendiente sobre caracteres de formato: el dominio del email de la 004 acepta Cf (p. ej. U+202E) y el título de la 005 acepta U+2028 y U+2029.
+- /sdd-change obligatorio de la 005 antes de la 009: no recalcular la ubicación pública si la nueva ubicación exacta sigue dentro del círculo actual (reactivar con otra ubicación permite correlacionar zonas). El identificador no se regenera, porque el título ya correlaciona. La 006 lo acepta como riesgo.
+- Ajuste manual del propietario: protección de rama de dev en GitHub (el CI ya está en verde); aprobación de workflows de forks. Escribir las skills react-ts y testing a partir de Riesgos conocidos.
 - Spec de despliegue: HTTPS, HSTS, cabecera de proxy, check --deploy en CI, servidor e imagen de producción, capacidad para sondas, migraciones antes del tráfico, DB_PASSWORD de 16 caracteres como mínimo en producción (cambio de spec con /sdd-change); nivel de detalle del log de PostgreSQL (sus errores de unicidad incluyen el valor, y los de un CHECK de bienes la fila con las coordenadas: la spec 005 solo cubre los logs de la aplicación); localización de la BD de producción (LC_CTYPE UTF-8: con la C, Jardín y JARDÍN no chocarían); borrado o anonimización de cuentas (RGPD, art. 17) obligatorio antes de abrir a usuarios reales.
 - Ubicación y privacidad: confirmar lo pendiente en docs/product.md (celda, profesionales, mapa). Hay reservas en el MVP: solicitud simple, el arrendatario pide fechas y el propietario acepta o rechaza; la dirección exacta se revela al confirmar. docs/product.md con grill-me (incluye RGPD, DSA y DAC7 como requisitos a tener en cuenta).
