@@ -134,7 +134,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
 
 ## Lógica
 **Backend**
-- `parse_zone(params: Mapping[str, list[str]]) -> Zone | ZoneError` (puro, sin DRF). Recibe `request.GET.lists()`.
+- `parse_zone(params: Mapping[str, list[str]]) -> Zone | ZoneError` (puro, sin DRF). Recibe `dict(request.GET.lists())`: `lists()` es un iterador de pares y el `QueryDict` entero devolvería `str` en vez de listas.
   - Por parámetro:
     - ausente → `required`;
     - más de un valor → `repeated`;
@@ -374,7 +374,7 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 |---|---|
 | RF-1 | pytest. Selector: dentro y fuera, los cuatro bordes, altura cero (39,4), pausados (también de un propietario), cuentas inactivas, base vacía. API: anónimo, propietario y staff (`force_login`) reciben el mismo cuerpo. Los valores de `latitude` y `longitude` devueltos coinciden con la ubicación pública del bien y difieren de la exacta |
 | RF-2 | pytest. Conjunto exacto de claves del bien y de la raíz. `public_id`: versión 4, ≠ `id`, único (nombre de la restricción), `editable=False`, sin cambios al editar, pausar, reactivar y mover en pausa (UPDATE capturado sin `public_id`), TypeError al pasarlo a los servicios. Relleno con las apps históricas y el test del alias. En el JSON, las coordenadas de cada bien son las de la ubicación pública (valores, no solo claves) |
-| RF-3 | pytest de `parse_zone`: `abc`, vacío, `NaN`, `Infinity`, `-inf`, `1e1`, `39,4`, `" 39.4"`, `"39.4\n"`, dígitos no ASCII (escapes), `+39`, `039`, `39.`, `.5`, `1_0`, repetido, 33 frente a 32 caracteres, 90,000001, −180,5, sur y este a la vez, invertida (y en el antimeridiano), invertida con área > 6, área 6 aceptada y 6,0001 rechazada. API: formato, `no-store`, sin valores ni coordenadas; parámetros desconocidos ignorados |
+| RF-3 | pytest de `parse_zone`: `abc`, vacío, `NaN`, `Infinity`, `-inf`, `1e1`, `39,4`, `" 39.4"`, `"39.4\n"`, dígitos no ASCII (escapes), `+39`, `039`, `39.`, `.5`, `1_0`, repetido, 33 frente a 32 caracteres, 90,000001, −180,5, sur y este a la vez, invertida (y en el antimeridiano), invertida con área > 6 (con ambos ejes invertidos, para que el área calculada sea positiva), área 6 aceptada y 6,0001 rechazada. Además: parámetro presente y vacío (`?south=`) → `not_a_number` y ausente → `required`; U+2212 (escapes) → `not_a_number`; `-0` como sur con `0` como norte (no invertida); sur = norte y oeste = este (áreas de cero aceptadas); área `6.00000000000000000000000000003` rechazada (cálculo exacto, no con la precisión por defecto). API: formato, `no-store`, sin valores ni coordenadas; parámetros desconocidos ignorados |
 | RF-4 | pytest: 201 → 200 e `incomplete=true`; 200 → `false`; orden con empate de `created_at` por `id` descendente; `CaptureQueriesContext` con una consulta, `LIMIT 201`, sin `COUNT(` y sin `exact_location` |
 | RF-5 | pytest con la caché vaciada y `timer` falso: 60 POST → 405 y la siguiente → 429; 60 inválidas → 400 y luego 429; con el límite superado, POST y OPTIONS → 429; las 429 no alargan la espera; `X-Forwarded-For` distintos cuentan para una IP; otra `REMOTE_ADDR` aparte; con `force_login` también cuenta; `Retry-After` entero ≥ 1 igual a `retry_after`; `no-store` |
 | RF-6 | pytest: 25 bienes, 24 activos y 1 pausado; las 11 categorías; los tres radios; un par con la misma ubicación pública y el mismo radio; haversine < 4 km desde el centro; altas por el servicio (25 y 24 llamadas); la segunda ejecución no crea nada y lo dice; un fallo a mitad no deja nada |
