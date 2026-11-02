@@ -18,6 +18,7 @@ from apps.assets.zone import (
     ZoneError,
     parse_zone,
 )
+from apps.core.api import ERROR_CODES
 
 ARABIC_INDIC_ONE = chr(0x661)
 FULLWIDTH_THREE = chr(0xFF13)
@@ -40,15 +41,6 @@ def make_params(**overrides):
         name: value if isinstance(value, list) else [value]
         for name, value in values.items()
     }
-
-
-def api_error_codes():
-    # DRF debe cargarse antes que apps.core.api para no provocar un import circular
-    import rest_framework.views  # noqa: F401
-
-    from apps.core.api import ERROR_CODES
-
-    return ERROR_CODES
 
 
 def invalid(params):
@@ -629,7 +621,7 @@ def test_general_error_codes_are_known_to_the_api_error_table():
         "invalid_parameters",
         "zone_inverted",
         "zone_too_large",
-    } <= api_error_codes()
+    } <= ERROR_CODES
 
 
 @pytest.mark.parametrize(
@@ -650,7 +642,7 @@ def test_every_error_code_returned_belongs_to_the_api_error_table(params, code):
     result = parse_zone(params)
 
     assert result.code == code
-    assert result.code in api_error_codes()
+    assert result.code in ERROR_CODES
 
 
 def test_codes_without_parameters_carry_an_empty_params_dict():

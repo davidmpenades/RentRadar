@@ -3,7 +3,6 @@ from collections.abc import Mapping
 from django.core.exceptions import PermissionDenied
 from django.http import Http404
 from rest_framework import exceptions, status
-from rest_framework.negotiation import DefaultContentNegotiation
 from rest_framework.response import Response
 from rest_framework.views import set_rollback
 
@@ -19,13 +18,6 @@ ERROR_CODES = frozenset(
         "bad_request",
     }
 )
-
-
-class JSONOnlyNegotiation(DefaultContentNegotiation):
-    # Siempre JSON: Accept no provoca un 406 ni añade Vary
-    def select_renderer(self, request, renderers, format_suffix=None):
-        renderer = renderers[0]
-        return renderer, renderer.media_type
 
 
 class ApiError(exceptions.APIException):

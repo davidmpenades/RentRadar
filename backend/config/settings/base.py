@@ -39,7 +39,7 @@ CSRF_COOKIE_SAMESITE = "Lax"
 REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
-    "DEFAULT_CONTENT_NEGOTIATION_CLASS": "apps.core.api.JSONOnlyNegotiation",
+    "DEFAULT_CONTENT_NEGOTIATION_CLASS": "apps.core.negotiation.JSONOnlyNegotiation",
     "URL_FORMAT_OVERRIDE": None,
     "DEFAULT_VERSIONING_CLASS": None,
     # Sin autenticación por defecto y denegar por defecto: cada vista declara lo suyo

@@ -4,7 +4,7 @@ from django.conf import settings
 REST_FRAMEWORK_EXPECTED = {
     "DEFAULT_RENDERER_CLASSES": ["rest_framework.renderers.JSONRenderer"],
     "DEFAULT_PARSER_CLASSES": ["rest_framework.parsers.JSONParser"],
-    "DEFAULT_CONTENT_NEGOTIATION_CLASS": "apps.core.api.JSONOnlyNegotiation",
+    "DEFAULT_CONTENT_NEGOTIATION_CLASS": "apps.core.negotiation.JSONOnlyNegotiation",
     "URL_FORMAT_OVERRIDE": None,
     "DEFAULT_VERSIONING_CLASS": None,
     "DEFAULT_AUTHENTICATION_CLASSES": [],
@@ -47,7 +47,8 @@ def test_drf_resolves_the_configured_classes():
     from rest_framework.renderers import JSONRenderer
     from rest_framework.settings import api_settings
 
-    from apps.core.api import JSONOnlyNegotiation, api_exception_handler
+    from apps.core.api import api_exception_handler
+    from apps.core.negotiation import JSONOnlyNegotiation
 
     assert [JSONRenderer] == api_settings.DEFAULT_RENDERER_CLASSES
     assert [JSONParser] == api_settings.DEFAULT_PARSER_CLASSES
