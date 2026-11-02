@@ -417,7 +417,7 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 | pytest, ruff, vitest, build y eslint en verde | En cada tarea y en CI |
 
 ### Pruebas de mecanismo (solo en tareas de privacidad o seguridad)
-Se mutan los ficheros nuevos con su sha256 antes y después. Lo ajeno se muta con un plugin de pytest temporal. Las migraciones, con `--create-db`.
+Se mutan los ficheros nuevos con su sha256 antes y después. Lo ajeno también se muta con copia y sha256 antes y después, sin plugins. Las migraciones, con `--create-db`.
 - T2 `public_id`:
   - `uuid1`;
   - `editable=True`;
