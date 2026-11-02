@@ -18,7 +18,7 @@
   - Commit: `feat(assets): add public_id uuid with backfill`
   - Hecho cuando: pytest en verde con `--create-db`, `makemigrations --check` limpio y mutaciones registradas en validation.md.
 
-- [ ] **T3. Validación de la zona en una función pura.** RF-3
+- [x] **T3. Validación de la zona en una función pura.** RF-3
   - PARAR: OK previo (validación de entrada).
   - Qué: apps/assets/zone.py y tests/test_zone.py.
   - Por qué: los campos de DRF aceptarían `1e1`, NaN o espacios y no dan Decimal exacto. Se descarta `serializers.DecimalField`.

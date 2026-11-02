@@ -41,3 +41,47 @@ sha256 antes y después:
 | `0003_fill_asset_public_id.py` | `310caf74f684262e40de105b96d5b224b5e2dfbc3b23d4b14fb622c4a3ebfcd9` |
 | `0004_alter_asset_public_id.py` | `3d9e913477a3dd69c38ce5c5baa1ff409ffebc6b95c4d7e6ee05d1d1defd5189` |
 | `services.py` | `ad17a3e668ba6c016a56a7b082ae21d876dd764c5ed08648462037039d3c4579` |
+
+## Validación de la zona (T3)
+Fecha: 2026-11-02 · Ficheros: `backend/apps/assets/zone.py` y `backend/apps/assets/tests/test_zone.py`. Ningún otro fichero de producción cambia.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests de la zona | `docker compose exec backend pytest -q apps/assets/tests/test_zone.py` | 284 passed |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1481 passed (1197 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 104 ficheros formateados |
+| Pureza | `test_zone_module_stays_pure_without_django_drf_or_other_apps` (AST) | `zone.py` no importa Django, DRF ni otras apps |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Área con el contexto por defecto (28 dígitos) | Redondearía: `6.00000000000000000000000000003` se aceptaría como 6. Con `localcontext(Context(prec=100, traps=[Inexact, InvalidOperation]))` se rechaza |
+| 2 | Cota de dígitos del área con operandos de 32 caracteres | Máximo 65 dígitos en 14 641 combinaciones de límites extremos y 300 000 zonas aleatorias, sin ninguna señal `Inexact` ni `InvalidOperation` |
+| 3 | `abs()` frente a la comparación para el rango | `abs()` redondea a la precisión del contexto global: `90.0000000000000000000000000001` pasaría como 90. El rango se comprueba con `-limit <= valor <= limit` |
+| 4 | Parámetro presente y vacío (`?south=`) | `not_a_number`; `required` queda para el ausente |
+
+### Pruebas de mecanismo
+Mutaciones sobre `zone.py`, restauradas desde una copia hecha antes. sha256 de `zone.py` idéntico antes y después de cada una, y también el de `test_zone.py`.
+
+| Mutación | Tests que fallan |
+|---|---|
+| `fullmatch` → `match` | 72: texto que no es un decimal simple |
+| `[0-9]` → `\d` (dígitos no ASCII) | 4: texto que no es un decimal simple |
+| Longitud máxima 33 | 6: tres de 33 caracteres, el orden de claves, los cinco códigos y el contexto corto |
+| Área con `float` | 3: área exacta con precisión por defecto, cola de 31 caracteres y contexto corto |
+| Área sin `localcontext` | 3: los mismos tres |
+| Inversión con `>=` | 8: sur = norte, oeste = este, `-0`, punto único y los bordes ±90 y ±180 |
+| Área con `>=` | 5: área exactamente 6 aceptada |
+| Área comprobada antes que la inversión | 1: invertida con ambos ejes y área positiva |
+| La inversión ignora la longitud | 3: zona invertida |
+| Aceptar duplicados (`> 2`) | 27: repetido (24), orden de claves (2) y los cinco códigos |
+| `abs()` en vez de comparar | 4: bordes con 28 dígitos y fuera de rango |
+| Rango exclusivo (`<`) | 16: bordes ±90 y ±180 y los que dependen de ellos |
+| Vacío tratado como `required` | 9: vacío, repetido y texto no decimal |
+| Límite de longitud en el sur | 7: rango y orden de claves |
+| Formato comprobado antes que la longitud | 3: 33 caracteres de basura y orden de claves |
+
+| Fichero | sha256 |
+|---|---|
+| `zone.py` | `a7329e76abff98163d348e8df5e709cfa9568334f9df6cebab4467c9b1b5022f` |
+| `test_zone.py` | `cbd3cf9c14fde3c2bef955df1bf48db8c9c13136a89865d19cf9147482923a57` |
