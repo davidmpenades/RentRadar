@@ -895,3 +895,24 @@ def test_the_openapi_description_is_valid_and_documents_the_list(tmp_path):
     assert set(schema["properties"]) == ROOT_KEYS
     asset_schema = resolve(spec, schema["properties"]["results"]["items"])
     assert set(asset_schema["properties"]) == ASSET_KEYS
+
+
+def test_the_description_only_requires_what_the_server_always_sends(tmp_path):
+    destination = tmp_path / "openapi.json"
+
+    call_command(
+        "spectacular",
+        "--format",
+        "openapi-json",
+        "--lang",
+        "en",
+        "--file",
+        str(destination),
+    )
+
+    schemas = json.loads(destination.read_text())["components"]["schemas"]
+    # El servidor omite params y retry_after salvo en el error que los necesita
+    assert set(schemas["ApiError"]["properties"]) == {"code", "params", "retry_after"}
+    assert set(schemas["ApiError"]["required"]) == {"code"}
+    assert set(schemas["PublicAsset"]["required"]) == ASSET_KEYS
+    assert set(schemas["PublicAssetList"]["required"]) == ROOT_KEYS
