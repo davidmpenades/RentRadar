@@ -36,7 +36,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
 | backend/conftest.py | M | Fixture autouse que vacía la caché `default` (contador del límite) | RF-5 |
 | backend/openapi.json | C | Descripción OpenAPI generada y versionada | RNF Contrato |
 | backend/apps/*/tests/*, config/tests/* | C/M | Tests por capa (ver Estrategia) | RF-1…RF-7 |
-| .github/workflows/ci.yml | M | Paso de desfase de la descripción en backend; job `frontend-quality` (vitest, build, eslint, desfase de tipos) | RNF Contrato |
+| .github/workflows/ci.yml | M | Paso de desfase de la descripción en backend; job `frontend-quality` (vitest, build, eslint, desfase de tipos, `npm audit --omit=dev`) | RNF Contrato |
 | docs/architecture.md | M | Capa de API, límite, selectores, comando y estructura del frontend | — |
 | frontend/package.json, package-lock.json, .npmrc, .nvmrc, index.html, vite.config.ts, tsconfig*.json, eslint.config.js, .env.example | C | Esqueleto con 19 dependencias exactas; `save-exact`, `ignore-scripts` y `engine-strict`; Node `^22.13.0`; proxy `/api`; `VITE_MAP_STYLE_URL` | RF-8 |
 | frontend/src/main.tsx, app/route.ts, app/NotFoundPage.tsx | C | `resolveRoute`: `/` y `/map/` → `replaceState` a `/map`; `/map` → mapa; otra dirección → «Página no encontrada» | RF-8, RF-14 |
@@ -195,7 +195,8 @@ Spec: specs/006-public-map/spec.md (aprobada)
   - comprueba el estado y `Content-Type`, captura el fallo de `JSON.parse` y valida con `validateResponse`;
   - nunca muestra el cuerpo del error.
 - `validateResponse(json)`:
-  - `z.strictObject` en la raíz y en cada bien; `public_id` UUID v4; `title` texto no vacío;
+  - devuelve `components["schemas"]["PublicAssetList"]`, el tipo generado. Una aserción en compilación comprueba que `z.infer` del esquema coincide con él, y un test compara las claves del esquema Zod con `properties` y `required` de `backend/openapi.json` (`resolveJsonModule`, sin `@types/node`);
+  - `z.strictObject` en la raíz y en cada bien; `public_id` UUID v4; `title` no vacío tras recortar y de 200 caracteres como máximo; `category_slug` y `category_name` texto no vacío, de 64 y 100 caracteres como máximo, sin enum (una categoría nueva no invalida la respuesta, RF-11). Los máximos de texto son más holgados que los del servidor a propósito, para no rechazar la respuesta entera si el backend sube un límite;
   - `price` `^\d{1,5}\.\d{2}$` (el máximo real de la spec 005 es 99999.99, `PRICE_MAXIMUM` en `rules.py` y CHECK `assets_asset_price_range`: cinco cifras enteras y dos decimales); `currency` el literal "EUR";
   - `price_unit` ∈ {hour, day, week, month}; `privacy_radius` ∈ {500, 1000, 2000};
   - latitud y longitud finitas en rango; `incomplete` booleano; como mucho 200 bienes; ids únicos.
@@ -208,6 +209,18 @@ Spec: specs/006-public-map/spec.md (aprobada)
 - `validateStyleUrl(url)`: `new URL`, `https:`, sin usuario ni contraseña.
 - `isAllowedMapUrl(url, allowedOrigins)`: https y un origen permitido (el del estilo y el propio).
 - `validateStyleJson(json)`: `version === 8`, `sources` es un objeto y `layers` un array.
+
+## Esqueleto del frontend (T7)
+- `main.tsx` monta un título mínimo con texto del catálogo; las rutas llegan en la T9. `es.ts` solo lleva las claves que se usan.
+- TypeScript: `tsconfig` con `strict`, `noUncheckedIndexedAccess` y `verbatimModuleSyntax`, en el proyecto de la app y en el de Node.
+- Vite: proxy de `/api` a `http://localhost:8000` sin `changeOrigin`; el servidor escucha solo en localhost y con `strictPort` en 5173.
+- `.env.example`: `VITE_MAP_STYLE_URL=https://tiles.openfreemap.org/styles/positron`.
+- `eslint.config.js` nace con `no-restricted-syntax` contra `dangerouslySetInnerHTML`, `innerHTML` y `setHTML`.
+- Scripts: `dev`, `build` (`tsc -b && vite build`), `test`, `lint`, `api:gen` y `api:check`. Los tests viven en `src/**/*.test.ts` y corren en entorno node.
+- `backend/openapi.json`: `info.title` queda vacío, porque `SPECTACULAR_SETTINGS` no define `TITLE`.
+- CI:
+  - backend: el desfase de `openapi.json` se comprueba con `docker compose run --rm --no-deps --entrypoint ""`, generando la descripción en el /tmp del contenedor y comparándola con la versionada;
+  - job `frontend-quality`: `actions/checkout@v7` y `actions/setup-node@v7` (`node-version-file: frontend/.nvmrc`, caché de npm), `npm ci --ignore-scripts`, vitest, build, eslint, `api:check` y `npm audit --omit=dev`.
 
 ## Interfaz
 - Móvil primero (375 px).
@@ -311,7 +324,7 @@ Python (hashes de todas las ruedas, también manylinux x86_64 y aarch64 de rpds-
 | uritemplate | 4.2.0 | BSD-3-Clause OR Apache-2.0 | Transitiva |
 | typing_extensions | — | PSF-2.0 | **Fuera del lock**: solo la piden referencing (Python < 3.13) y drf-spectacular (< 3.10); el lock se compila con 3.13 |
 
-npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `npm ci --ignore-scripts`; `engines` y `.nvmrc` con Node `^22.13.0`; esta máquina usa Node v22.23.3 y npm 10.9.9; resolución probada: 288 paquetes, 0 vulnerabilidades, sin ERESOLVE):
+npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `npm ci --ignore-scripts`; `engines` con Node `^22.13.0` y `.nvmrc` con `22`; esta máquina usa Node v22.23.3 y npm 10.9.9; las 19 versiones existen, ninguna está deprecated y las licencias coinciden con la tabla; resolución probada: 288 paquetes, sin ERESOLVE; `npm audit`: 13 avisos moderados, todos de desarrollo (ver Riesgos), y `npm audit --omit=dev`: 0):
 
 | Paquete | Versión | Licencia | Para qué |
 |---|---|---|---|
@@ -369,7 +382,8 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 | Sin índice espacial, la consulta recorre los activos | Volumen de MVP; D1-B si hace falta |
 | La migración choca con escrituras entre 0002 y 0004 | Solo hay datos de desarrollo; se aplica con el servidor parado |
 | Sin WebGL2, `new Map()` lanza un error síncrono | Se captura y se trata como fallo del mapa (RF-13) |
-| Tareas que pueden pasar de 30 min (T5, T7, T9, T10) | Se avisa al llegar a ellas. Corte posible sin pasar de 10 tareas: Zod de la T7 a la T8 |
+| `npm audit` da 13 avisos moderados, todos del aviso GHSA-g3hv-75wg-m249 (minimatch < 11.0.1), en dependencias de desarrollo: eslint, typescript-eslint y openapi-typescript | Aceptado como riesgo de desarrollo: sin `overrides` y sin cambiar las versiones aprobadas. `npm audit --omit=dev` da 0 y es la puerta del CI. Antes del commit se comprueba que el lock resuelve las mismas 288 versiones auditadas |
+| Tareas que pueden pasar de 30 min (T5, T7, T9, T10) | Se avisa al llegar a ellas. Zod se queda en la T7; si se alarga, dos commits dentro de la tarea: primero el andamiaje y el CI, después `validate.ts` y sus tests |
 
 ## Estrategia de tests
 | RF | Cómo se verifica |
