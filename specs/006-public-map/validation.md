@@ -311,3 +311,26 @@ Mutaciones restauradas desde una copia hecha antes; cada una se ejecutó con `te
 | `settings/production.py` | `cc19ede72d8ea0393c4c3477d035d984d25ed6fefb3a54ae4fe4cbee5ac72d7d` |
 | `test_demo_command.py` | `aa0c7b9104eadc833daf83ece3392197ce18af739337d2347e048b9de6ef8ee2` |
 | `test_settings.py` | `4f27b16a0276b2a40690747fa86888f6c96a30c10b466e1d09134ca7c413efa8` |
+
+## De punta a punta, parte de backend
+Fecha: 2026-11-02 · Entorno: Docker Compose, BD de desarrollo, `runserver` en `127.0.0.1:8000`. Ejecutado con orden expresa del usuario para `migrate` (solo las tres migraciones de assets) y para `create_demo_assets` (dos veces). Los comandos de `manage.py` se lanzaron con el servidor parado (`docker compose stop backend` y `docker compose run --rm backend …`), como pide el plan. La comprobación en navegador (24 tarjetas y sus círculos en la vista inicial, a 375 y 1280 px) queda para la tarea del frontend.
+
+Zona usada en los `curl`: `south=39.40&west=-0.45&north=39.55&east=-0.30`, sobre `http://localhost:8000/api/v1/public/assets/`.
+
+| # | Orden | Esperado | Observado |
+|---|---|---|---|
+| 1 | `docker compose run --rm backend python manage.py showmigrations assets` | `0001` aplicada y `0002`, `0003` y `0004` pendientes | Igual |
+| 1b | `… manage.py migrate --plan` | Solo las tres migraciones de assets, sin pendientes de otras apps | Igual: `0002` (Add field), `0003` (Raw Python operation) y `0004` (Alter field) |
+| 2 | `… manage.py migrate` | Las tres se aplican, cada una en su transacción | `Applying assets.0002_asset_public_id… OK`, `0003_fill_asset_public_id… OK` y `0004_alter_asset_public_id… OK`; `showmigrations assets` las muestra aplicadas |
+| 3 | `… manage.py create_demo_assets` | `Creados 25 bienes de demostración (24 activos, 1 pausado).` sin contraseña | Igual |
+| 3b | El mismo comando otra vez | `El propietario de demostración ya existe; no se ha creado nada.` | Igual |
+| 4 | `docker compose up -d backend` | `runserver` en `127.0.0.1:8000` | Igual |
+| 5 | GET de la zona | `200`, `application/json`, `Cache-Control: public, max-age=60`, `Vary: Accept-Encoding`, `Allow: GET, HEAD`, sin `Set-Cookie`, sin `Vary: Cookie`, sin `Access-Control-*`; 24 bienes, `incomplete: false`, diez claves, sin el pausado, precio como texto | Igual. 24 bienes, todos de `demo.py` (ninguno ajeno), los 24 activos presentes y «Piscina infantil con toldo» (el pausado) ausente; un solo conjunto de claves: `category_name`, `category_slug`, `currency`, `latitude`, `longitude`, `price`, `price_unit`, `privacy_radius`, `public_id`, `title`; raíz con `incomplete` y `results`; todos los precios son texto (p. ej. «8.00»); el primer bien lleva la pública `39.455291 / -0.380941` |
+| 6 | HEAD de la misma URL (`curl -I`) y socket crudo | `200` con las cabeceras del GET y cuerpo vacío | `200` con exactamente las mismas cabeceras que el GET (comparadas sin `Date`). En un socket crudo llegan 353 bytes en total y 0 tras la línea en blanco: no hay cuerpo. `Content-Length` es 6385, el mismo que el del GET, como permite HTTP para HEAD |
+| 7 | POST a la misma URL | `405`, `{"code":"method_not_allowed"}`, `Allow: GET, HEAD`, `no-store`, sin `Set-Cookie` | Igual |
+| 8 | GET con `south=40&west=-0.45&north=39.5&east=-0.30` | `400 {"code":"zone_inverted"}` y `no-store` | Igual |
+| 8b | GET sin `east` | `400 invalid_parameters` con `{"params":{"east":"required"}}` y `no-store` | Igual |
+| 9 | GET con `Cookie: csrftoken=x; sessionid=short` | `200`, mismo cuerpo que el paso 5, sin `Set-Cookie` y sin `Vary: Cookie` | Igual: cuerpo idéntico byte a byte (`cmp`), 0 cabeceras `Set-Cookie`, `Vary: Accept-Encoding` |
+| 9b | Control: GET a `/api/v1/unknown/` con esas mismas cookies | `404` con `Set-Cookie` (`csrftoken` y la sesión borrada) y `Vary: Cookie` | Igual: ambas cookies y `Vary: Cookie`. Demuestra que el problema existe en el servidor real y que la vista pública lo evita |
+
+No se pidió ni se cambió nada más en la BD de desarrollo: quedan el propietario `demo@example.com` y sus 25 bienes. En la zona consultada solo aparecen los 24 bienes de demostración: no hay otros bienes activos y visibles.
