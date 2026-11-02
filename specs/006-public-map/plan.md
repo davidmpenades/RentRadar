@@ -372,8 +372,8 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 ## Estrategia de tests
 | RF | Cómo se verifica |
 |---|---|
-| RF-1 | pytest. Selector: dentro y fuera, los cuatro bordes, altura cero (39,4), pausados (también de un propietario), cuentas inactivas, base vacía. API: anónimo, propietario y staff (`force_login`) reciben el mismo cuerpo |
-| RF-2 | pytest. Conjunto exacto de claves del bien y de la raíz. `public_id`: versión 4, ≠ `id`, único (nombre de la restricción), `editable=False`, sin cambios al editar, pausar, reactivar y mover en pausa (UPDATE capturado sin `public_id`), TypeError al pasarlo a los servicios. Relleno con las apps históricas y el test del alias |
+| RF-1 | pytest. Selector: dentro y fuera, los cuatro bordes, altura cero (39,4), pausados (también de un propietario), cuentas inactivas, base vacía. API: anónimo, propietario y staff (`force_login`) reciben el mismo cuerpo. Los valores de `latitude` y `longitude` devueltos coinciden con la ubicación pública del bien y difieren de la exacta |
+| RF-2 | pytest. Conjunto exacto de claves del bien y de la raíz. `public_id`: versión 4, ≠ `id`, único (nombre de la restricción), `editable=False`, sin cambios al editar, pausar, reactivar y mover en pausa (UPDATE capturado sin `public_id`), TypeError al pasarlo a los servicios. Relleno con las apps históricas y el test del alias. En el JSON, las coordenadas de cada bien son las de la ubicación pública (valores, no solo claves) |
 | RF-3 | pytest de `parse_zone`: `abc`, vacío, `NaN`, `Infinity`, `-inf`, `1e1`, `39,4`, `" 39.4"`, `"39.4\n"`, dígitos no ASCII (escapes), `+39`, `039`, `39.`, `.5`, `1_0`, repetido, 33 frente a 32 caracteres, 90,000001, −180,5, sur y este a la vez, invertida (y en el antimeridiano), invertida con área > 6, área 6 aceptada y 6,0001 rechazada. API: formato, `no-store`, sin valores ni coordenadas; parámetros desconocidos ignorados |
 | RF-4 | pytest: 201 → 200 e `incomplete=true`; 200 → `false`; orden con empate de `created_at` por `id` descendente; `CaptureQueriesContext` con una consulta, `LIMIT 201`, sin `COUNT(` y sin `exact_location` |
 | RF-5 | pytest con la caché vaciada y `timer` falso: 60 POST → 405 y la siguiente → 429; 60 inválidas → 400 y luego 429; con el límite superado, POST y OPTIONS → 429; las 429 no alargan la espera; `X-Forwarded-For` distintos cuentan para una IP; otra `REMOTE_ADDR` aparte; con `force_login` también cuenta; `Retry-After` entero ≥ 1 igual a `retry_after`; `no-store` |
@@ -422,6 +422,7 @@ Se mutan los ficheros nuevos con su sha256 antes y después. Lo ajeno se muta co
   - `[:200]`;
   - `.count()`;
   - quitar `-id`;
+  - anotar `latitude` y `longitude` desde `exact_location`;
   - Range a mayor estricto.
 - T5 endpoint, límite, cookies y OPTIONS:
   - campo de más en el serializer;

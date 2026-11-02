@@ -31,7 +31,7 @@
   - PARAR: OK previo (privacidad). Depende de T2.
   - Qué: apps/assets/selectors.py y tests/test_selectors.py.
   - Por qué: la lista blanca no carga la exacta y el rango sobre coordenadas coincide con la definición de zona. Se descarta `ST_Intersects` sobre geography.
-  - Pruebas: casos de RF-1 y RF-4 de la Estrategia contra la BD. Mutaciones.
+  - Pruebas: casos de RF-1 y RF-4 de la Estrategia contra la BD. El selector devuelve exactamente las diez claves de la lista blanca, sin `id`, `owner` ni `exact_location`, y `latitude` y `longitude` coinciden con la ubicación pública del bien y no con la exacta. Prueba aplazada desde la T2. Mutaciones.
   - Revisar: el SQL capturado.
   - Commit: `feat(assets): add public assets selector`
   - Hecho cuando: pytest y `test_architecture` en verde y mutaciones registradas.
@@ -40,7 +40,7 @@
   - PARAR: OK previo (seguridad, privacidad y contrato de la API). Depende de T1, T3 y T4.
   - Qué: apps/assets/{views,serializers,urls}.py (vista, `PublicListThrottle`, `extend_schema`), config/urls.py, apps/core/middleware.py (`mark_response_cookieless` y `CleanMarkedResponseMiddleware`), base.py (MIDDLEWARE con el nuevo el primero), backend/conftest.py (`cache.clear()` autouse), tests/test_public_list_api.py, apps/core/tests/test_middleware.py, docs/architecture.md.
   - Por qué: `AnonRateThrottle` con `NUM_PROXIES=0` cubre RF-5 sin código propio. El middleware actúa solo sobre las respuestas que la vista marca expresamente, así ninguna vista futura bajo `/api/` pierde sus cookies; es la única forma de quitar las que Session y CSRF añaden después de la vista. `http_method_names` hace que OPTIONS dé 405.
-  - Pruebas: casos de RF-1 a RF-5, Permisos, Caché, Respuesta idéntica (con `csrftoken` mal formado y `sessionid` corta), Errores y Logs de la Estrategia; el middleware deja limpia la respuesta marcada y conserva las cookies de una sin marcar; `spectacular --validate --fail-on-warn` limpio. Mutaciones.
+  - Pruebas: casos de RF-1 a RF-5, Permisos, Caché, Respuesta idéntica (con `csrftoken` mal formado y `sessionid` corta), Errores y Logs de la Estrategia; el middleware deja limpia la respuesta marcada y conserva las cookies de una sin marcar; `spectacular --validate --fail-on-warn` limpio. Conjunto exacto de claves de la raíz y de cada bien en el JSON, sin `id` ni ubicación exacta, y las coordenadas de cada bien son las de la ubicación pública. Prueba aplazada desde la T2. Mutaciones.
   - Revisar: la forma del JSON, la ruta y la tabla de permisos.
   - Commit: `feat(api): add public assets list endpoint`
   - Hecho cuando: pytest y ruff en verde y mutaciones registradas.
