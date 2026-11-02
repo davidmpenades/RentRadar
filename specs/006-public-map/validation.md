@@ -334,3 +334,127 @@ Zona usada en los `curl`: `south=39.40&west=-0.45&north=39.55&east=-0.30`, sobre
 | 9b | Control: GET a `/api/v1/unknown/` con esas mismas cookies | `404` con `Set-Cookie` (`csrftoken` y la sesión borrada) y `Vary: Cookie` | Igual: ambas cookies y `Vary: Cookie`. Demuestra que el problema existe en el servidor real y que la vista pública lo evita |
 
 No se pidió ni se cambió nada más en la BD de desarrollo: quedan el propietario `demo@example.com` y sus 25 bienes. En la zona consultada solo aparecen los 24 bienes de demostración: no hay otros bienes activos y visibles.
+
+## Campos opcionales del error en la descripción OpenAPI (previo a la T7)
+Fecha: 2026-11-02 · Commit `bb837b3` · Ficheros: `backend/apps/assets/serializers.py` y `backend/apps/assets/tests/test_public_list_api.py`. No se ha accedido a la BD de desarrollo: todo contra la BD de test.
+
+Causa: `drf_spectacular/openapi.py:1094-1097` añade a `required` todo campo cuyo esquema es `readOnly` mientras `COMPONENT_NO_READ_ONLY_REQUIRED` valga `False` (el valor por defecto), aunque el campo tenga `required=False`. `params` y `retry_after` de `ApiErrorSerializer` eran `read_only=True`, así que `openapi.json` los exigía y el servidor los omite (un 405 solo lleva `code`). Arreglo: quitar `read_only=True` de esos dos campos, porque el serializer solo documenta respuestas; `code` sigue de solo lectura y por tanto obligatorio. Se descarta `COMPONENT_NO_READ_ONLY_REQUIRED=True`: dejaría de exigir también los campos de `PublicAsset` y de `PublicAssetList`.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Test nuevo antes del arreglo | `docker compose exec backend pytest -q apps/assets/tests/test_public_list_api.py -k only_requires` | Falla porque `ApiError.required` contiene `params` y `retry_after` |
+| Test nuevo con el arreglo | la misma orden | Pasa |
+| Suite completa | `docker compose exec backend pytest -q` | 1717 passed (1716 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 119 ficheros formateados |
+| Descripción regenerada | `docker compose run --rm -T --no-deps --entrypoint "" -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` | `ApiError.required` pasa a `["code"]` y desaparece `readOnly` de `params` y `retry_after`; nada más cambia |
+| Tipos regenerados | `npm run api:gen` | `params?` y `retry_after?` opcionales y sin `readonly` |
+
+El test comprueba, en la descripción generada, que `ApiError` conserva sus tres propiedades y solo exige `code`, que `PublicAsset` exige sus diez campos y que `PublicAssetList` exige `results` e `incomplete`.
+
+### Pruebas de mecanismo
+Mutaciones restauradas desde una copia hecha antes; cada una se ejecutó con `test_public_list_api.py`, `apps/core/tests/test_api.py` y `config/tests/test_api_settings.py` (149 tests en verde sin mutar). sha256 idéntico antes y después en `serializers.py` y en `config/settings/base.py`, que es anterior a la tarea.
+
+| Fichero | Mutación | Tests que fallan |
+|---|---|---|
+| `serializers.py` | `params` vuelve a `read_only=True` | 1: `test_the_description_only_requires_what_the_server_always_sends` |
+| `serializers.py` | `retry_after` vuelve a `read_only=True` | 1: el mismo |
+| `serializers.py` | Los dos vuelven a `read_only=True` | 1: el mismo |
+| `serializers.py` | `params` sin `required=False` | 1: el mismo |
+| `config/settings/base.py` | `COMPONENT_NO_READ_ONLY_REQUIRED=True` en `SPECTACULAR_SETTINGS` | 1: el mismo |
+
+| Fichero | sha256 |
+|---|---|
+| `serializers.py` | `9d0a8effbf175399d94374c362e5ea33908772804d7b15032a735e3ec715df9d` |
+| `config/settings/base.py` | `7ee4907e9f6cc76540da45a77fbc208c3721f0eff08df373bf5af744b8c7a205` |
+
+## Esqueleto del frontend y contrato del cliente (T7)
+Fecha: 2026-11-02 · Ficheros: `frontend/` (configuración, `src/main.tsx`, `src/styles/index.css`, `src/i18n/es.ts`, `src/api/{schema.gen.ts, validate.ts, validate.test.ts}`), `backend/openapi.json`, `.github/workflows/ci.yml` y `docs/architecture.md`. No se ha accedido a la BD de desarrollo. El workflow de CI no se ha ejecutado en GitHub: sus órdenes se han probado en local.
+
+El lock se resolvió y auditó antes, fuera del repo, con `npm install --package-lock-only --ignore-scripts` y las 19 versiones exactas. El del repo tiene el mismo sha256 (`773728f3644cebe7e0d04e32da357cbaf2db4534efa0cc72966c148c17417466`) y no ha cambiado con `npm ci`.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Instalación | `cd frontend && npm ci --ignore-scripts` | 240 paquetes instalados; el lock tiene 288 entradas sin la raíz y solo `fsevents` trae script de instalación |
+| Tests | `npx vitest run` | 81 passed (un fichero) |
+| Build | `npm run build` | `tsc -b && vite build` en verde |
+| Lint | `npx eslint .` | Sin incidencias |
+| Tipos generados al día | `npm run api:check` | Salida 0 con el contrato real; salida 1 («Generated types are not up-to-date!») con una copia en la que `ApiError.required` lleva `params` |
+| Auditoría de producción | `npm audit --omit=dev` | 0 vulnerabilidades |
+| Auditoría completa | `npm audit` | 13 moderados, todos del aviso GHSA-g3hv-75wg-m249 (minimatch < 11.0.1) en eslint, typescript-eslint y openapi-typescript; aceptado como riesgo de desarrollo (plan, Riesgos) |
+| Desfase de la descripción | `docker compose run --rm -T --no-deps --entrypoint "" backend sh -c "python manage.py spectacular --format openapi-json --file /tmp/openapi.json --validate --fail-on-warn --lang en && diff /tmp/openapi.json openapi.json"` | Salida 0 |
+| YAML del CI | Cargado con PyYAML | Dos jobs (`backend-quality` y `frontend-quality`) |
+| Acciones del CI | `gh release list -R actions/setup-node` | La versión 7 existe (v7.1.0, 2026-10-08) |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | `z.number()` con `NaN` e `Infinity` | Los rechaza (tests de latitud NaN, infinita y longitud infinita negativa) |
+| 2 | `z.uuidv4()` en Zod 4.6.7 | Existe; rechaza UUID v1 y v7 |
+| 3 | Tipos generados frente a Zod | `price_unit` y `currency` salen `string`, `privacy_radius` sale `number` y `public_id` y `price` salen texto, porque el serializer los declara como `CharField`, `IntegerField` y `UUIDField`. Zod es más estricto; la aserción de compilación exige que `z.infer` sea asignable al tipo generado, en un solo sentido. La descripción no limita unidades, moneda ni radios: solo los limita Zod |
+| 4 | Build | Las tres variantes de la fuente salen como `url(/assets/…woff2)`, del propio origen. Las URL del JS son internas de React (mensajes de error y espacios de nombres XML) y la del CSS es el comentario de licencia de Tailwind; ninguna es una petición |
+| 5 | `tseslint.config()` | Está marcado `@deprecated` en typescript-eslint 8.72.1 a favor de `defineConfig()` de ESLint; `eslint.config.js` usa `defineConfig` |
+| 6 | Proxy de Vite | Añade `Vary: Origin` a las respuestas en desarrollo; no lo pone Django |
+
+### Proxy de Vite (mismo origen)
+`npm run dev` en `frontend/`, con el backend arrancado. Ninguna de las dos peticiones consulta la BD: el POST se rechaza por método y el GET falla en la validación de la zona, las dos antes del selector.
+
+| Orden | Esperado | Observado |
+|---|---|---|
+| `ss -ltn \| grep :5173` | Solo en localhost | `127.0.0.1:5173` |
+| `curl -si -X POST http://localhost:5173/api/v1/public/assets/` | 405 con el formato único | `405`, `{"code":"method_not_allowed"}`, `allow: GET, HEAD`, `cache-control: no-store` |
+| `curl -si http://localhost:5173/api/v1/public/assets/` | 400 con los cuatro límites ausentes | `400`, `{"code":"invalid_parameters","params":{"south":"required","west":"required","north":"required","east":"required"}}`, `no-store` |
+| `curl -si http://localhost:5173/` | La página de Vite | `200`, `text/html` |
+
+### ESLint: sintaxis de inyección de HTML
+Fichero temporal sin versionar con un caso por línea, ya borrado (`eslint src/lint-probe.tsx --format json`). Con la configuración anterior, 13 de los 17 casos no saltaban. Con la actual saltan los 17 y los 5 controles quedan limpios.
+
+| Casos que saltan | Controles que no saltan |
+|---|---|
+| `dangerouslySetInnerHTML` en JSX, en un objeto de `createElement` y como clave entre comillas; `innerHTML`, `outerHTML`, `insertAdjacentHTML` y `setHTML`; `document.write`, `document.writeln` y `window.document.write`; los mismos con corchetes y con plantilla (``el[`innerHTML`]``, `document["write"]`); acceso opcional `el?.innerHTML` | `textContent`, `document.title`, `el["textContent"]`, `write` de otro objeto y una clave dinámica (`el[key]`, límite conocido: no se puede analizar) |
+
+### Pruebas de mecanismo de Zod
+36 mutaciones de `validate.ts`, restauradas desde una copia hecha antes; 33 se ejecutan con vitest (81 tests en verde sin mutar) y 3 con `tsc -p tsconfig.app.json --noEmit`. Ninguna sobrevive. sha256 de `validate.ts` y de `validate.test.ts` idéntico antes y después.
+
+| Mutación | Fallos |
+|---|---|
+| Bien: `strictObject` a `object` | 1 |
+| Raíz: `strictObject` a `object` | 2 |
+| `privacy_radius` de unión de literales a `number` | 4 |
+| `latitude` admite `null` | 1 |
+| `currency` de literal a `string` | 2 |
+| `price_unit` de enum a `string` | 1 |
+| Precio sin el ancla `^` | 3 |
+| Precio sin el ancla `$` | 2 |
+| Precio de hasta 6 cifras enteras | 1 |
+| Precio con 1 o 2 decimales | 1 |
+| Precio con `\s*` final | 1 |
+| Máximo de bienes 201 | 1 |
+| Sin comprobar ids únicos | 1 |
+| Título con máximo 201 | 1 |
+| Título sin `refine` (acepta solo espacios) | 2 |
+| Título con `trim()` (reescribe el valor) | 1 |
+| `public_id` de `uuidv4` a `uuid` | 2 |
+| `public_id` de `uuidv4` a `string` | 3 |
+| `incomplete` con `coerce.boolean` | 3 |
+| `latitude` sin máximo | 1 |
+| `latitude` sin mínimo | 1 |
+| `longitude` con máximo 181 | 1 |
+| `longitude` con mínimo −181 | 1 |
+| `category_slug` sin mínimo | 1 |
+| `category_slug` con máximo 65 | 1 |
+| `category_name` sin mínimo | 1 |
+| `category_name` con máximo 101 | 1 |
+| El error lleva `cause` con el error de Zod | 1 |
+| El error lleva la ruta del campo en el mensaje | 2 |
+| `validateResponse` devuelve el JSON sin validar | 56 |
+| Clave de más en el esquema de la raíz | 25 |
+| Clave de más en el esquema del bien | 22 |
+| Quitar una clave del esquema de la raíz (vitest) | 24 |
+| Aserción de tipos: `incomplete` como `string` | `tsc` TS2322 |
+| Aserción de tipos: `privacy_radius` como `string` | `tsc` TS2322 |
+| Aserción de tipos: quitar `incomplete` del esquema (`tsc`) | `tsc` TS2741 |
+
+| Fichero | sha256 |
+|---|---|
+| `frontend/src/api/validate.ts` | `2faff7e0cb1a834e69739e8647b03993dabdb7e25904d2282ce09ef74e076068` |
+| `frontend/src/api/validate.test.ts` | `1f4c6dceed962e8f0ab6376f43c656546454061e0eba329160868c159ddc342e` |

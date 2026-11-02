@@ -1,0 +1,16 @@
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+
+@theme {
+  --color-accent: #1647b8;
+  --color-sky: #e8eeff;
+  --color-ink: #14181f;
+  --color-muted: #424b5a;
+  --color-lemon: #f5d547;
+  --font-sans: "Bricolage Grotesque Variable", sans-serif;
+}
+
+body {
+  background-color: var(--color-sky);
+  color: var(--color-ink);
+}

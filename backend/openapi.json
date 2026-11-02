@@ -1,0 +1,208 @@
+{
+    "openapi": "3.0.3",
+    "info": {
+        "title": "",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/v1/public/assets/": {
+            "get": {
+                "operationId": "listPublicAssets",
+                "parameters": [
+                    {
+                        "in": "query",
+                        "name": "east",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Longitud del límite este de la zona.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "north",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Latitud del límite norte de la zona.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "south",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Latitud del límite sur de la zona.",
+                        "required": true
+                    },
+                    {
+                        "in": "query",
+                        "name": "west",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Longitud del límite oeste de la zona.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "public"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/PublicAssetList"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "400": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "405": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "ApiError": {
+                "type": "object",
+                "properties": {
+                    "code": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "params": {
+                        "type": "object",
+                        "additionalProperties": {
+                            "type": "string"
+                        }
+                    },
+                    "retry_after": {
+                        "type": "integer",
+                        "minimum": 1
+                    }
+                },
+                "required": [
+                    "code"
+                ]
+            },
+            "PublicAsset": {
+                "type": "object",
+                "properties": {
+                    "public_id": {
+                        "type": "string",
+                        "format": "uuid",
+                        "readOnly": true
+                    },
+                    "title": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "category_slug": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "category_name": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "price": {
+                        "type": "string",
+                        "format": "decimal",
+                        "pattern": "^-?\\d{0,6}(?:\\.\\d{0,2})?$",
+                        "readOnly": true
+                    },
+                    "currency": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "price_unit": {
+                        "type": "string",
+                        "readOnly": true
+                    },
+                    "privacy_radius": {
+                        "type": "integer",
+                        "readOnly": true
+                    },
+                    "latitude": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true
+                    },
+                    "longitude": {
+                        "type": "number",
+                        "format": "double",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "category_name",
+                    "category_slug",
+                    "currency",
+                    "latitude",
+                    "longitude",
+                    "price",
+                    "price_unit",
+                    "privacy_radius",
+                    "public_id",
+                    "title"
+                ]
+            },
+            "PublicAssetList": {
+                "type": "object",
+                "properties": {
+                    "results": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/PublicAsset"
+                        },
+                        "readOnly": true
+                    },
+                    "incomplete": {
+                        "type": "boolean",
+                        "readOnly": true
+                    }
+                },
+                "required": [
+                    "incomplete",
+                    "results"
+                ]
+            }
+        }
+    }
+}

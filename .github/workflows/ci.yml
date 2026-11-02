@@ -38,8 +38,50 @@ jobs:
         run: |
           docker compose run --rm -T backend pytest -q
 
+      # La descripción versionada debe ser la que genera el código actual
+      - name: OpenAPI drift
+        run: |
+          docker compose run --rm -T --no-deps --entrypoint "" backend sh -c "python manage.py spectacular --format openapi-json --file /tmp/openapi.json --validate --fail-on-warn --lang en && diff /tmp/openapi.json openapi.json"
+
       # Sin .env nada se construyó ni arrancó, y down -v fallaría al interpolar
       - name: Clean up
         if: always()
         run: |
           if [ -f .env ]; then docker compose down -v; fi
+
+  frontend-quality:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node
+        uses: actions/setup-node@v7
+        with:
+          node-version-file: frontend/.nvmrc
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install
+        run: npm ci --ignore-scripts
+
+      - name: Test
+        run: npx vitest run
+
+      - name: Build
+        run: npm run build
+
+      - name: Lint
+        run: npx eslint .
+
+      - name: API types drift
+        run: npm run api:check
+
+      - name: Audit
+        run: npm audit --omit=dev

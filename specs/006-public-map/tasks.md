@@ -54,7 +54,7 @@
   - Commit: `feat(assets): add demo assets command`
   - Hecho cuando: pytest en verde y mutaciones registradas.
 
-- [ ] **T7. Esqueleto de frontend/ y contrato del cliente.** RNF Contrato, Desconfianza, Dependencias
+- [x] **T7. Esqueleto de frontend/ y contrato del cliente.** RNF Contrato, Desconfianza, Dependencias
   - Dependencias de npm aprobadas (tabla del plan, con versiones exactas).
   - Qué: frontend/{package.json, package-lock.json, .npmrc, .nvmrc, index.html, vite.config.ts, tsconfig*.json, eslint.config.js, .env.example}, src/main.tsx (monta la app), src/styles/index.css, src/i18n/es.ts, src/api/{schema.gen.ts, validate.ts}, backend/openapi.json, .github/workflows/ci.yml (paso de desfase en backend y job `frontend-quality`), docs/architecture.md (frontend).
   - Por qué: el contrato antes que la pantalla. Se descartan guardas escritas a mano en lugar de Zod.

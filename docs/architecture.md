@@ -1,4 +1,4 @@
-# Arquitectura del backend
+# Arquitectura
 
 ## Estructura
 ```
@@ -88,3 +88,26 @@ La lista pública (`GET|HEAD /api/v1/public/assets/`) no autentica al visitante 
 
 ## Arranque y aislamiento de tests
 El `ENTRYPOINT` del contenedor ejecuta `wait_for_db`, que reintenta la conexión hasta 60 s y, si no llega, falla con un mensaje fijo sin credenciales. Durante los tests, un fixture autouse de `backend/conftest.py` bloquea los sockets de internet (libpq y los sockets AF_UNIX siguen funcionando; el loopback TCP, 127.0.0.1 y ::1, también queda bloqueado) y una guarda aborta la sesión si la BD de test no contiene `test` o coincide con `DB_NAME`.
+
+## Frontend
+Vive en `frontend/` (React, TypeScript, Vite y Tailwind v4) y corre en el host, no en Docker. Las versiones están fijadas con `save-exact` y `package-lock.json` está en git; se instala con `npm ci --ignore-scripts`.
+
+```
+frontend/
+├── index.html
+├── vite.config.ts      # Proxy de /api, puerto 5173 y configuración de vitest (entorno node)
+├── eslint.config.js    # Incluye no-restricted-syntax contra dangerouslySetInnerHTML, innerHTML y setHTML
+├── .env.example        # VITE_MAP_STYLE_URL: estilo del mapa base (https)
+└── src/
+    ├── main.tsx        # Monta la aplicación
+    ├── styles/         # index.css: Tailwind, tokens de @theme y tipografía autoalojada
+    ├── i18n/es.ts      # Catálogo de mensajes en castellano
+    └── api/
+        ├── schema.gen.ts   # Tipos generados desde backend/openapi.json (no se edita a mano)
+        └── validate.ts     # Esquema Zod estricto y validateResponse
+```
+
+- **Contrato de la API**: `backend/openapi.json` es la descripción versionada de la API (no se sirve por HTTP). Se genera con `docker compose run --rm -T --no-deps --entrypoint "" -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en`. De ella salen los tipos con `npm run api:gen`, y `validateResponse` valida en ejecución cada respuesta con Zod y devuelve el tipo generado. Un test compara las claves del esquema con las del `openapi.json`. Si el esquema dejase de caber en el tipo generado, el build no compilaría.
+- **Mismo origen**: en desarrollo el navegador solo habla con `localhost:5173`; Vite reenvía `/api` a `http://localhost:8000`, sin cabeceras CORS.
+- **Comandos** (desde `frontend/`): `npm run dev`, `npx vitest run`, `npm run build`, `npx eslint .`, `npm run api:gen` y `npm run api:check`.
+- **Puertas de CI**: el backend regenera la descripción en `/tmp` y la compara con `backend/openapi.json` con `diff`; el job `frontend-quality` ejecuta vitest, build, eslint, `api:check` (los tipos generados corresponden al `openapi.json`) y `npm audit --omit=dev`.
