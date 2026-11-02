@@ -73,7 +73,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
   5. método: 405 para todo lo que no sea GET o HEAD, también OPTIONS;
   6. validación de la zona (400);
   7. selector.
-- **200**: `Content-Type: application/json`, `Cache-Control: public, max-age=60` (solo aquí), `Vary: Accept-Encoding` explícito, sin `Set-Cookie` ni `Vary: Cookie`, y `Allow: GET, HEAD`. La vista marca esta respuesta como sin cookies.
+- **200**: `Content-Type: application/json`, `Cache-Control: public, max-age=60` (solo aquí), `Vary: Accept-Encoding` explícito, sin `Set-Cookie` ni `Vary: Cookie`, y `Allow: GET, HEAD`. La vista marca todas sus respuestas como sin cookies, también 400, 405 y 429.
 - HEAD: mismas cabeceras que GET, sin cuerpo.
 
 ```json
@@ -158,7 +158,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
   - la hora la da el atributo `timer`, sustituible en los tests;
   - no hace falta un alias de caché aparte: en la 011 la caché `default` pasa a ser compartida.
 - Cookies de la respuesta pública (`apps/core/middleware.py`):
-  - `mark_response_cookieless(response)` pone en la respuesta una marca expresa (`response.cookieless = True`). La vista pública la pone en su 200.
+  - `mark_response_cookieless(response)` pone en la respuesta una marca expresa (`response.cookieless = True`). La vista pública la pone en todas sus respuestas, errores incluidos, desde `finalize_response`.
   - `CleanMarkedResponseMiddleware` va el primero de MIDDLEWARE, para ejecutarse el último en la respuesta, después de Session y CSRF. Si la respuesta lleva la marca, vacía `response.cookies` y quita `Cookie` de `Vary`. Si no la lleva, no hace nada.
   - No mira la ruta: ninguna vista futura bajo `/api/` (la autenticación de la 009) pierde sus cookies salvo que marque expresamente su respuesta.
   - La vista no puede quitar esas cookies por sí misma: Session y CSRF las añaden después de ella.
@@ -168,7 +168,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
   - pone `no-store`;
   - devuelve `None` para lo que no es de DRF.
 - `apps/core/negotiation.py` no importa `rest_framework.views`: DRF resuelve `DEFAULT_CONTENT_NEGOTIATION_CLASS` al importar esa vista (es un atributo de clase de `APIView`), así que la clase vive en un módulo que no depende de ella. `test_api_import.py` importa cada módulo en un proceso nuevo.
-- Vista: `get` llama a `parse_zone`; si hay error lanza `ApiError`; si no, selector → serializer → `Response`, más `patch_cache_control(public=True, max_age=60)`, `patch_vary_headers(("Accept-Encoding",))` y `mark_response_cookieless`. Nada de esto toca la sesión.
+- Vista: `get` llama a `parse_zone`; si hay error lanza `ApiError`; si no, selector → serializer → `Response`, más `patch_cache_control(public=True, max_age=60)` y `patch_vary_headers(("Accept-Encoding",))` en el 200. `finalize_response` llama a `mark_response_cookieless` en todas las respuestas de la vista, también 400, 405 y 429. Nada de esto toca la sesión.
 - Comando `create_demo_assets`:
   - Comprueba `getattr(settings, "ENVIRONMENT", None) in {"development", "test"}` antes de cualquier acceso a la BD. Si falla: `CommandError("El comando de demostración solo se ejecuta en development o test.")`.
   - Dentro de un `transaction.atomic()`:
@@ -265,7 +265,7 @@ La partición de la spec ya está decidida: se hizo por profundidad y la interac
 | D6 Formato de error | A) `{code, params?, retry_after?}` plano; B) `{error: {…}}`; C) el de DRF | A | `detail` con mensajes y valores | Manejador y tabla propios |
 | D7 Negociación | A) fija a JSON; B) la de DRF | A | 406 antes del límite y `Vary: Accept` | Una clase de diez líneas |
 | D8 `no-store` en los errores | A) en el manejador de DRF; B) un middleware global; C) un decorador por vista | A | B queda para la 011; C se olvida en vistas nuevas | Cubre solo los errores de DRF, que son los que pide la spec |
-| D9 Cookies en el 200 público | A) middleware que actúa solo sobre las respuestas marcadas expresamente por la vista; B) middleware por ruta `/api/`; C) subclases de Session y CSRF por ruta; D) postproceso en la vista | A | B quitaría las cookies de cualquier vista futura bajo `/api/` (la autenticación de la 009); D no funciona porque Session y CSRF actúan después de la vista; C duplica Django | Una marca más en la respuesta; un test comprueba que una respuesta sin marcar conserva sus cookies |
+| D9 Cookies en las respuestas de la lista pública | A) middleware que actúa solo sobre las respuestas marcadas expresamente por la vista; B) middleware por ruta `/api/`; C) subclases de Session y CSRF por ruta; D) postproceso en la vista | A | B quitaría las cookies de cualquier vista futura bajo `/api/` (la autenticación de la 009); D no funciona porque Session y CSRF actúan después de la vista; C duplica Django | Una marca más en la respuesta; un test comprueba que una respuesta sin marcar conserva sus cookies |
 | D10 Métodos | A) `http_method_names = ["get", "head"]`; B) solo GET | A | OPTIONS con metadatos (200 por defecto en APIView) | Un método más en los tests |
 | D11 Descripción OpenAPI | A) drf-spectacular en runtime, sin ruta; B) solo en dev; C) a mano | A | C se desfasa; B obliga a mover las anotaciones fuera de las vistas | 10 paquetes en la imagen |
 | D12 Entorno del comando | A) constante `ENVIRONMENT`; B) `settings.SETTINGS_MODULE`; C) leer `DJANGO_ENV` | A | B vale None bajo `override_settings` (verificado); C la prohíbe `test_env_reader` | Una línea por settings |
@@ -394,7 +394,7 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 | Permisos | pytest: GET y HEAD admitidos; OPTIONS y métodos de escritura → 405 con formato y `no-store`; atributos declarados en la vista; `force_login` |
 | Privacidad | pytest con el SQL capturado y el conjunto de claves. DevTools: la URL no cambia, almacenamiento vacío, `history.length` estable |
 | Caché | pytest: el 200 lleva `public` y `max-age=60` (por directivas); 400, 405 y 429 llevan `no-store` |
-| Respuesta idéntica | pytest: misma petición con sesión de `force_login`, `Authorization`, `Origin`, `Accept: application/xml`, `?format=xml` y `X-Forwarded-For`. Mismo cuerpo, mismo `Cache-Control`, `Vary == Accept-Encoding`, sin `Set-Cookie` ni `Access-Control-*`, `SessionStore.load` nunca llamado. Se repite con `csrftoken=x` y `sessionid=short`: sin `Set-Cookie` ni `Vary: Cookie`. Test del middleware: la respuesta marcada sale limpia y una respuesta sin marcar conserva sus cookies |
+| Respuesta idéntica | pytest: misma petición con sesión de `force_login`, `Authorization`, `Origin`, `Accept: application/xml`, `?format=xml` y `X-Forwarded-For`. Mismo cuerpo, mismo `Cache-Control`, `Vary == Accept-Encoding`, sin `Set-Cookie` ni `Access-Control-*`, `SessionStore.load` nunca llamado. Se repite con `csrftoken=x` y `sessionid=short`: sin `Set-Cookie` ni `Vary: Cookie`; lo mismo en las respuestas 400, 405 y 429 con `csrftoken=x` y con `sessionid=short`. Test del middleware: la respuesta marcada sale limpia y una respuesta sin marcar conserva sus cookies |
 | Errores de la lista | pytest: formato único en 400, 405 y 429; conjunto de códigos igual a la tabla; sin valores, coordenadas ni trazas |
 | Logs | pytest: `caplog` a DEBUG con `force_debug_cursor` en una petición con coordenadas centinela (no aparecen) y en el comando (ni coordenadas de `coordinate_forms` ni la contraseña centinela en stdout, stderr o logs) |
 | Contrato | CI: `spectacular --validate --fail-on-warn` más `diff`; `openapi-typescript --check` |
@@ -433,6 +433,7 @@ Se mutan los ficheros nuevos con su sha256 antes y después. Lo ajeno se muta co
   - añadir `Vary: Cookie`;
   - añadir `Access-Control-Allow-Origin`;
   - quitar el middleware de cookies o la marca de la vista;
+  - `finalize_response` marca solo el 200;
   - hacer que el middleware actúe por ruta `/api/` en vez de por marca;
   - poner la caché pública también en los errores;
   - el manejador incluye `detail`;

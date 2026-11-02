@@ -42,7 +42,7 @@
   - Por qué: `AnonRateThrottle` con `NUM_PROXIES=0` cubre RF-5 sin código propio. El middleware actúa solo sobre las respuestas que la vista marca expresamente, así ninguna vista futura bajo `/api/` pierde sus cookies; es la única forma de quitar las que Session y CSRF añaden después de la vista. `http_method_names` hace que OPTIONS dé 405. `parse_zone` recibe un `Mapping` de listas, así que la vista le pasa `dict(request.GET.lists())`.
   - Pruebas: casos de RF-1 a RF-5, Permisos, Caché, Respuesta idéntica (con `csrftoken` mal formado y `sessionid` corta), Errores y Logs de la Estrategia; el middleware deja limpia la respuesta marcada y conserva las cookies de una sin marcar; `spectacular --validate --fail-on-warn` limpio. Conjunto exacto de claves de la raíz y de cada bien en el JSON, sin `id` ni ubicación exacta, y las coordenadas de cada bien son las de la ubicación pública. Prueba aplazada desde la T2. Mutaciones.
   - Revisar: la forma del JSON, la ruta y la tabla de permisos.
-  - Commit: `feat(api): add public assets list endpoint`
+  - Commits, en este orden: `feat(api): add cookieless response middleware` (middleware.py, test_middleware.py y base.py) y `feat(api): add public assets list endpoint` (el resto).
   - Hecho cuando: pytest y ruff en verde y mutaciones registradas.
 
 - [ ] **T6. Comando de demostración.** RF-6, RF-7
