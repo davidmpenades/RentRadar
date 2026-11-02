@@ -185,3 +185,71 @@ Mutaciones restauradas desde una copia hecha antes; cada una se ejecutó con `te
 | `middleware.py` | `04dba6893fff87caad85a98e60d1520997e8fd174ba90bc8a884d8b7d295cb56` |
 | `base.py` | `7ee4907e9f6cc76540da45a77fbc208c3721f0eff08df373bf5af744b8c7a205` |
 | `test_middleware.py` | `8dff5c90f20d882c51b59ec0969c6958b9e244b9fa18ce58915780d825f0ffdc` |
+
+## Lista pública de bienes (T5, segunda mitad)
+Fecha: 2026-11-02 · Ficheros: `backend/apps/assets/{views,serializers,urls}.py`, `backend/apps/assets/tests/test_public_list_api.py`, `backend/config/urls.py`, `backend/conftest.py` (`cache.clear()` autouse) y `docs/architecture.md`. `migrate` no se ha ejecutado y no se ha accedido a la BD de desarrollo: todo se prueba contra la BD de test. `backend/openapi.json` no se genera aquí. La petición real de punta a punta (incluido el cuerpo vacío de HEAD con curl) queda para cuando se apliquen las migraciones en desarrollo.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests de la lista pública | `docker compose exec backend pytest -q apps/assets/tests/test_public_list_api.py` | 93 passed |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1673 passed (1580 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 114 ficheros formateados |
+| Descripción OpenAPI | `call_command("spectacular", "--validate", "--fail-on-warn", "--lang", "en", …)` dentro de un test | Sin avisos; una sola ruta con `get`, cuatro parámetros obligatorios y respuestas 200, 400, 405 y 429 |
+
+### Comprobado en el código instalado (DRF 3.18.3, Django 5.2.18)
+| Afirmación del plan | Dónde |
+|---|---|
+| El límite se comprueba antes de resolver el método (un POST con el límite superado da 429) | `rest_framework/views.py:514` (`initial`) antes de `:517-521`; `check_throttles` en `:421` |
+| `THROTTLE_RATES` se lee al importar | `throttling.py:66`; `rate` en la subclase evita `get_rate()` (`:69-70`) |
+| Con `authentication_classes = []` no se toca la sesión | `request.py:166`, `:405-414` y el setter de `user` (`:240-250`) |
+| Los contadores viven en la caché `default` | `throttling.py:62`, `:123` y `:140` |
+| Las 429 no se anotan | `throttling.py:130-131` y `:143-146` |
+| `Throttled.wait` se redondea hacia arriba | `exceptions.py:236-237` |
+| `as_view` es `csrf_exempt` | `views.py:149` |
+| `X-Forwarded-For` se ignora con `NUM_PROXIES = 0` | `throttling.py:31-33` |
+| Una cookie `csrftoken` mal formada añade cookie aunque la vista sea `csrf_exempt` | `django/middleware/csrf.py:402-405` y `:420` |
+| Una `sessionid` de menos de 8 caracteres se borra y añade `Vary: Cookie` | `django/contrib/sessions/middleware.py` (`process_response`) y `backends/base.py:215-232` |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Respuesta sin marcar con cada cookie mal formada por separado (ruta inexistente bajo `/api/v1/`) | `sessionid=short` sola, `csrftoken=x` sola y las dos a la vez añaden cada una su `Set-Cookie` y `Vary: Cookie`; una `sessionid` de 32 caracteres no añade nada. Los tests de errores con la vista real parametrizan las tres combinaciones |
+| 2 | 400, 405 y 429 de la vista real con esas cookies | Sin `Set-Cookie` y sin `Vary: Cookie`, porque `finalize_response` marca todas las respuestas |
+| 3 | `Vary: Cookie` puesto por la vista | No se ve por HTTP con el middleware activo, que lo quita; lo detecta el test que llama a la vista sin middleware |
+| 4 | `SessionAuthentication` en la vista | Sin `AuthenticationMiddleware` en el proyecto no cambia la respuesta; lo detecta el test de atributos de la vista |
+| 5 | Cabecera `Access-Control-*` puesta por la vista | La detectan 10 tests por HTTP: el middleware no la quita |
+
+### Pruebas de mecanismo
+Mutaciones restauradas desde una copia hecha antes. Cada una se ejecutó con `test_public_list_api.py`, `apps/core/tests/test_api.py` y `config/tests/test_api_settings.py`. sha256 idéntico antes y después en todos los ficheros tocados, incluidos `apps/core/api.py` y `config/settings/base.py`, que son anteriores a la tarea y se mutaron con copia.
+
+| Fichero | Mutación | Tests que fallan |
+|---|---|---|
+| `serializers.py` | Campo `id` de más | 3 |
+| `serializers.py` | `price` como `FloatField` | 1 |
+| `serializers.py` | `category_slug` leído de `category__name` | 1 |
+| `views.py` | `SessionAuthentication` | 1 |
+| `views.py` | Quitar `permission_classes` (queda `IsAuthenticated`) | 88 |
+| `views.py` | Quitar el `Vary: Accept-Encoding` explícito | 11 |
+| `views.py` | Añadir `Cookie` al `Vary` | 1 |
+| `views.py` | Añadir `Access-Control-Allow-Origin` | 10 |
+| `views.py` | No marcar las respuestas | 13 |
+| `views.py` | `finalize_response` marca solo el 200 | 10 |
+| `views.py` | `rate = "61/min"` | 23 |
+| `views.py` | Comprobar el límite dentro de `get` | 4 |
+| `views.py` | Añadir `options` a `http_method_names` | 13 |
+| `views.py` | `max_age` 61 | 1 |
+| `views.py` | Caché sin `public` | 1 |
+| `views.py` | Límite de 201 bienes | 2 |
+| `views.py` | Pasar el `QueryDict` a `parse_zone` | 49 |
+| `apps/core/api.py` | Caché pública también en los errores | 33 (20 de la lista y 13 de `test_api.py`) |
+| `apps/core/api.py` | El manejador incluye `detail` | 49 (27 y 22) |
+| `apps/core/api.py` | Quitar la cabecera `Retry-After` | 4 (1 y 3) |
+| `config/settings/base.py` | `NUM_PROXIES = None` | 2 (1 de la lista y 1 de los ajustes) |
+
+| Fichero | sha256 |
+|---|---|
+| `views.py` | `dc67279a1fc9486467d81bfcf94bfaa0a72e9e1e527c40fb9d7c75d72431f69c` |
+| `serializers.py` | `c9f0e3dea6901bd1223027ff6af5f88926b48089695986330adbd88dcfa90932` |
+| `apps/core/api.py` | `4c0c3586c54e1deba9afd1b165e333fa347e781f12725b7672662450fe9cdb09` |
+| `config/settings/base.py` | `7ee4907e9f6cc76540da45a77fbc208c3721f0eff08df373bf5af744b8c7a205` |
+| `test_public_list_api.py` | `17035b2d93ceca33dfc92141e6600e187614ade3b5e43a7b511587a1ace66928` |

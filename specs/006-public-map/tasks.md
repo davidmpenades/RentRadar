@@ -36,7 +36,7 @@
   - Commit: `feat(assets): add public assets selector`
   - Hecho cuando: pytest y `test_architecture` en verde y mutaciones registradas.
 
-- [ ] **T5. Endpoint GET /api/v1/public/assets/ con caché, límite y respuesta idéntica.** RF-1, RF-2, RF-3, RF-4, RF-5
+- [x] **T5. Endpoint GET /api/v1/public/assets/ con caché, límite y respuesta idéntica.** RF-1, RF-2, RF-3, RF-4, RF-5
   - PARAR: OK previo (seguridad, privacidad y contrato de la API). Depende de T1, T3 y T4.
   - Qué: apps/assets/{views,serializers,urls}.py (vista, `PublicListThrottle`, `extend_schema`), config/urls.py, apps/core/middleware.py (`mark_response_cookieless` y `CleanMarkedResponseMiddleware`), base.py (MIDDLEWARE con el nuevo el primero), backend/conftest.py (`cache.clear()` autouse), tests/test_public_list_api.py, apps/core/tests/test_middleware.py, docs/architecture.md.
   - Por qué: `AnonRateThrottle` con `NUM_PROXIES=0` cubre RF-5 sin código propio. El middleware actúa solo sobre las respuestas que la vista marca expresamente, así ninguna vista futura bajo `/api/` pierde sus cookies; es la única forma de quitar las que Session y CSRF añaden después de la vista. `http_method_names` hace que OPTIONS dé 405. `parse_zone` recibe un `Mapping` de listas, así que la vista le pasa `dict(request.GET.lists())`.

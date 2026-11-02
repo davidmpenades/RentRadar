@@ -23,6 +23,9 @@ backend/
     │   ├── text.py        # Detección de caracteres de control y su validador de Django
     │   ├── errors.py      # Error de dominio (solo campos y códigos) y traducción de errores de Django
     │   ├── db.py          # run_guarded: guardado protegido que traduce las restricciones de la BD a códigos
+    │   ├── api.py         # ApiError, códigos de error de la API y manejador de excepciones de DRF (formato único)
+    │   ├── negotiation.py # Negociación de contenido que siempre elige JSON y no importa rest_framework.views
+    │   ├── middleware.py  # mark_response_cookieless y el middleware que limpia las cookies de las respuestas marcadas
     │   ├── management/commands/wait_for_db.py
     │   └── migrations/    # 0001 declara la extensión PostGIS (necesaria en BD gestionadas)
     ├── users/             # Usuario identificado por email
@@ -35,8 +38,13 @@ backend/
     ├── assets/            # Bienes en alquiler y privacidad de su ubicación
     │   ├── location.py    # Función de aproximación (pura): centro de la celda de la cuadrícula
     │   ├── rules.py       # Reglas de los campos (puras): texto, precio, radio, estado, coordenadas
+    │   ├── zone.py        # parse_zone (puro): valida los cuatro límites de la zona y devuelve Zone o ZoneError
+    │   ├── selectors.py   # visible_assets_in_zone: bienes visibles de una zona, solo con campos públicos
     │   ├── models.py      # Asset: ubicación exacta y pública en campos separados, CHECK con nombre
     │   ├── services.py    # create_asset y update_asset: única vía de escritura de bienes
+    │   ├── serializers.py # Forma JSON de la lista pública (diez campos) y esquemas de respuesta de la documentación
+    │   ├── views.py       # PublicAssetListView y PublicListThrottle: la lista pública, sin sesión y con límite
+    │   ├── urls.py        # Ruta public/assets/, montada bajo api/v1/ en config/urls.py
     │   └── migrations/    # 0001 depende de categories.0001, no de la semilla
     └── <app>/
         ├── models.py
@@ -69,6 +77,9 @@ Los servicios no devuelven los errores de Django tal cual: los traducen a `Domai
 - `update_asset` bloquea la fila con `select_for_update` como primera lectura del bien, compara con el estado guardado y escribe solo las columnas que cambian. Con el bien activo no deja cambiar la ubicación exacta ni el radio.
 - Las FK de `owner` y `category` son `PROTECT` y sin `related_name`: borrar un usuario o una categoría con bienes se rechaza, también al revertir la semilla de categorías.
 - Ni los errores, ni `str()` ni `repr()` ni los logs contienen coordenadas. `test_leaks.py` lo comprueba con coordenadas centinela en 22 formas.
+
+## API pública
+La lista pública (`GET|HEAD /api/v1/public/assets/`) no autentica al visitante ni toca la sesión: `authentication_classes` está vacío y la respuesta no depende de cookies ni de cabeceras. El límite de peticiones (`PublicListThrottle`) se aplica antes de comprobar el método y de validar la zona, y cuenta por `REMOTE_ADDR` (`NUM_PROXIES = 0`). Todas las respuestas de la vista, errores incluidos, llevan la marca de `mark_response_cookieless` y salen sin cookies. Los errores salen con `Cache-Control: no-store`, y solo el 200 es cacheable. El módulo de negociación no importa `rest_framework.views`: DRF resuelve esa clase al importar la vista.
 
 ## Logs
 `django.db.backends` está fijado en INFO en los tres entornos (en producción, con el handler que redacta secretos): con DEBUG, Django registra cada consulta con sus valores, entre ellos el email y el hash.
