@@ -144,3 +144,44 @@ Mutaciones sobre `selectors.py`, restauradas desde una copia hecha antes; cada u
 |---|---|
 | `selectors.py` | `8e88dbd21840c1552fbc61f217969e05ae5e9f71ad52699683660913c61b2422` |
 | `test_selectors.py` | `69cf7774e0ec6c73f56acc96e14fbe3ba9076b54f2474a52d073d5c1d21b7c52` |
+
+## Middleware de cookies (T5, primera mitad)
+Fecha: 2026-11-02 · Ficheros: `backend/apps/core/middleware.py`, `backend/apps/core/tests/test_middleware.py` y `backend/config/settings/base.py` (el middleware, el primero de `MIDDLEWARE`). La vista, el límite y el serializer son de la segunda mitad. `migrate` no se ha ejecutado y no se ha accedido a la BD de desarrollo: los tests de la pila real no llevan `django_db`, así que cualquier acceso a la BD los haría fallar.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests del middleware | `docker compose exec backend pytest -q apps/core/tests/test_middleware.py` | 45 passed |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1580 passed (1535 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 110 ficheros formateados |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Vista sin marcar con `csrftoken=x` y `sessionid=short` | Sí lleva `Set-Cookie` (cookie CSRF nueva y cookie de sesión borrada) y `Vary: Cookie`: el montaje reproduce el problema |
+| 2 | La misma petición a una vista marcada | Sin `Set-Cookie` y sin `Vary: Cookie`, con GET, HEAD, POST y otros métodos, y con respuestas 400, 405 y 429 |
+| 3 | `SessionStore.load` parcheado para fallar | No se llama: ni el middleware ni la pila tocan la sesión |
+| 4 | `Vary` con espacios alrededor de las comas | `cc_delim_re.split` deja espacios en los extremos de la cabecera; cada token se recorta, así que un `Vary` sin `Cookie` pero con espacios raros se reescribe normalizado con `", "` |
+| 5 | `Vary: Cookies` | No se toca: la comparación es por token completo |
+
+### Pruebas de mecanismo
+Mutaciones restauradas desde una copia hecha antes; cada una se ejecutó con `test_middleware.py`. sha256 idéntico antes y después en `middleware.py`, `base.py` y `test_middleware.py`.
+
+| Fichero | Mutación | Tests que fallan |
+|---|---|---|
+| `middleware.py` | No vaciar `response.cookies` | 23 |
+| `middleware.py` | No quitar `Cookie` de `Vary` | 28 |
+| `middleware.py` | Actuar sobre todas las respuestas, marcadas o no | 9 |
+| `middleware.py` | Basta una marca truthy en vez de `True` | 5 |
+| `middleware.py` | Actuar por la ruta `/api/` en vez de por la marca | 29 |
+| `middleware.py` | Comparar el token `Cookie` distinguiendo mayúsculas | 3 |
+| `middleware.py` | Quitar cualquier token que contenga «cookie» | 1 |
+| `middleware.py` | Borrar `Vary` entero | 6 |
+| `middleware.py` | Leer `request.session` | 24 |
+| `base.py` | Middleware el último de la lista | 18 |
+| `base.py` | Middleware fuera de la lista | 18 |
+
+| Fichero | sha256 |
+|---|---|
+| `middleware.py` | `04dba6893fff87caad85a98e60d1520997e8fd174ba90bc8a884d8b7d295cb56` |
+| `base.py` | `7ee4907e9f6cc76540da45a77fbc208c3721f0eff08df373bf5af744b8c7a205` |
+| `test_middleware.py` | `8dff5c90f20d882c51b59ec0969c6958b9e244b9fa18ce58915780d825f0ffdc` |

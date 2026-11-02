@@ -22,6 +22,8 @@ INSTALLED_APPS = [
 AUTH_USER_MODEL = "users.User"
 
 MIDDLEWARE = [
+    # El primero actúa el último al volver la respuesta, tras Session y CSRF
+    "apps.core.middleware.CleanMarkedResponseMiddleware",
     "django.middleware.security.SecurityMiddleware",
     "django.contrib.sessions.middleware.SessionMiddleware",
     "django.middleware.common.CommonMiddleware",
