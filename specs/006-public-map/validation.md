@@ -85,3 +85,62 @@ Mutaciones sobre `zone.py`, restauradas desde una copia hecha antes. sha256 de `
 |---|---|
 | `zone.py` | `a7329e76abff98163d348e8df5e709cfa9568334f9df6cebab4467c9b1b5022f` |
 | `test_zone.py` | `cbd3cf9c14fde3c2bef955df1bf48db8c9c13136a89865d19cf9147482923a57` |
+
+## Selector de la lectura pública (T4)
+Fecha: 2026-11-02 · Ficheros: `backend/apps/assets/selectors.py` y `backend/apps/assets/tests/test_selectors.py`. Ningún otro fichero de producción cambia. `migrate` no se ha ejecutado en la BD de desarrollo: los tests usan la BD de test.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests del selector | `docker compose exec backend pytest -q apps/assets/tests/test_selectors.py` | 51 passed |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1535 passed (1484 previos), `test_architecture` incluido |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 108 ficheros formateados |
+
+### Qué prueba cada grupo de tests
+| Grupo | Tests | Qué demuestra |
+|---|---|---|
+| Privacidad | `test_the_coordinates_are_the_public_ones_and_not_the_exact_ones`, `test_each_row_carries_its_own_coordinates_without_crossing_the_axes` | Con la exacta desplazada +0,004° en latitud y +0,003° en longitud (≈ 445 m y ≈ 258 m a 39,5 N), `latitude` y `longitude` coinciden con la pública con tolerancia 1e-9° (≈ 0,1 mm) y difieren de la exacta en al menos 0,003° por eje. Las coordenadas asimétricas detectan un cruce de ejes |
+| Privacidad | `test_an_asset_whose_public_location_is_inside_and_exact_outside_is_returned`, `test_an_asset_whose_public_location_is_outside_and_exact_inside_is_not_returned` | Un bien con la pública a un lado del borde y la exacta al otro se filtra por la pública |
+| Estructura (apoyo a la privacidad) | `test_a_row_has_exactly_the_whitelisted_keys` y los tests del SQL | Las diez claves exactas, sin `id`, `owner` ni `exact_location`; el SQL capturado no contiene `exact_location` ni columnas de `users_user` en el SELECT |
+| Coherencia, no privacidad | `test_the_coordinates_of_the_selector_match_what_the_service_stored` (radios 500, 1000 y 2000, Madrid) | Servicio y selector leen la misma columna. No afirma ninguna distancia entre exacta y pública: un punto en el centro de su celda daría ≈ 0 m |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Distancia entre exacta y pública con el servicio en Madrid (40,4168 / −3,7038) | 174 m con radio 500, 366 m con 1000 y 943 m con 2000 |
+| 2 | Límites `Decimal` de la zona | El ORM los pasa al SQL como `float`; la comparación es en doble precisión. Un límite con más de unas 17 cifras significativas se redondea y no se prueba |
+| 3 | Filtro por `ST_X`/`ST_Y` con `BETWEEN` | Inclusivo en los cuatro bordes; a 1e-6° fuera de cualquiera de ellos, el bien no aparece |
+| 4 | `select_related("owner")` antes de `.values()` | El SQL es idéntico con y sin él: `.values()` lo descarta, así que esa mutación es equivalente (ver abajo) |
+
+SQL capturado por `captured_sql` con la zona 39,4 / −0,4 / 39,5 / −0,3 y `limit=200`:
+```sql
+SELECT "assets_asset"."public_id" AS "public_id", "assets_asset"."title" AS "title", "categories_category"."slug" AS "category__slug", "categories_category"."name" AS "category__name", "assets_asset"."price" AS "price", "assets_asset"."currency" AS "currency", "assets_asset"."price_unit" AS "price_unit", "assets_asset"."privacy_radius" AS "privacy_radius", ST_Y(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) AS "latitude", ST_X(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) AS "longitude" FROM "assets_asset" INNER JOIN "users_user" ON ("assets_asset"."owner_id" = "users_user"."id") INNER JOIN "categories_category" ON ("assets_asset"."category_id" = "categories_category"."id") WHERE ("users_user"."is_active" AND "assets_asset"."status" = 'active' AND ST_Y(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) BETWEEN 39.4 AND 39.5 AND ST_X(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) BETWEEN  -0.4 AND  -0.3) ORDER BY "assets_asset"."created_at" DESC, "assets_asset"."id" DESC LIMIT 201
+```
+
+### Pruebas de mecanismo
+Mutaciones sobre `selectors.py`, restauradas desde una copia hecha antes; cada una se ejecutó con `test_selectors.py` y `test_architecture.py` (102 tests). sha256 de `selectors.py` idéntico antes y después de cada una, y también el de los ficheros de test.
+
+| Mutación | Tests que fallan |
+|---|---|
+| Añadir `exact_location` a `values` | 2: claves exactas y `exact_location` en la consulta |
+| Añadir `id` a `values` | 2: claves exactas y columnas fuera de la lista blanca |
+| Añadir `owner` a `values` | 2: claves exactas y columnas de usuario en el SELECT |
+| Quitar `.values()` | 35 |
+| Quitar `.values()` y añadir `select_related("owner")` | 35 |
+| `select_related("owner")` antes de `.values()` | 0: mutación equivalente, el SQL no cambia |
+| Quitar el filtro de `status` | 1: bien pausado |
+| Quitar el filtro `owner__is_active` | 2: propietario desactivado y condiciones del WHERE |
+| Cortar con `[:limit]` | 5: límites, `LIMIT 201` y 201 bienes |
+| Comparar con `queryset.count()` | 12: una sola consulta, sin `COUNT(` y SELECT |
+| Quitar `-id` del orden | 1: empate de `created_at` |
+| Orden ascendente | 10: orden y límites |
+| Rango estricto (`gt` y `lt`) | 9: bordes, altura cero y anchura cero |
+| Coordenadas desde `exact_location` | 16: valores, bordes, altura cero y SQL |
+| Filtrar por la exacta y devolver la pública | 11: bordes, lados opuestos del borde y SQL |
+| Intercambiar `ST_X` y `ST_Y` | 29 |
+| Devolver la fila de más | 4: límites y 201 bienes |
+| Incompleta con exactamente `limit` bienes | 4: 200 bienes, límite 0 sin bienes y límites |
+
+| Fichero | sha256 |
+|---|---|
+| `selectors.py` | `8e88dbd21840c1552fbc61f217969e05ae5e9f71ad52699683660913c61b2422` |
+| `test_selectors.py` | `69cf7774e0ec6c73f56acc96e14fbe3ba9076b54f2474a52d073d5c1d21b7c52` |

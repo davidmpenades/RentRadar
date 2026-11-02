@@ -27,7 +27,7 @@
   - Commit: `feat(assets): validate public map zone`
   - Hecho cuando: pytest y ruff en verde y mutaciones registradas.
 
-- [ ] **T4. Selector de la lectura pública.** RF-1, RF-2, RF-4
+- [x] **T4. Selector de la lectura pública.** RF-1, RF-2, RF-4
   - PARAR: OK previo (privacidad). Depende de T2.
   - Qué: apps/assets/selectors.py y tests/test_selectors.py.
   - Por qué: la lista blanca no carga la exacta y el rango sobre coordenadas coincide con la definición de zona. Se descarta `ST_Intersects` sobre geography.
