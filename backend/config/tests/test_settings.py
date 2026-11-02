@@ -71,3 +71,17 @@ def test_real_environments_keep_the_default_password_hashers(load_settings, env)
     settings = load_settings(env, **environ)
 
     assert not hasattr(settings, "PASSWORD_HASHERS")
+
+
+@pytest.mark.parametrize("env", ["development", "test", "production"])
+def test_each_environment_declares_its_own_name(load_settings, env):
+    environ = PRODUCTION_ENVIRON if env == "production" else DEVELOPMENT_ENVIRON
+    settings = load_settings(env, **environ)
+
+    assert env == settings.ENVIRONMENT
+
+
+def test_the_base_settings_do_not_declare_an_environment(load_settings):
+    settings = load_settings("base")
+
+    assert not hasattr(settings, "ENVIRONMENT")

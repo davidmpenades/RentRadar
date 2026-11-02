@@ -45,7 +45,7 @@
   - Commits, en este orden: `feat(api): add cookieless response middleware` (middleware.py, test_middleware.py y base.py) y `feat(api): add public assets list endpoint` (el resto).
   - Hecho cuando: pytest y ruff en verde y mutaciones registradas.
 
-- [ ] **T6. Comando de demostración.** RF-6, RF-7
+- [x] **T6. Comando de demostración.** RF-6, RF-7
   - PARAR: OK previo (crea una cuenta con contraseña; comprobación de entorno).
   - Qué: settings/{development,test,production}.py (`ENVIRONMENT`), apps/assets/demo.py, apps/assets/management/commands/create_demo_assets.py, tests/test_demo_command.py y casos en config/tests/test_settings.py.
   - Por qué: `ENVIRONMENT` falla cerrado y sobrevive a `override_settings`. Se descarta `SETTINGS_MODULE`, que vale None bajo `override_settings`.

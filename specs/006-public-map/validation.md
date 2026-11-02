@@ -253,3 +253,61 @@ Mutaciones restauradas desde una copia hecha antes. Cada una se ejecutó con `te
 | `apps/core/api.py` | `4c0c3586c54e1deba9afd1b165e333fa347e781f12725b7672662450fe9cdb09` |
 | `config/settings/base.py` | `7ee4907e9f6cc76540da45a77fbc208c3721f0eff08df373bf5af744b8c7a205` |
 | `test_public_list_api.py` | `17035b2d93ceca33dfc92141e6600e187614ade3b5e43a7b511587a1ace66928` |
+
+## Comando de demostración (T6)
+Fecha: 2026-11-02 · Ficheros: `backend/apps/assets/demo.py`, `backend/apps/assets/management/commands/create_demo_assets.py` (con sus `__init__.py`), `backend/apps/assets/tests/test_demo_command.py`, `ENVIRONMENT` en `backend/config/settings/{development,test,production}.py` y cuatro casos en `backend/config/tests/test_settings.py`. El comando solo se ha ejecutado dentro de pytest, contra la BD de test: no se ha accedido a la BD de desarrollo ni se ha ejecutado `migrate`.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests del comando y de los ajustes | `docker compose exec backend pytest -q apps/assets/tests/test_demo_command.py config/tests/test_settings.py` | 61 passed (39 del comando) |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1716 passed (1673 previos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 119 ficheros formateados |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Datos de demostración | 25 entradas: 24 activas y la última pausada; las 11 categorías de la semilla (las 11 primeras entradas, una por slug); radios 10 de 500, 9 de 1000 y 6 de 2000 |
+| 2 | Reparto de radios | No es por turnos: dentro de 2 km del centro solo caben 6 celdas de 2000 m y, con más bienes de ese radio, algunos compartían celda. Se rebajaron dos entradas (la 22 a 500 y la 24 a 1000) para que el único par repetido sea el esperado |
+| 3 | Distancias al centro (39,4699 / −0,3763) | Exactas a menos de 1715 m; públicas, calculadas por el servicio, a menos de 2343 m. El criterio es 4 km |
+| 4 | Par con la misma ubicación pública y el mismo radio | Las entradas 1 y 12 (bicicletas eléctricas), radio 1000, exactas (39,4579 / −0,3803) y (39,4581 / −0,3801); pública común (39,455291 / −0,380941). Es el único grupo repetido |
+| 5 | Selector sobre una zona alrededor del centro | Devuelve los 24 bienes activos y ninguno es el pausado |
+| 6 | Comprobación de entorno | Primera sentencia de `handle`. Con `production`, `staging`, `Development`, `TEST`, vacío, ` test`, `None`, un valor no hashable o el atributo borrado: `CommandError` con el mensaje fijo, sin salida y sin acceso a la BD (el test no lleva `django_db`) |
+| 7 | Sin salida de coordenadas ni contraseña | Con la configuración real (`django.db.backends` en INFO, sin `force_debug_cursor`), ninguna forma de las 25 coordenadas exactas ni la contraseña centinela aparece en stdout, stderr ni logs. El test comprueba antes el nivel efectivo y un control positivo de captura |
+| 8 | Por qué no se prueba con DEBUG | Con `caplog` a DEBUG y `force_debug_cursor`, un `create_asset` correcto registra la ubicación exacta (EWKB) en el `INSERT` |
+| 9 | Generador de contraseña y reloj reales | Los tests los sustituyen, así que una primera mutación del generador sobrevivió; se añadieron dos tests (contraseña de al menos 43 caracteres, URL-safe y distinta cada vez; hora con zona UTC) |
+
+### Pruebas de mecanismo
+Mutaciones restauradas desde una copia hecha antes; cada una se ejecutó con `test_demo_command.py` y `test_settings.py` (61 tests). sha256 idéntico antes y después en todos los ficheros tocados.
+
+| Fichero | Mutación | Tests que fallan |
+|---|---|---|
+| `create_demo_assets.py` | Quitar la comprobación de entorno | 9 |
+| `create_demo_assets.py` | Consultar la BD antes de comprobar el entorno | 9 |
+| `create_demo_assets.py` | Quitar `atomic` | 2 |
+| `create_demo_assets.py` | Imprimir la contraseña por stdout / por stderr / en un log | 3 / 1 / 1 |
+| `create_demo_assets.py` | Entornos permitidos como conjunto (un valor no hashable lanza `TypeError`) | 1 |
+| `create_demo_assets.py` | Permitir `production` | 1 |
+| `create_demo_assets.py` | Misma hora para todos los bienes | 1 |
+| `create_demo_assets.py` | Activar los 25 | 3 |
+| `create_demo_assets.py` | Ignorar al propietario existente | 2 |
+| `create_demo_assets.py` | Hora sin zona | 1 |
+| `create_demo_assets.py` | Contraseña fija en vez de aleatoria | 1 |
+| `demo.py` | Un punto a más de 4 km | 3 |
+| `demo.py` | Quitar una categoría | 3 |
+| `demo.py` | Solo dos radios | 3 |
+| `demo.py` | Romper el par | 2 |
+| `demo.py` | Todos activos / dos pausados | 6 / 6 |
+| `demo.py` | Email fuera de `example.com` | 1 |
+| `settings/test.py` | `ENVIRONMENT = "production"` | 13 |
+| `settings/production.py` | `ENVIRONMENT = "development"` | 1 |
+| `settings/development.py` | Sin `ENVIRONMENT` | 1 |
+
+| Fichero | sha256 |
+|---|---|
+| `create_demo_assets.py` | `c41aeadbbffb833c0a10cae916b9843b6d88ba7a65cef986b8dc34a488fe6603` |
+| `demo.py` | `1e1178c71504c8aae63433a0f353cc7e65401fa8f38b37bbea27fa0c662bc4e6` |
+| `settings/development.py` | `0df56a7b9021faf622f8f8ff79aacb4c70b99ac9c35ff8286b54f8d363759d64` |
+| `settings/test.py` | `e3ac015ad8621984d9c2699e598f7c9ede9ec0bf7bbb377adb4888bec194e7ec` |
+| `settings/production.py` | `cc19ede72d8ea0393c4c3477d035d984d25ed6fefb3a54ae4fe4cbee5ac72d7d` |
+| `test_demo_command.py` | `aa0c7b9104eadc833daf83ece3392197ce18af739337d2347e048b9de6ef8ee2` |
+| `test_settings.py` | `4f27b16a0276b2a40690747fa86888f6c96a30c10b466e1d09134ca7c413efa8` |
