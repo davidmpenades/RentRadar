@@ -45,6 +45,8 @@ backend/
     │   ├── serializers.py # Forma JSON de la lista pública (diez campos) y esquemas de respuesta de la documentación
     │   ├── views.py       # PublicAssetListView y PublicListThrottle: la lista pública, sin sesión y con límite
     │   ├── urls.py        # Ruta public/assets/, montada bajo api/v1/ en config/urls.py
+    │   ├── demo.py        # Datos puros de los 25 bienes de demostración (no importa el modelo)
+    │   ├── management/commands/create_demo_assets.py  # Comando de demostración: solo en development y test, en una transacción
     │   └── migrations/    # 0001 depende de categories.0001, no de la semilla
     └── <app>/
         ├── models.py
