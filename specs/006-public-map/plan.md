@@ -21,7 +21,8 @@ Spec: specs/006-public-map/spec.md (aprobada)
 | backend/config/settings/base.py | M | `rest_framework` y `drf_spectacular` en INSTALLED_APPS; REST_FRAMEWORK; SPECTACULAR_SETTINGS; middleware de cookies el primero de MIDDLEWARE | RF-5, RNF |
 | backend/config/settings/{development,test,production}.py | M | Constante `ENVIRONMENT` | RF-7 |
 | backend/config/urls.py | M | `path("api/v1/", include("apps.assets.urls"))` (sin handlers) | RF-1 |
-| backend/apps/core/api.py | C | Negociación fija a JSON; `ApiError` (código y parámetros); manejador de excepciones de DRF con formato único y `no-store`; tabla de códigos | RF-3, RF-5, RNF Errores |
+| backend/apps/core/api.py | C | `ApiError` (código y parámetros); manejador de excepciones de DRF con formato único y `no-store`; tabla de códigos | RF-3, RF-5, RNF Errores |
+| backend/apps/core/negotiation.py | C | Negociación fija a JSON (`JSONOnlyNegotiation`); no importa `rest_framework.views` | RF-3, RF-5, RNF Errores |
 | backend/apps/core/middleware.py | C | `mark_response_cookieless(response)` y `CleanMarkedResponseMiddleware`: solo una respuesta marcada expresamente sale sin `Set-Cookie` y sin `Cookie` en `Vary`; una sin marcar conserva sus cookies | RNF Respuesta idéntica |
 | backend/apps/assets/models.py | M | `public_id = UUIDField(default=uuid.uuid4, editable=False, unique=True)` | RF-2 |
 | backend/apps/assets/migrations/0002_…, 0003_…, 0004_… | C | Añadir nulo → rellenar con uuid4 por fila → no nulo y único | RF-2 |
@@ -115,7 +116,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
 ### Ajustes globales de DRF
 - Renderer: solo `JSONRenderer` (sin la interfaz navegable ni `Vary: Accept`).
 - Parser: solo `JSONParser`.
-- Negociación: `JSONOnlyNegotiation`, que ignora `Accept`. `URL_FORMAT_OVERRIDE = None`.
+- Negociación: `apps.core.negotiation.JSONOnlyNegotiation`, que ignora `Accept`. `URL_FORMAT_OVERRIDE = None`.
 - `DEFAULT_VERSIONING_CLASS = None`: la versión va en la ruta `api/v1/`.
 - `DEFAULT_AUTHENTICATION_CLASSES = []` y `DEFAULT_PERMISSION_CLASSES = [IsAuthenticated]` (denegar por defecto).
 - `DEFAULT_THROTTLE_CLASSES = []` y `NUM_PROXIES = 0`.
@@ -166,6 +167,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
   - en `Throttled` pone `Retry-After` y `retry_after` con `exc.wait` (≥ 1 por construcción);
   - pone `no-store`;
   - devuelve `None` para lo que no es de DRF.
+- `apps/core/negotiation.py` no importa `rest_framework.views`: DRF resuelve `DEFAULT_CONTENT_NEGOTIATION_CLASS` al importar esa vista (es un atributo de clase de `APIView`), así que la clase vive en un módulo que no depende de ella. `test_api_import.py` importa cada módulo en un proceso nuevo.
 - Vista: `get` llama a `parse_zone`; si hay error lanza `ApiError`; si no, selector → serializer → `Response`, más `patch_cache_control(public=True, max_age=60)`, `patch_vary_headers(("Accept-Encoding",))` y `mark_response_cookieless`. Nada de esto toca la sesión.
 - Comando `create_demo_assets`:
   - Comprueba `getattr(settings, "ENVIRONMENT", None) in {"development", "test"}` antes de cualquier acceso a la BD. Si falla: `CommandError("El comando de demostración solo se ejecuta en development o test.")`.

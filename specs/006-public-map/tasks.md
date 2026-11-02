@@ -2,7 +2,7 @@
 
 - [x] **T1. DRF con su formato de errores y no-store.** RF-3, RF-5 (formato), RNF Errores, Dependencias
   - Dependencias de Python aprobadas (tabla del plan, con versiones exactas y hashes).
-  - Qué: backend/requirements.in, requirements.txt (pip-compile con hashes, sin typing_extensions), config/settings/base.py (INSTALLED_APPS, REST_FRAMEWORK, SPECTACULAR_SETTINGS), apps/core/api.py (negociación, `ApiError`, manejador y tabla de códigos), apps/core/tests/test_api.py, config/tests/test_api_settings.py.
+  - Qué: backend/requirements.in, requirements.txt (pip-compile con hashes, sin typing_extensions), config/settings/base.py (INSTALLED_APPS, REST_FRAMEWORK, SPECTACULAR_SETTINGS), apps/core/api.py (`ApiError`, manejador y tabla de códigos), apps/core/negotiation.py (negociación), apps/core/tests/test_api.py, config/tests/test_api_settings.py.
   - Por qué: el manejador de DRF da el formato único y `no-store` sin tocar Django. Los handlers globales se descartan: son de la 011.
   - Pruebas: ajustes (un renderer, autenticación vacía, `IsAuthenticated` por defecto, `NUM_PROXIES=0`, `URL_FORMAT_OVERRIDE` None); el manejador con `ApiError`, `MethodNotAllowed` y `Throttled` da el formato, `no-store`, `Retry-After` y nunca `detail`; conjunto de códigos igual a la tabla.
   - Revisar: el diff del lock (hashes x86_64 y aarch64 de rpds-py y PyYAML).
