@@ -9,7 +9,7 @@
   - Commit: `build(api): add drf with uniform error format`
   - Hecho cuando: la imagen se construye con `--require-hashes` y pytest y ruff están en verde.
 
-- [ ] **T2. Identificador público UUID v4 con migración en tres ficheros.** RF-2
+- [x] **T2. Identificador público UUID v4 con migración en tres ficheros.** RF-2
   - PARAR: OK previo (migración y privacidad). `migrate` en la BD de desarrollo solo con OK en ese momento.
   - Qué: apps/assets/models.py, migraciones 0002, 0003 y 0004, tests/test_models.py, tests/test_public_id.py.
   - Por qué: un default de AddField daría el mismo UUID a todas las filas. Se descarta generarlo en el servicio: rompería `make_asset`.
