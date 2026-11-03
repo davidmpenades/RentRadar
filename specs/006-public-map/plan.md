@@ -209,6 +209,8 @@ Spec: specs/006-public-map/spec.md (aprobada)
 - `validateStyleUrl(url)`: `new URL`, `https:`, sin usuario ni contraseña.
 - `isAllowedMapUrl(url, allowedOrigins)`: https y un origen permitido (el del estilo y el propio).
 - `validateStyleJson(json)`: `version === 8`, `sources` es un objeto y `layers` un array.
+- `withFixedAttribution(style)`: devuelve una copia del estilo con el `attribution` de cada fuente sustituido por una constante del código (enlaces propios con `rel="noopener noreferrer"`). MapLibre mezcla las opciones de la fuente sobre el TileJSON (`load_tilejson.ts`, `extend(tileJSON, options)`) y pinta la atribución de la fuente.
+- `BlockedUrlError`: error propio con mensaje fijo, sin la URL. `transformRequest` lo lanza para toda URL que no pase `isAllowedMapUrl`, y el listener del evento `error` solo silencia esa clase.
 
 ## Esqueleto del frontend (T7)
 - `main.tsx` monta un título mínimo con texto del catálogo; las rutas llegan en la T9. `es.ts` solo lleva las claves que se usan.
@@ -463,7 +465,12 @@ Se mutan los ficheros nuevos con su sha256 antes y después. Lo ajeno también s
   - imprimir la contraseña.
 - vitest:
   - T7: Zod que acepte 1500, `null`, un campo de más o otra moneda;
-  - T9: `validateStyleUrl` e `isAllowedMapUrl` que acepten `http:` u otro host;
+  - T9:
+    - `validateStyleUrl` que acepte `http:`;
+    - `isAllowedMapUrl` que acepte `http:` u otro host;
+    - el listener de errores que silencie cualquiera;
+    - quitar la sustitución de la atribución;
+    - pintar sin comprobar `isCurrent()`;
   - T10: título con `dangerouslySetInnerHTML` (renderizado con `react-dom/server`).
 
 ## Afirmaciones no verificadas

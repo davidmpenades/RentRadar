@@ -74,16 +74,24 @@
 
 - [ ] **T9. Rutas, mapa base, círculos y fallo del estilo.** RF-8, RF-10, RF-13 (estilo), RF-14
   - PARAR: OK previo (terceros y URLs del estilo). Depende de T8.
-  - Qué: src/app/{route.ts, NotFoundPage.tsx}, src/main.tsx (rutas: `/` y `/map/` normalizan a `/map`), src/map/{style.ts, geodesy.ts, circles.ts, MapView.tsx}, src/pages/MapPage.tsx (carcasa con aviso) y sus tests.
-  - Por qué: polígono geodésico y estilo descargado y validado. Se descartan la capa `circle` y el evento `error`.
-  - Pruebas: vitest de `resolveRoute`, haversine 99–101 %, círculos únicos, `validateStyleUrl`, `validateStyleJson` e `isAllowedMapUrl` (mutaciones). DevTools a 375 y 1280 px.
+  - Qué: src/app/{route.ts, NotFoundPage.tsx}, src/main.tsx (rutas: `/` y `/map/` normalizan a `/map`), src/map/{style.ts, geodesy.ts, circles.ts, MapView.tsx}, src/pages/MapPage.tsx (aviso y petición de bienes) y sus tests.
+  - Por qué: polígono geodésico y estilo descargado y validado. Se descartan la capa `circle` y el evento `error` como detector del fallo del estilo.
+  - Petición de bienes (RF-9, RF-10): la T9 cablea `moveend`, `requestBox`, el planificador, `fetchPublicAssets` y `setData` de los círculos. `MapPage` guarda solo los bienes:
+    - comprueba `isCurrent()` antes de pintar;
+    - si el cuadro no se pide (`tooLarge`, `outOfRange`) o la petición falla, vacía los círculos;
+    - los errores que `classifyFailure` no clasifica también vacían los círculos y van a `console.error`;
+    - no muestra nada más: `viewState`, el panel y los errores visibles son de la T10.
+  - Estilo (RF-13): se descarga con timeout de 10 s, `credentials: "omit"` y `Content-Type` JSON, con tope de 1 MiB sobre el texto leído. Un fallo de red, el tope, un JSON roto o un estilo no válido dan el estado de fallo del estilo.
+  - Atribución: al validar el estilo, el campo `attribution` de cada fuente se sustituye por un texto fijo del código, con los enlaces escritos aquí (`rel="noopener noreferrer"`). Las opciones de la fuente pisan al TileJSON, y la atribución del tercero no se pinta.
+  - Errores de MapLibre: `transformRequest` lanza `BlockedUrlError` (mensaje fijo, sin la URL) para toda URL que no pase `isAllowedMapUrl`. El listener del evento `error` solo silencia esa clase; el resto va a `console.error`.
+  - Pruebas: vitest de `resolveRoute`, haversine 99–101 %, círculos únicos, `validateStyleUrl`, `validateStyleJson`, `isAllowedMapUrl`, la sustitución de la atribución (con una atribución hostil en la entrada y sin mutar el estilo original), el listener (un error que no sea `BlockedUrlError` no se silencia) y la decisión de pintar con `isCurrent()`. Mutaciones. DevTools a 375 y 1280 px: la atribución visible lleva los enlaces propios (`rel="noopener noreferrer"`, que el TileJSON no trae), el worker carga en dev y en `vite preview`, una sola petición tras parar el mapa y consola limpia.
   - Revisar: atribución y aviso visibles; red solo al propio origen y a OpenFreeMap.
   - Commit: `feat(map): render base map and asset circles`
   - Hecho cuando: vitest, build y eslint en verde; DevTools sin errores en consola.
 
 - [ ] **T10. Lista del panel, vacío y errores de la API.** RF-11, RF-12, RF-13 (petición)
   - PARAR: OK previo (texto público como salida: XSS). Depende de T9.
-  - Qué: src/panel/{ResultsPanel.tsx, AssetCard.tsx, header.ts}, src/state/viewState.ts, src/i18n/format.ts, src/assets/categories/*.svg y sus tests.
+  - Qué: src/panel/{ResultsPanel.tsx, AssetCard.tsx, header.ts}, src/state/viewState.ts, src/i18n/format.ts, src/assets/categories/*.svg y sus tests. Sobre la petición que cablea la T9, añade `viewState`, el panel y los errores visibles de la petición.
   - Por qué: tarjetas no interactivas y una sola altura, como fija la spec. Se descarta reutilizar el HTML del prototipo (usa `innerHTML`).
   - Pruebas: vitest de `headerText`, `isCircleVisible`, `viewState` y formato del precio; título como texto con `react-dom/server` (mutación). DevTools a 375 y 1280 px.
   - La página decide qué muestra el panel si `classifyFailure` propaga un error inesperado (solo clasifica causas conocidas): nunca se queda en «Buscando bienes…».
