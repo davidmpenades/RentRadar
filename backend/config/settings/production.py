@@ -3,6 +3,9 @@ from config.log_redaction import build_production_logging
 from config.settings.base import *  # noqa: F403
 from config.settings.base import build_database
 
+# Lo lee el comando de demostración; sin este valor se niega a ejecutarse
+ENVIRONMENT = "production"
+
 _config = load_production_config()
 
 # Se valida DJANGO_DEBUG para que un valor mal formado falle también aquí,

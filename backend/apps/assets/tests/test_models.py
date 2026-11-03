@@ -1,4 +1,5 @@
 import math
+import uuid
 from datetime import UTC, datetime
 from decimal import Decimal
 
@@ -76,6 +77,7 @@ EXPECTED_FIELDS = {
     "status": models.TextField,
     "created_at": models.DateTimeField,
     "updated_at": models.DateTimeField,
+    "public_id": models.UUIDField,
 }
 # Tipo de cada columna en PostgreSQL
 EXPECTED_COLUMNS = {
@@ -93,6 +95,7 @@ EXPECTED_COLUMNS = {
     "status": "text",
     "created_at": "timestamptz",
     "updated_at": "timestamptz",
+    "public_id": "uuid",
 }
 EMOJI = chr(0x1F600)
 
@@ -110,7 +113,10 @@ def test_the_model_has_exactly_these_fields():
 def test_no_field_is_nullable_or_has_a_default():
     for field in Asset._meta.concrete_fields:
         assert field.null is False, field.name
-        assert field.has_default() is False, field.name
+        if field.name == "public_id":
+            assert field.default is uuid.uuid4
+        else:
+            assert field.has_default() is False, field.name
 
 
 def test_dates_are_set_by_the_caller_and_not_by_the_model():

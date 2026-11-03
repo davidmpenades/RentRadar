@@ -1,3 +1,5 @@
+import uuid
+
 from django.conf import settings
 from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.db.models import GeometryField
@@ -48,6 +50,8 @@ def _valid_location(field_name):
 
 
 class Asset(models.Model):
+    # Opaco para el público: la clave primaria nunca sale de la API
+    public_id = models.UUIDField(default=uuid.uuid4, editable=False, unique=True)
     owner = models.ForeignKey(
         settings.AUTH_USER_MODEL, on_delete=models.PROTECT, related_name="+"
     )

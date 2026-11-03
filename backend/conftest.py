@@ -2,6 +2,7 @@ import socket
 
 import pytest
 from django.conf import settings
+from django.core.cache import cache
 
 from config.env import read_optional
 
@@ -19,6 +20,12 @@ def pytest_sessionstart(session):
     # Django crea y borra TEST["NAME"], y NAME es la que se abriría si se omitiera
     for name in (database["NAME"], database["TEST"]["NAME"]):
         ensure_isolated_test_database(name, development_name)
+
+
+@pytest.fixture(autouse=True)
+def clear_default_cache():
+    # Los contadores del límite viven en la caché: no pasan de un test a otro
+    cache.clear()
 
 
 class NetworkBlockedError(RuntimeError):

@@ -2,6 +2,9 @@ from config.env import parse_bool, parse_port, read_optional, require
 from config.settings.base import *  # noqa: F403
 from config.settings.base import build_database
 
+# Lo lee el comando de demostración; sin este valor se niega a ejecutarse
+ENVIRONMENT = "test"
+
 TEST_DATABASE_NAME = "rentradar_test"
 
 _env = require(None, ("DB_HOST", "DB_PORT", "DB_USER", "DB_PASSWORD"))

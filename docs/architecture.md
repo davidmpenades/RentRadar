@@ -1,4 +1,4 @@
-# Arquitectura del backend
+# Arquitectura
 
 ## Estructura
 ```
@@ -23,6 +23,9 @@ backend/
     │   ├── text.py        # Detección de caracteres de control y su validador de Django
     │   ├── errors.py      # Error de dominio (solo campos y códigos) y traducción de errores de Django
     │   ├── db.py          # run_guarded: guardado protegido que traduce las restricciones de la BD a códigos
+    │   ├── api.py         # ApiError, códigos de error de la API y manejador de excepciones de DRF (formato único)
+    │   ├── negotiation.py # Negociación de contenido que siempre elige JSON y no importa rest_framework.views
+    │   ├── middleware.py  # mark_response_cookieless y el middleware que limpia las cookies de las respuestas marcadas
     │   ├── management/commands/wait_for_db.py
     │   └── migrations/    # 0001 declara la extensión PostGIS (necesaria en BD gestionadas)
     ├── users/             # Usuario identificado por email
@@ -35,8 +38,15 @@ backend/
     ├── assets/            # Bienes en alquiler y privacidad de su ubicación
     │   ├── location.py    # Función de aproximación (pura): centro de la celda de la cuadrícula
     │   ├── rules.py       # Reglas de los campos (puras): texto, precio, radio, estado, coordenadas
+    │   ├── zone.py        # parse_zone (puro): valida los cuatro límites de la zona y devuelve Zone o ZoneError
+    │   ├── selectors.py   # visible_assets_in_zone: bienes visibles de una zona, solo con campos públicos
     │   ├── models.py      # Asset: ubicación exacta y pública en campos separados, CHECK con nombre
     │   ├── services.py    # create_asset y update_asset: única vía de escritura de bienes
+    │   ├── serializers.py # Forma JSON de la lista pública (diez campos) y esquemas de respuesta de la documentación
+    │   ├── views.py       # PublicAssetListView y PublicListThrottle: la lista pública, sin sesión y con límite
+    │   ├── urls.py        # Ruta public/assets/, montada bajo api/v1/ en config/urls.py
+    │   ├── demo.py        # Datos puros de los 25 bienes de demostración (no importa el modelo)
+    │   ├── management/commands/create_demo_assets.py  # Comando de demostración: solo en development y test, en una transacción
     │   └── migrations/    # 0001 depende de categories.0001, no de la semilla
     └── <app>/
         ├── models.py
@@ -70,8 +80,34 @@ Los servicios no devuelven los errores de Django tal cual: los traducen a `Domai
 - Las FK de `owner` y `category` son `PROTECT` y sin `related_name`: borrar un usuario o una categoría con bienes se rechaza, también al revertir la semilla de categorías.
 - Ni los errores, ni `str()` ni `repr()` ni los logs contienen coordenadas. `test_leaks.py` lo comprueba con coordenadas centinela en 22 formas.
 
+## API pública
+La lista pública (`GET|HEAD /api/v1/public/assets/`) no autentica al visitante ni toca la sesión: `authentication_classes` está vacío y la respuesta no depende de cookies ni de cabeceras. El límite de peticiones (`PublicListThrottle`) se aplica antes de comprobar el método y de validar la zona, y cuenta por `REMOTE_ADDR` (`NUM_PROXIES = 0`). Todas las respuestas de la vista, errores incluidos, llevan la marca de `mark_response_cookieless` y salen sin cookies. Los errores salen con `Cache-Control: no-store`, y solo el 200 es cacheable. El módulo de negociación no importa `rest_framework.views`: DRF resuelve esa clase al importar la vista.
+
 ## Logs
 `django.db.backends` está fijado en INFO en los tres entornos (en producción, con el handler que redacta secretos): con DEBUG, Django registra cada consulta con sus valores, entre ellos el email y el hash.
 
 ## Arranque y aislamiento de tests
 El `ENTRYPOINT` del contenedor ejecuta `wait_for_db`, que reintenta la conexión hasta 60 s y, si no llega, falla con un mensaje fijo sin credenciales. Durante los tests, un fixture autouse de `backend/conftest.py` bloquea los sockets de internet (libpq y los sockets AF_UNIX siguen funcionando; el loopback TCP, 127.0.0.1 y ::1, también queda bloqueado) y una guarda aborta la sesión si la BD de test no contiene `test` o coincide con `DB_NAME`.
+
+## Frontend
+Vive en `frontend/` (React, TypeScript, Vite y Tailwind v4) y corre en el host, no en Docker. Las versiones están fijadas con `save-exact` y `package-lock.json` está en git; se instala con `npm ci --ignore-scripts`.
+
+```
+frontend/
+├── index.html
+├── vite.config.ts      # Proxy de /api, puerto 5173 y configuración de vitest (entorno node)
+├── eslint.config.js    # Incluye no-restricted-syntax contra dangerouslySetInnerHTML, innerHTML y setHTML
+├── .env.example        # VITE_MAP_STYLE_URL: estilo del mapa base (https)
+└── src/
+    ├── main.tsx        # Monta la aplicación
+    ├── styles/         # index.css: Tailwind, tokens de @theme y tipografía autoalojada
+    ├── i18n/es.ts      # Catálogo de mensajes en castellano
+    └── api/
+        ├── schema.gen.ts   # Tipos generados desde backend/openapi.json (no se edita a mano)
+        └── validate.ts     # Esquema Zod estricto y validateResponse
+```
+
+- **Contrato de la API**: `backend/openapi.json` es la descripción versionada de la API (no se sirve por HTTP). Se genera con `docker compose run --rm -T --no-deps --entrypoint "" -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en`. De ella salen los tipos con `npm run api:gen`, y `validateResponse` valida en ejecución cada respuesta con Zod y devuelve el tipo generado. Un test compara las claves del esquema con las del `openapi.json`. Si el esquema dejase de caber en el tipo generado, el build no compilaría.
+- **Mismo origen**: en desarrollo el navegador solo habla con `localhost:5173`; Vite reenvía `/api` a `http://localhost:8000`, sin cabeceras CORS.
+- **Comandos** (desde `frontend/`): `npm run dev`, `npx vitest run`, `npm run build`, `npx eslint .`, `npm run api:gen` y `npm run api:check`.
+- **Puertas de CI**: el backend regenera la descripción en `/tmp` y la compara con `backend/openapi.json` con `diff`; el job `frontend-quality` ejecuta vitest, build, eslint, `api:check` (los tipos generados corresponden al `openapi.json`) y `npm audit --omit=dev`.

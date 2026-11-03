@@ -1,0 +1,185 @@
+import "maplibre-gl/dist/maplibre-gl.css";
+import workerUrl from "maplibre-gl/dist/maplibre-gl-worker.mjs?worker&url";
+import {
+  AttributionControl,
+  GeoJSONSource,
+  Map as MapLibreMap,
+  NavigationControl,
+  setWorkerUrl,
+  type StyleSpecification,
+} from "maplibre-gl";
+import { useEffect, useRef, useState } from "react";
+
+import { es } from "../i18n/es";
+import type { CircleCollection } from "./circles";
+import { loadStyle } from "./loadStyle";
+import { INITIAL_CENTER, INITIAL_ZOOM, type Viewport } from "./viewport";
+import { createMapErrorListener, createTransformRequest, validateStyleUrl } from "./style";
+
+// Sin esto MapLibre busca el worker junto al módulo, y tras empaquetar no existe
+setWorkerUrl(workerUrl);
+
+const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
+const CIRCLES_SOURCE = "circles";
+const ACCENT = "#1647b8";
+
+const configuredStyleUrl: unknown = import.meta.env.VITE_MAP_STYLE_URL;
+const styleUrl = validateStyleUrl(
+  typeof configuredStyleUrl === "string" && configuredStyleUrl !== "" ? configuredStyleUrl : DEFAULT_STYLE_URL,
+);
+
+const EMPTY_CIRCLES: CircleCollection = { type: "FeatureCollection", features: [] };
+
+type MapViewProps = {
+  circles: CircleCollection;
+  styleFailed: boolean;
+  // Cada cambio de este contador devuelve el mapa a la vista inicial
+  resetSignal: number;
+  onStyleFailed: () => void;
+  onStyleRetry: () => void;
+  onReady: (viewport: Viewport) => void;
+  onMoveStart: () => void;
+  onMoveEnd: (viewport: Viewport) => void;
+};
+
+function readViewport(map: MapLibreMap): Viewport {
+  const bounds = map.getBounds();
+  const center = map.getCenter();
+  return {
+    bounds: { south: bounds.getSouth(), west: bounds.getWest(), north: bounds.getNorth(), east: bounds.getEast() },
+    latitude: center.lat,
+    longitude: center.lng,
+    zoom: map.getZoom(),
+  };
+}
+
+function addCircleLayers(map: MapLibreMap): void {
+  map.addSource(CIRCLES_SOURCE, { type: "geojson", data: EMPTY_CIRCLES });
+  map.addLayer({
+    id: "circles-fill",
+    type: "fill",
+    source: CIRCLES_SOURCE,
+    paint: { "fill-color": ACCENT, "fill-opacity": 0.12 },
+  });
+  map.addLayer({
+    id: "circles-line",
+    type: "line",
+    source: CIRCLES_SOURCE,
+    paint: { "line-color": ACCENT, "line-width": 1.5 },
+  });
+}
+
+function createMap(container: HTMLElement, style: StyleSpecification, allowedOrigins: string[]): MapLibreMap {
+  const map = new MapLibreMap({
+    container,
+    style,
+    center: [INITIAL_CENTER.longitude, INITIAL_CENTER.latitude],
+    zoom: INITIAL_ZOOM,
+    dragRotate: false,
+    pitchWithRotate: false,
+    maxPitch: 0,
+    attributionControl: false,
+    locale: es.map.locale,
+    transformRequest: createTransformRequest(allowedOrigins),
+  });
+  map.touchZoomRotate.disableRotation();
+  map.keyboard.disableRotation();
+  map.on("error", createMapErrorListener((error) => console.error(error)));
+  map.addControl(new AttributionControl({ compact: false }), "top-right");
+  map.addControl(new NavigationControl({ showCompass: false }), "top-right");
+  return map;
+}
+
+export function MapView({
+  circles,
+  styleFailed,
+  resetSignal,
+  onStyleFailed,
+  onStyleRetry,
+  onReady,
+  onMoveStart,
+  onMoveEnd,
+}: MapViewProps) {
+  const containerRef = useRef<HTMLDivElement>(null);
+  const handledResetSignal = useRef(resetSignal);
+  const [attempt, setAttempt] = useState(0);
+  const [loadedMap, setLoadedMap] = useState<MapLibreMap | null>(null);
+
+  useEffect(() => {
+    const container = containerRef.current;
+    if (!styleUrl) {
+      onStyleFailed();
+      return;
+    }
+    if (!container) return;
+
+    const controller = new AbortController();
+    let map: MapLibreMap | undefined;
+
+    async function start(url: URL, element: HTMLElement) {
+      try {
+        const style = await loadStyle(url.href, controller.signal);
+        if (controller.signal.aborted) return;
+        // new Map lanza si no hay WebGL2: se trata como un estilo que no carga
+        map = createMap(element, style as unknown as StyleSpecification, [url.origin, window.location.origin]);
+      } catch {
+        if (!controller.signal.aborted) onStyleFailed();
+        return;
+      }
+      const created = map;
+      created.once("load", () => {
+        addCircleLayers(created);
+        setLoadedMap(created);
+        onReady(readViewport(created));
+        // Una animación interrumpida emite moveend antes de la siguiente: no está quieto hasta que nadie la sigue
+        created.on("movestart", onMoveStart);
+        created.on("moveend", () => onMoveEnd(readViewport(created)));
+      });
+    }
+    void start(styleUrl, container);
+
+    return () => {
+      controller.abort();
+      map?.remove();
+      setLoadedMap(null);
+    };
+  }, [attempt, onStyleFailed, onReady, onMoveStart, onMoveEnd]);
+
+  useEffect(() => {
+    loadedMap?.getSource<GeoJSONSource>(CIRCLES_SOURCE)?.setData(circles);
+  }, [loadedMap, circles]);
+
+  useEffect(() => {
+    if (!loadedMap || resetSignal === handledResetSignal.current) return;
+    handledResetSignal.current = resetSignal;
+    // Sin essential: con movimiento reducido MapLibre pone la duración a cero
+    loadedMap.easeTo({ center: [INITIAL_CENTER.longitude, INITIAL_CENTER.latitude], zoom: INITIAL_ZOOM });
+  }, [loadedMap, resetSignal]);
+
+  function retry() {
+    onStyleRetry();
+    setAttempt((current) => current + 1);
+  }
+
+  if (styleFailed) {
+    return (
+      <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-4 text-center">
+        <p className="text-lg font-semibold">{es.map.styleError}</p>
+        <button
+          type="button"
+          onClick={retry}
+          className="inline-flex min-h-11 items-center rounded-lg bg-accent px-6 font-semibold text-white"
+        >
+          {es.map.retry}
+        </button>
+      </div>
+    );
+  }
+
+  // MapLibre pone position: relative al contenedor y pisaría a absolute: el hueco lo da el envoltorio
+  return (
+    <div className="absolute inset-0">
+      <div ref={containerRef} className="h-full w-full" />
+    </div>
+  );
+}

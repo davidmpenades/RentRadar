@@ -1,0 +1,34 @@
+@import "tailwindcss";
+@import "@fontsource-variable/bricolage-grotesque";
+
+@theme {
+  --color-accent: #1647b8;
+  --color-sky: #e8eeff;
+  --color-ink: #14181f;
+  --color-muted: #424b5a;
+  --color-lemon: #f5d547;
+  --font-sans: "Bricolage Grotesque Variable", sans-serif;
+}
+
+body {
+  background-color: var(--color-sky);
+  color: var(--color-ink);
+}
+
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* Los controles de MapLibre traen su propio foco y botones de 29 px */
+.maplibregl-map .maplibregl-ctrl-group button:focus:focus-visible,
+.maplibregl-map .maplibregl-ctrl-attrib-button:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+}
