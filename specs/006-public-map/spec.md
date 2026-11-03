@@ -34,6 +34,7 @@ La interacción entre la lista y el mapa (agrupación, selección en las dos dir
 - **Lista incompleta**: respuesta que no incluye todos los bienes visibles del cuadro pedido porque se ha alcanzado el tope.
 - **Círculo de un bien**: círculo centrado en la ubicación pública con un radio igual al radio de privacidad, medido sobre el terreno.
 - **Página del mapa**: página propia de RentRadar, con la dirección definitiva `/map`. Desde la 006 vive en esa dirección; la raíz y la dirección con barra final (`/map/`) se normalizan a ella sin añadir una entrada al historial.
+- **Zona de contenido**: la parte de la pantalla que ocupa cada página debajo de la barra superior que añade la spec 009. Mientras esa barra no exista, es la pantalla completa. El mapa, el panel y los mensajes de error ocupan la zona de contenido, nunca la barra.
 - **Vista inicial**: centro en 39,4699 N y 0,3763 O (Valencia) con zoom 11. En esa zona crea sus bienes el comando de demostración.
 - **Mapa base**: el estilo "positron" de OpenFreeMap, con su estilo, sus teselas, sus glifos y sus sprites, sin recolorear.
 - **Panel de resultados**: lista de bienes que acompaña al mapa.
@@ -83,7 +84,7 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - RF-7: SI el comando de demostración se ejecuta en un entorno distinto de `development` o `test`, o sin entorno definido, ENTONCES EL SISTEMA termina con un error y un mensaje fijo, sin escribir nada en la base de datos.
 
 ### Mapa
-- RF-8: CUANDO un visitante abre la raíz de RentRadar, la página del mapa o la página del mapa con barra final (`/map/`), EL SISTEMA lo lleva a la página del mapa (la raíz y la dirección con barra final se normalizan a ella, sin añadir una entrada al historial) y muestra el mapa a pantalla completa en la vista inicial, con el mapa base, el panel de resultados y la atribución del mapa base. La atribución queda visible en todo momento, sin que el panel la tape.
+- RF-8: CUANDO un visitante abre la raíz de RentRadar, la página del mapa o la página del mapa con barra final (`/map/`), EL SISTEMA lo lleva a la página del mapa (la raíz y la dirección con barra final se normalizan a ella, sin añadir una entrada al historial) y muestra el mapa en la vista inicial, ocupando toda la zona de contenido, con el mapa base, el panel de resultados y la atribución del mapa base. La atribución queda visible en todo momento, sin que el panel la tape.
 - RF-9: CUANDO el mapa lleva quieto el tiempo de espera, EL SISTEMA calcula el cuadro pedido. Si su latitud está dentro de −85…85, su longitud dentro de −180…180 y su área no supera el máximo menos el margen del cliente, pide sus bienes; si no, aplica RF-12. Cancela cualquier petición anterior sin terminar y nunca muestra su respuesta. El mapa queda quieto tras abrirlo, desplazarlo, acercarlo o alejarlo y tras redimensionar la ventana.
 - RF-10: EL SISTEMA dibuja cada bien de la última respuesta como su círculo, a cualquier zoom, sin marcador ni punto central. Los bienes con la misma ubicación pública y el mismo radio comparten un solo círculo.
 - RF-11: CUANDO llega una respuesta válida, EL SISTEMA hace lo siguiente:
@@ -97,9 +98,9 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
   - falla el estilo del mapa base, que no se descarga o no es válido.
 
   Según lo que falle:
-  - si falla el estilo, el mensaje y el botón «Reintentar» ocupan la pantalla completa y no se muestran ni el mapa ni el panel (ni su cabecera ni una caja vacía);
+  - si falla el estilo, el mensaje y el botón «Reintentar» ocupan la zona de contenido, con la barra superior de la spec 009 conservada, y no se muestran ni el mapa ni el panel (ni su cabecera ni una caja vacía);
   - si falla la petición de bienes, el panel sustituye la lista por el mensaje y el mapa deja de mostrar círculos.
-- RF-14: CUANDO un visitante abre una dirección de la web que no es la raíz, la página del mapa ni su versión con barra final, EL SISTEMA muestra una página «Página no encontrada» con un enlace «Ir al mapa» a la página del mapa.
+- RF-14: CUANDO un visitante abre una dirección de la web que no es la raíz, la página del mapa ni su versión con barra final, EL SISTEMA muestra, en la zona de contenido, una página «Página no encontrada» con un enlace «Ir al mapa» a la página del mapa.
 
 ## Requisitos no funcionales
 - **Permisos (constitución, punto 5)**:
@@ -110,7 +111,7 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - **Privacidad**:
   - Solo se usa la ubicación pública, para buscar y para dibujar. La lectura pública no carga la ubicación exacta de la base de datos.
   - Los datos del propietario se minimizan a ninguno.
-  - La dirección de la página no cambia al mover el mapa (ni fragmento ni parámetros), el historial no gana entradas y la vista no se guarda en el almacenamiento del navegador.
+  - La zona del mapa nunca va a la URL ni al almacenamiento del navegador: mover el mapa no cambia la dirección ni añade entradas al historial. La navegación entre páginas (`/map`, `/register` y después `/login`) sí usa el historial.
 - **Caché**:
   - Una respuesta correcta de la lista pública puede guardarse en cachés públicas, también la del navegador, durante 60 s.
   - Ninguna respuesta de error de la lista pública se guarda en ninguna caché: las de entrada inválida, método no admitido y límite superado llevan `Cache-Control: no-store`.
@@ -183,9 +184,10 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - Falla la red, el servidor tarda más del tiempo máximo de espera o el servidor devuelve un error 500: se muestra el mensaje correspondiente con «Reintentar» (RF-13).
 - La respuesta trae un bien con radio 1500, latitud `null`, precio no decimal o un campo de más: la respuesta entera se trata como inválida (RF-13, Desconfianza de la entrada).
 - La respuesta trae una categoría que el cliente no conoce: se muestra su nombre y la imagen de «Otros» (Definiciones: tarjeta).
-- El servidor del estilo no responde o devuelve algo que no es un estilo: se muestra el mensaje con «Reintentar» a pantalla completa, sin mapa ni panel, y no se piden bienes; al reintentar con éxito vuelven el mapa y el panel (RF-13). Si fallan teselas sueltas, el mapa base queda incompleto sin aviso (Fuera de alcance).
+- El servidor del estilo no responde o devuelve algo que no es un estilo: se muestra el mensaje con «Reintentar» en la zona de contenido, con la barra superior de la spec 009 conservada, sin mapa ni panel, y no se piden bienes; al reintentar con éxito vuelven el mapa y el panel (RF-13). Si fallan teselas sueltas, el mapa base queda incompleto sin aviso (Fuera de alcance).
 - El visitante abre la raíz: llega a la página del mapa, y el botón Atrás no le devuelve a la raíz (RF-8).
 - El visitante abre `/map/`: la dirección se normaliza a `/map` sin añadir una entrada al historial, igual que la raíz (RF-8).
+- El visitante pasa del mapa a otra página (por ejemplo `/register`) y vuelve con «Atrás»: la navegación entre páginas añade entradas al historial, y el mapa vuelve a su vista inicial, porque la zona nunca se guarda.
 - El visitante abre una dirección que no es la raíz, `/map` ni `/map/`: ve «Página no encontrada» con el enlace «Ir al mapa» (RF-14).
 - El comando de demostración se ejecuta dos veces: la segunda no crea nada (RF-6). Si falla a mitad, no queda nada creado (RF-6, una transacción). Fuera de `development` y `test`, o sin entorno definido, se niega sin escribir nada (RF-7).
 - La base de datos está vacía y el visitante está en la vista inicial: ve «No hay bienes en esta zona», sin el botón (RF-12).
@@ -204,7 +206,7 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - Aviso de fallo de teselas sueltas del mapa base: en la 006 solo se avisa del fallo del estilo y de la petición de bienes (RF-13).
 - Un aviso o una leyenda que explique qué significa el círculo: lo dicen el propio círculo y la tarjeta («Zona de unos 500 m», «1 km» o «2 km»). Si hiciera falta más, se decide en otra spec.
 - Recuentos por celda en lugar de bienes sueltos, por encima del tope o con zoom bajo, cuando haya volumen real.
-- Autenticación, sesiones y protección CSRF de las escrituras (spec 009).
+- Autenticación, sesiones y protección CSRF de las escrituras (specs 009 y 015).
 - Publicar bienes y fotos reales; las imágenes son genéricas por categoría (spec 010).
 - Despliegue (spec 011):
   - HTTPS y proxy inverso;
@@ -259,10 +261,10 @@ Los demás números los fija el plan: el paso de la cuadrícula del cuadro pedid
 - El control de desfase entre la descripción de la API y los tipos generados está en verde (Contrato).
 - Comprobación de punta a punta con el comando de demostración: en la vista inicial, el panel muestra 24 tarjetas, ninguna la del bien pausado, y el mapa dibuja sus círculos (RF-1, RF-6).
 - Verificación en navegador con Chrome DevTools a 375 y 1280 px, registrada en validation.md:
-  - redirección de la raíz y de `/map/` a `/map` sin entrada en el historial, página «Página no encontrada», círculos sin marcador, lista del panel, vacío y su salida, error del mapa base (mensaje y «Reintentar» a pantalla completa, sin panel ni cajas vacías) y de la API (simulados), y atribución visible;
+  - redirección de la raíz y de `/map/` a `/map` sin entrada en el historial, página «Página no encontrada», círculos sin marcador, lista del panel, vacío y su salida, error del mapa base (mensaje y «Reintentar» en la zona de contenido, sin panel ni cajas vacías) y de la API (simulados), y atribución visible;
   - recorrido con teclado de los controles (mapa, zoom, «Reintentar», «Volver a la zona inicial» y «Ir al mapa») y consola sin errores;
   - red solo hacia el propio origen y el proveedor del mapa base, este siempre por https, con aciertos de caché al mover el mapa dentro del mismo cuadro;
-  - la dirección de la página no cambia al mover el mapa.
+  - la dirección de la página no cambia al mover el mapa y la zona no se guarda en el almacenamiento del navegador.
 - pytest, ruff, vitest, build y eslint en verde.
 
 ## Dudas abiertas

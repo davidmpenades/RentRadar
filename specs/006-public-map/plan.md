@@ -1,4 +1,6 @@
 # Plan 006 — Mapa público: ver los bienes
+Partes de este plan quedan superadas por los /sdd-change del 2026-11-03 (barra superior de la 009 y navegación entre páginas): la spec manda.
+
 Spec: specs/006-public-map/spec.md (aprobada)
 
 ## Resumen
