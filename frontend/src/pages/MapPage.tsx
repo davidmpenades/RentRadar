@@ -1,36 +1,41 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchPublicAssets } from "../api/publicAssets";
-import type { components } from "../api/schema.gen";
-import { es } from "../i18n/es";
-import { circlesToFeatureCollection, uniqueCircles } from "../map/circles";
+import { circlesToFeatureCollection } from "../map/circles";
 import { loadAssetsForView } from "../map/loadAssets";
 import { MapView } from "../map/MapView";
 import type { VisibleBounds } from "../map/requestBox";
 import { createRequestScheduler, REQUEST_DELAY_MS } from "../map/scheduler";
-
-type PublicAsset = components["schemas"]["PublicAsset"];
+import { atInitialView, type Viewport } from "../map/viewport";
+import { ResultsPanel } from "../panel/ResultsPanel";
+import { INITIAL_REQUEST, requestCircles, startLoading, viewState, type RequestState } from "../state/viewState";
 
 export function MapPage() {
-  const [assets, setAssets] = useState<readonly PublicAsset[]>([]);
-  const circles = useMemo(() => circlesToFeatureCollection(uniqueCircles(assets)), [assets]);
+  const [request, setRequest] = useState<RequestState>(INITIAL_REQUEST);
+  const [styleFailed, setStyleFailed] = useState(false);
+  const [atInitial, setAtInitial] = useState(true);
+  const [resetSignal, setResetSignal] = useState(0);
   const boundsRef = useRef<VisibleBounds | null>(null);
   const schedulerRef = useRef<ReturnType<typeof createRequestScheduler<number>> | null>(null);
+
+  const view = viewState({ styleFailed, request, atInitialView: atInitial });
+  const circles = useMemo(() => circlesToFeatureCollection(requestCircles(request)), [request]);
 
   useEffect(() => {
     const scheduler = createRequestScheduler({
       delayMs: REQUEST_DELAY_MS,
       setTimer: (callback, ms) => window.setTimeout(callback, ms),
       clearTimer: (handle) => window.clearTimeout(handle),
-      run: (request) => {
+      run: (scheduled) => {
         const bounds = boundsRef.current;
         if (!bounds) return;
+        // Si el cuadro no se pide, el aviso llega en el mismo lote y «Buscando» no llega a pintarse
+        setRequest(startLoading);
         void loadAssetsForView({
           bounds,
-          request,
+          request: scheduled,
           fetchAssets: fetchPublicAssets,
-          show: setAssets,
-          clear: () => setAssets([]),
+          report: setRequest,
           logError: (error) => console.error(error),
         });
       },
@@ -42,8 +47,9 @@ export function MapPage() {
     };
   }, []);
 
-  const handleReady = useCallback((bounds: VisibleBounds) => {
-    boundsRef.current = bounds;
+  const handleReady = useCallback((viewport: Viewport) => {
+    boundsRef.current = viewport.bounds;
+    setAtInitial(atInitialView(viewport));
     schedulerRef.current?.runNow();
   }, []);
 
@@ -51,17 +57,36 @@ export function MapPage() {
     schedulerRef.current?.cancel();
   }, []);
 
-  const handleMoveEnd = useCallback((bounds: VisibleBounds) => {
-    boundsRef.current = bounds;
+  const handleMoveEnd = useCallback((viewport: Viewport) => {
+    boundsRef.current = viewport.bounds;
+    setAtInitial(atInitialView(viewport));
     schedulerRef.current?.schedule();
   }, []);
 
+  const handleStyleFailed = useCallback(() => setStyleFailed(true), []);
+
+  const handleStyleRetry = useCallback(() => {
+    setStyleFailed(false);
+    setRequest(INITIAL_REQUEST);
+  }, []);
+
+  const handleRetry = useCallback(() => schedulerRef.current?.runNow(), []);
+
+  const handleReset = useCallback(() => setResetSignal((current) => current + 1), []);
+
   return (
     <main className="relative h-dvh overflow-hidden">
-      <MapView circles={circles} onReady={handleReady} onMoveStart={handleMoveStart} onMoveEnd={handleMoveEnd} />
-      <aside className="absolute inset-x-0 bottom-0 z-10 h-[40dvh] min-h-60 overflow-y-auto bg-sky p-4 shadow-lg min-[900px]:inset-y-0 min-[900px]:right-auto min-[900px]:h-auto min-[900px]:w-[400px]">
-        <p className="text-sm text-muted">{es.map.notice}</p>
-      </aside>
+      <MapView
+        circles={circles}
+        styleFailed={styleFailed}
+        resetSignal={resetSignal}
+        onStyleFailed={handleStyleFailed}
+        onStyleRetry={handleStyleRetry}
+        onReady={handleReady}
+        onMoveStart={handleMoveStart}
+        onMoveEnd={handleMoveEnd}
+      />
+      <ResultsPanel view={view} onRetry={handleRetry} onReset={handleReset} />
     </main>
   );
 }

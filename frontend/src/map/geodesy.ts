@@ -1,3 +1,5 @@
+import type { VisibleBounds } from "./requestBox";
+
 export type GeoPoint = { latitude: number; longitude: number };
 
 export const EARTH_RADIUS_METERS = 6_371_008.8;
@@ -31,4 +33,15 @@ export function destinationPoint(origin: GeoPoint, bearingRadians: number, dista
       Math.cos(angularDistance) - Math.sin(latitude) * Math.sin(destinationLatitude),
     );
   return { latitude: toDegrees(destinationLatitude), longitude: toDegrees(destinationLongitude) };
+}
+
+const clamp = (value: number, low: number, high: number) => Math.min(Math.max(value, low), high);
+
+// Recortar latitud y longitud por separado da el punto más cercano con un error de centímetros a estas distancias
+export function distanceToBoundsMeters(point: GeoPoint, bounds: VisibleBounds): number {
+  const nearest = {
+    latitude: clamp(point.latitude, bounds.south, bounds.north),
+    longitude: clamp(point.longitude, bounds.west, bounds.east),
+  };
+  return haversineMeters(point, nearest);
 }

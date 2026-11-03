@@ -1,7 +1,7 @@
 import { describe, expect, it } from "vitest";
 
-import { circleKey, circlePolygon, circlesToFeatureCollection, uniqueCircles } from "./circles";
-import { haversineMeters } from "./geodesy";
+import { circleKey, circlePolygon, circlesToFeatureCollection, isCircleVisible, uniqueCircles } from "./circles";
+import { EARTH_RADIUS_METERS, haversineMeters } from "./geodesy";
 
 const RADII = [500, 1000, 2000];
 const LATITUDES = [0, 39.4699, -33.87, 60, 80, 89];
@@ -95,5 +95,76 @@ describe("circlesToFeatureCollection", () => {
 
   it("vacía la colección sin círculos", () => {
     expect(circlesToFeatureCollection([]).features).toEqual([]);
+  });
+});
+
+describe("isCircleVisible", () => {
+  const BOUNDS = { south: 39.4, north: 39.5, west: -0.45, east: -0.3 };
+  const METERS_PER_DEGREE = (EARTH_RADIUS_METERS * Math.PI) / 180;
+  const MIDDLE = { latitude: 39.45, longitude: -0.375 };
+  const metersPerDegreeOfLongitude = (latitude: number) => METERS_PER_DEGREE * Math.cos((latitude * Math.PI) / 180);
+
+  // Centro a los metros indicados de los bordes: positivo es hacia fuera
+  const centerAt = (northMeters: number, eastMeters: number) => ({
+    latitude: northMeters >= 0 ? BOUNDS.north + northMeters / METERS_PER_DEGREE : BOUNDS.south + northMeters / METERS_PER_DEGREE,
+    longitude:
+      eastMeters >= 0
+        ? BOUNDS.east + eastMeters / metersPerDegreeOfLongitude(BOUNDS.north)
+        : BOUNDS.west + eastMeters / metersPerDegreeOfLongitude(BOUNDS.north),
+  });
+  const circle = (center: { latitude: number; longitude: number }, radius: number) => ({ ...center, radius });
+
+  it("ve un círculo con el centro dentro de la zona", () => {
+    expect(isCircleVisible(circle(MIDDLE, 500), BOUNDS)).toBe(true);
+  });
+
+  it("ve un círculo de 2 km que asoma por el borde con el centro fuera", () => {
+    expect(isCircleVisible(circle(centerAt(1500, 0), 2000), BOUNDS)).toBe(true);
+  });
+
+  it("no ve el círculo de 500 m ni el de 1 km a 1,5 km del borde", () => {
+    expect(isCircleVisible(circle(centerAt(1500, 0), 500), BOUNDS)).toBe(false);
+    expect(isCircleVisible(circle(centerAt(1500, 0), 1000), BOUNDS)).toBe(false);
+  });
+
+  // Centro a una distancia del borde indicado, a media altura o a media anchura de la zona
+  const beyondEdge = {
+    norte: (meters: number) => ({ latitude: BOUNDS.north + meters / METERS_PER_DEGREE, longitude: MIDDLE.longitude }),
+    sur: (meters: number) => ({ latitude: BOUNDS.south - meters / METERS_PER_DEGREE, longitude: MIDDLE.longitude }),
+    este: (meters: number) => ({
+      latitude: MIDDLE.latitude,
+      longitude: BOUNDS.east + meters / metersPerDegreeOfLongitude(MIDDLE.latitude),
+    }),
+    oeste: (meters: number) => ({
+      latitude: MIDDLE.latitude,
+      longitude: BOUNDS.west - meters / metersPerDegreeOfLongitude(MIDDLE.latitude),
+    }),
+  };
+
+  it.each(["norte", "sur", "este", "oeste"] as const)("por el borde %s: asoma con el centro a 1 m menos del radio y no con 1 m más", (edge) => {
+    expect(isCircleVisible(circle(beyondEdge[edge](999), 1000), BOUNDS)).toBe(true);
+    expect(isCircleVisible(circle(beyondEdge[edge](1001), 1000), BOUNDS)).toBe(false);
+  });
+
+  it.each([
+    ["noreste", 1, 1],
+    ["noroeste", 1, -1],
+    ["sureste", -1, 1],
+    ["suroeste", -1, -1],
+  ])("en la esquina %s cuenta la distancia a la esquina, no a cada borde", (_name, north, east) => {
+    // A 800 m de cada borde (1131 m de la esquina): cada eje por separado cabría en 1 km, la esquina no
+    expect(isCircleVisible(circle(centerAt(north * 800, east * 800), 1000), BOUNDS)).toBe(false);
+    // A 700 m de cada borde (990 m de la esquina)
+    expect(isCircleVisible(circle(centerAt(north * 700, east * 700), 1000), BOUNDS)).toBe(true);
+  });
+
+  it("ve un círculo tangente por dentro de un milímetro y no uno que se queda a un milímetro", () => {
+    expect(isCircleVisible(circle(centerAt(1000 - 0.001, 0), 1000), BOUNDS)).toBe(true);
+    expect(isCircleVisible(circle(centerAt(1000 + 0.001, 0), 1000), BOUNDS)).toBe(false);
+  });
+
+  it("ve un círculo que envuelve toda la zona sin tener el centro dentro", () => {
+    const tiny = { south: 39.4, north: 39.4001, west: -0.4, east: -0.3999 };
+    expect(isCircleVisible(circle({ latitude: 39.405, longitude: -0.4 }, 2000), tiny)).toBe(true);
   });
 });

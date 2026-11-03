@@ -89,12 +89,16 @@
   - Commit: `feat(map): render base map and asset circles`
   - Hecho cuando: vitest, build y eslint en verde; DevTools sin errores en consola.
 
-- [ ] **T10. Lista del panel, vacío y errores de la API.** RF-11, RF-12, RF-13 (petición)
+- [x] **T10. Lista del panel, vacío y errores de la API.** RF-11, RF-12, RF-13 (petición)
   - PARAR: OK previo (texto público como salida: XSS). Depende de T9.
   - Qué: src/panel/{ResultsPanel.tsx, AssetCard.tsx, header.ts}, src/state/viewState.ts, src/i18n/format.ts, src/assets/categories/*.svg y sus tests. Sobre la petición que cablea la T9, añade `viewState`, el panel y los errores visibles de la petición.
   - Por qué: tarjetas no interactivas y una sola altura, como fija la spec. Se descarta reutilizar el HTML del prototipo (usa `innerHTML`).
   - Pruebas: vitest de `headerText`, `isCircleVisible`, `viewState` y formato del precio; título como texto con `react-dom/server` (mutación). DevTools a 375 y 1280 px.
   - La página decide qué muestra el panel si `classifyFailure` propaga un error inesperado (solo clasifica causas conocidas): nunca se queda en «Buscando bienes…».
+  - Estado único en `MapPage`: la petición es `loading | loaded | notRequested | failed`, y los círculos y el panel se derivan de él. `loaded` guarda la zona visible del momento de pedir (`getBounds`), nunca el cuadro de `requestBox`; las tarjetas son los bienes cuyo círculo toca esa zona y los círculos del mapa son todos los de la respuesta.
+  - Un error no clasificado llega al panel como el tipo `unexpected` de `viewState` («Ha ocurrido un error inesperado. Vuelve a intentarlo.», con «Reintentar») y va a `console.error`. Con el estilo fallido el panel muestra solo el aviso.
+  - Imágenes: se elige por `Map` slug → URL, con `?no-inline` para que salgan como ficheros. Un test lee los SVG con `?raw` y exige una lista blanca de etiquetas y atributos.
+  - Mutaciones: título con `dangerouslySetInnerHTML`, búsqueda de la imagen con `in`, SVG con referencia externa, tarjetas filtradas con el cuadro pedido y pintar sin `isCurrent()`.
   - Movimiento reducido: el movimiento propio de «Volver a la zona inicial» no pasa `essential`, se comprueba en DevTools con la emulación y las transiciones CSS del panel se desactivan con `prefers-reduced-motion`.
   - Revisar: textos del catálogo y medidas del panel.
   - Commit: `feat(panel): list assets with empty and error states`

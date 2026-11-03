@@ -13,15 +13,13 @@ import { useEffect, useRef, useState } from "react";
 import { es } from "../i18n/es";
 import type { CircleCollection } from "./circles";
 import { loadStyle } from "./loadStyle";
-import type { VisibleBounds } from "./requestBox";
+import { INITIAL_CENTER, INITIAL_ZOOM, type Viewport } from "./viewport";
 import { createMapErrorListener, createTransformRequest, validateStyleUrl } from "./style";
 
 // Sin esto MapLibre busca el worker junto al módulo, y tras empaquetar no existe
 setWorkerUrl(workerUrl);
 
 const DEFAULT_STYLE_URL = "https://tiles.openfreemap.org/styles/positron";
-const INITIAL_CENTER: [number, number] = [-0.3763, 39.4699];
-const INITIAL_ZOOM = 11;
 const CIRCLES_SOURCE = "circles";
 const ACCENT = "#1647b8";
 
@@ -34,14 +32,25 @@ const EMPTY_CIRCLES: CircleCollection = { type: "FeatureCollection", features: [
 
 type MapViewProps = {
   circles: CircleCollection;
-  onReady: (bounds: VisibleBounds) => void;
+  styleFailed: boolean;
+  // Cada cambio de este contador devuelve el mapa a la vista inicial
+  resetSignal: number;
+  onStyleFailed: () => void;
+  onStyleRetry: () => void;
+  onReady: (viewport: Viewport) => void;
   onMoveStart: () => void;
-  onMoveEnd: (bounds: VisibleBounds) => void;
+  onMoveEnd: (viewport: Viewport) => void;
 };
 
-function visibleBounds(map: MapLibreMap): VisibleBounds {
+function readViewport(map: MapLibreMap): Viewport {
   const bounds = map.getBounds();
-  return { south: bounds.getSouth(), west: bounds.getWest(), north: bounds.getNorth(), east: bounds.getEast() };
+  const center = map.getCenter();
+  return {
+    bounds: { south: bounds.getSouth(), west: bounds.getWest(), north: bounds.getNorth(), east: bounds.getEast() },
+    latitude: center.lat,
+    longitude: center.lng,
+    zoom: map.getZoom(),
+  };
 }
 
 function addCircleLayers(map: MapLibreMap): void {
@@ -64,7 +73,7 @@ function createMap(container: HTMLElement, style: StyleSpecification, allowedOri
   const map = new MapLibreMap({
     container,
     style,
-    center: INITIAL_CENTER,
+    center: [INITIAL_CENTER.longitude, INITIAL_CENTER.latitude],
     zoom: INITIAL_ZOOM,
     dragRotate: false,
     pitchWithRotate: false,
@@ -81,15 +90,28 @@ function createMap(container: HTMLElement, style: StyleSpecification, allowedOri
   return map;
 }
 
-export function MapView({ circles, onReady, onMoveStart, onMoveEnd }: MapViewProps) {
+export function MapView({
+  circles,
+  styleFailed,
+  resetSignal,
+  onStyleFailed,
+  onStyleRetry,
+  onReady,
+  onMoveStart,
+  onMoveEnd,
+}: MapViewProps) {
   const containerRef = useRef<HTMLDivElement>(null);
-  const [failed, setFailed] = useState(styleUrl === undefined);
+  const handledResetSignal = useRef(resetSignal);
   const [attempt, setAttempt] = useState(0);
   const [loadedMap, setLoadedMap] = useState<MapLibreMap | null>(null);
 
   useEffect(() => {
     const container = containerRef.current;
-    if (!styleUrl || !container) return;
+    if (!styleUrl) {
+      onStyleFailed();
+      return;
+    }
+    if (!container) return;
 
     const controller = new AbortController();
     let map: MapLibreMap | undefined;
@@ -101,17 +123,17 @@ export function MapView({ circles, onReady, onMoveStart, onMoveEnd }: MapViewPro
         // new Map lanza si no hay WebGL2: se trata como un estilo que no carga
         map = createMap(element, style as unknown as StyleSpecification, [url.origin, window.location.origin]);
       } catch {
-        if (!controller.signal.aborted) setFailed(true);
+        if (!controller.signal.aborted) onStyleFailed();
         return;
       }
       const created = map;
       created.once("load", () => {
         addCircleLayers(created);
         setLoadedMap(created);
-        onReady(visibleBounds(created));
+        onReady(readViewport(created));
         // Una animación interrumpida emite moveend antes de la siguiente: no está quieto hasta que nadie la sigue
         created.on("movestart", onMoveStart);
-        created.on("moveend", () => onMoveEnd(visibleBounds(created)));
+        created.on("moveend", () => onMoveEnd(readViewport(created)));
       });
     }
     void start(styleUrl, container);
@@ -121,19 +143,25 @@ export function MapView({ circles, onReady, onMoveStart, onMoveEnd }: MapViewPro
       map?.remove();
       setLoadedMap(null);
     };
-  }, [attempt, onReady, onMoveStart, onMoveEnd]);
+  }, [attempt, onStyleFailed, onReady, onMoveStart, onMoveEnd]);
 
   useEffect(() => {
     loadedMap?.getSource<GeoJSONSource>(CIRCLES_SOURCE)?.setData(circles);
   }, [loadedMap, circles]);
 
+  useEffect(() => {
+    if (!loadedMap || resetSignal === handledResetSignal.current) return;
+    handledResetSignal.current = resetSignal;
+    // Sin essential: con movimiento reducido MapLibre pone la duración a cero
+    loadedMap.easeTo({ center: [INITIAL_CENTER.longitude, INITIAL_CENTER.latitude], zoom: INITIAL_ZOOM });
+  }, [loadedMap, resetSignal]);
+
   function retry() {
-    // Con una dirección que no pasa la validación no hay nada que repetir
-    setFailed(styleUrl === undefined);
+    onStyleRetry();
     setAttempt((current) => current + 1);
   }
 
-  if (failed) {
+  if (styleFailed) {
     return (
       <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-4 text-center">
         <p className="text-lg font-semibold">{es.map.styleError}</p>

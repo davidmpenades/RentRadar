@@ -31,122 +31,127 @@ function setup(options: { fetch?: Fetch } = {}) {
   const controller = new AbortController();
   const state = { current: true };
   const fetchAssets = vi.fn(options.fetch ?? (async () => LIST));
-  const show = vi.fn();
-  const clear = vi.fn();
+  const report = vi.fn();
   const logError = vi.fn();
   const run = (bounds = VALENCIA) =>
     loadAssetsForView({
       bounds,
       request: { signal: controller.signal, isCurrent: () => state.current },
       fetchAssets,
-      show,
-      clear,
+      report,
       logError,
     });
-  return { run, state, controller, fetchAssets, show, clear, logError };
+  return { run, state, controller, fetchAssets, report, logError };
 }
 
 describe("loadAssetsForView", () => {
-  it("pide el cuadro calculado con la señal de la petición y pinta lo que llega", async () => {
-    const { run, fetchAssets, show, clear, controller } = setup();
+  it("pide el cuadro calculado con la señal de la petición y reporta la lista con la zona visible", async () => {
+    const { run, fetchAssets, report, controller } = setup();
 
     await run();
 
     const result = requestBox(VALENCIA);
     expect(result.kind).toBe("ok");
     expect(fetchAssets).toHaveBeenCalledExactlyOnceWith(result.kind === "ok" ? result.box : null, controller.signal);
-    expect(show).toHaveBeenCalledExactlyOnceWith([ASSET]);
-    expect(clear).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledExactlyOnceWith({ kind: "loaded", list: LIST, visibleBounds: VALENCIA });
   });
 
-  it("pinta una lista vacía como lista vacía, sin vaciar", async () => {
-    const { run, show, clear } = setup({ fetch: async () => ({ results: [], incomplete: false }) });
+  it("guarda la zona visible que recibe y no el cuadro pedido", async () => {
+    const { run, report } = setup();
     await run();
-    expect(show).toHaveBeenCalledExactlyOnceWith([]);
-    expect(clear).not.toHaveBeenCalled();
+    const reported = report.mock.calls[0]![0];
+    expect(reported.visibleBounds).toEqual(VALENCIA);
   });
 
-  it("no pinta la respuesta de una petición que ya no es la actual", async () => {
-    const { run, state, show, clear, logError } = setup();
+  it("reporta una lista vacía como cargada", async () => {
+    const empty = { results: [], incomplete: false };
+    const { run, report } = setup({ fetch: async () => empty });
+    await run();
+    expect(report).toHaveBeenCalledExactlyOnceWith({ kind: "loaded", list: empty, visibleBounds: VALENCIA });
+  });
+
+  it("no reporta la respuesta de una petición que ya no es la actual", async () => {
+    const { run, state, report, logError } = setup();
     state.current = false;
 
     await run();
 
-    expect(show).not.toHaveBeenCalled();
-    expect(clear).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });
 
   it("comprueba la vigencia al llegar la respuesta, no al pedir", async () => {
     let resolve: (list: typeof LIST) => void = () => {};
-    const { run, state, show } = setup({ fetch: () => new Promise((r) => (resolve = r)) });
+    const { run, state, report } = setup({ fetch: () => new Promise((r) => (resolve = r)) });
 
     const pending = run();
     state.current = false;
     resolve(LIST);
     await pending;
 
-    expect(show).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
   });
 
   it.each([
-    ["demasiado grande", { south: 30, west: -10, north: 50, east: 10 }],
-    ["fuera de rango en latitud", { south: 84, west: 0, north: 85, east: 0.5 }],
-    ["fuera de rango en longitud", { south: 0, west: 179.9, north: 0.5, east: 180 }],
-  ])("vacía los círculos y no pide si el cuadro es %s", async (_name, bounds) => {
-    const { run, fetchAssets, show, clear } = setup();
+    ["demasiado grande", { south: 30, west: -10, north: 50, east: 10 }, "tooLarge"],
+    ["fuera de rango en latitud", { south: 84, west: 0, north: 85, east: 0.5 }, "outOfRange"],
+    ["fuera de rango en longitud", { south: 0, west: 179.9, north: 0.5, east: 180 }, "outOfRange"],
+  ])("no pide y reporta notRequested si el cuadro es %s", async (_name, bounds, reason) => {
+    const { run, fetchAssets, report } = setup();
     await run(bounds);
     expect(fetchAssets).not.toHaveBeenCalled();
-    expect(show).not.toHaveBeenCalled();
-    expect(clear).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledExactlyOnceWith({ kind: "notRequested", reason });
+  });
+
+  it("reporta notRequested antes de ceder el control, sin pasar por una espera", async () => {
+    const { run, report } = setup();
+    const pending = run({ south: 30, west: -10, north: 50, east: 10 });
+    expect(report).toHaveBeenCalledTimes(1);
+    await pending;
   });
 
   it.each([
-    ["servidor", new HttpStatusError(500)],
-    ["límite", new HttpStatusError(429)],
-    ["red", new NetworkError()],
-    ["tiempo agotado", new RequestTimeoutError()],
-    ["respuesta no válida", new InvalidResponseError()],
-  ])("vacía los círculos, sin registrar nada, si falla por %s", async (_name, error) => {
-    const { run, show, clear, logError } = setup({ fetch: async () => Promise.reject(error) });
+    ["servidor", new HttpStatusError(500), "server"],
+    ["límite", new HttpStatusError(429), "throttled"],
+    ["red", new NetworkError(), "network"],
+    ["tiempo agotado", new RequestTimeoutError(), "timeout"],
+    ["respuesta no válida", new InvalidResponseError(), "invalid"],
+  ])("reporta el fallo, sin registrar nada, si falla por %s", async (_name, error, failure) => {
+    const { run, report, logError } = setup({ fetch: async () => Promise.reject(error) });
     await run();
-    expect(clear).toHaveBeenCalledTimes(1);
-    expect(show).not.toHaveBeenCalled();
+    expect(report).toHaveBeenCalledExactlyOnceWith({ kind: "failed", failure });
     expect(logError).not.toHaveBeenCalled();
   });
 
-  it("vacía los círculos y registra un error que classifyFailure no clasifica", async () => {
+  it("reporta unexpected y registra un error que classifyFailure no clasifica", async () => {
     const bug = new TypeError("fallo del código");
-    const { run, show, clear, logError } = setup({ fetch: async () => Promise.reject(bug) });
+    const { run, report, logError } = setup({ fetch: async () => Promise.reject(bug) });
     await run();
-    expect(clear).toHaveBeenCalledTimes(1);
+    expect(report).toHaveBeenCalledExactlyOnceWith({ kind: "failed", failure: "unexpected" });
     expect(logError).toHaveBeenCalledExactlyOnceWith(bug);
-    expect(show).not.toHaveBeenCalled();
   });
 
   it("no hace nada al cancelar la petición", async () => {
     const abort = new DOMException("Aborted", "AbortError");
-    const { run, show, clear, logError } = setup({ fetch: async () => Promise.reject(abort) });
+    const { run, report, logError } = setup({ fetch: async () => Promise.reject(abort) });
     await run();
-    expect(show).not.toHaveBeenCalled();
-    expect(clear).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });
 
   it("ignora el fallo de una petición que ya no es la actual", async () => {
-    const { run, state, show, clear, logError } = setup({ fetch: async () => Promise.reject(new NetworkError()) });
+    const { run, state, report, logError } = setup({ fetch: async () => Promise.reject(new NetworkError()) });
     state.current = false;
     await run();
-    expect(show).not.toHaveBeenCalled();
-    expect(clear).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });
 
   it("ignora también un error inesperado de una petición que ya no es la actual", async () => {
-    const { run, state, clear, logError } = setup({ fetch: async () => Promise.reject(new TypeError("bug")) });
+    const { run, state, report, logError } = setup({ fetch: async () => Promise.reject(new TypeError("bug")) });
     state.current = false;
     await run();
-    expect(clear).not.toHaveBeenCalled();
+    expect(report).not.toHaveBeenCalled();
     expect(logError).not.toHaveBeenCalled();
   });
 });

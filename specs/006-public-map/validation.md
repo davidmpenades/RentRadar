@@ -569,3 +569,154 @@ Se comprobó en el código de `maplibre-gl` 6.14.0 y en el navegador. En el cód
 | `no-preference` | 817, 807 y 822 | Los 500 ms de la animación más la espera |
 
 Ningún código nuestro pasa `essential`, así que el zoom de los botones, el teclado y el arrastre no se animan con movimiento reducido. Queda comprobar en la T10 el movimiento propio de «Volver a la zona inicial».
+
+## Decisiones previas a la lista del panel (T10)
+Fecha: 2026-11-03 · Sin código nuevo.
+
+| # | Tema | Decisión o comprobación |
+|---|---|---|
+| 1 | Caso que RF-13 no enumeraba | Un error que `classifyFailure` no clasifica (un fallo del código, no de la red ni del servidor) llega al panel como el tipo `unexpected`, que existe solo en `viewState`; `classifyFailure` no cambia. Mensaje: «Ha ocurrido un error inesperado. Vuelve a intentarlo.», con «Reintentar». El error además va a `console.error`. Sin esto el panel se quedaría en «Buscando bienes…» |
+| 2 | Zona de las tarjetas | El estado de la petición guarda la zona visible del momento de pedir (los límites de `getBounds`), nunca el cuadro que calcula `requestBox`. Las tarjetas son los bienes cuyo círculo toca esa zona; los círculos del mapa son todos los de la respuesta. Un bien dentro del cuadro pedido (ampliado 2 km) pero con el círculo fuera de la zona visible tiene círculo y no tiene tarjeta |
+| 3 | Fallo del estilo y panel | Con el estilo fallido el panel muestra solo el aviso de ubicación aproximada, sin cabecera ni lista: el «Reintentar» está ya sobre el mapa. No se lanza ninguna petición de bienes |
+| 4 | `?no-inline` en Vite 8.3.5 | Build de prueba fuera del repo con las 11 imágenes de `prototypes/006-mapa/datos/fotos`: con `import.meta.glob(..., {query: "?no-inline", import: "default"})` salen 11 ficheros `assets/<nombre>-<hash>.svg` y las rutas son `/assets/<nombre>-<hash>.svg`; con `?url` salen las 11 como `data:image/svg+xml`. Se usa `?no-inline` para que la CSP de la 011 pueda ser `img-src 'self'` |
+| 5 | Imágenes de categoría | Los 11 nombres coinciden con los 11 slugs de `0002_seed_categories.py`. Sin `href`, `xlink`, `url(`, `<script>`, `<style>`, `<image>`, `<foreignObject>`, `data:` ni atributos `on*` una vez quitado el `xmlns`; solo `svg`, `rect`, `circle`, `ellipse` y `path` |
+
+## Lista del panel, vacío y errores (T10)
+Fecha: 2026-11-03 · Ficheros nuevos: `frontend/src/panel/{ResultsPanel.tsx, AssetCard.tsx, header.ts, categoryImage.ts}`, `frontend/src/state/viewState.ts`, `frontend/src/map/viewport.ts`, `frontend/src/i18n/format.ts`, `frontend/src/assets/categories/*.svg` (11, copiadas de `prototypes/006-mapa/datos/fotos`, que no está en git) y sus tests. Modificados: `frontend/src/map/{loadAssets.ts, MapView.tsx, circles.ts, geodesy.ts}`, `frontend/src/pages/MapPage.tsx`, `frontend/src/i18n/es.ts` y los tests de `loadAssets`, `circles` y `geodesy`. No se ha accedido a la BD de desarrollo, no se han tocado servicios de Docker ni se han añadido dependencias. El navegador solo hizo GET a la API pública por el proxy de Vite.
+
+Antes de implementar, los tests nuevos fallaron por la razón esperada: `Cannot find module './format'`, `'./header'`, `'./categoryImage'`, `'./AssetCard'`, `'./viewport'` y `'./viewState'`; en los ficheros ya existentes, `isCircleVisible is not a function`, `distanceToBoundsMeters is not a function` y `report is not a function` (el contrato antiguo de `loadAssetsForView`).
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests | `cd frontend && npx vitest run` | 539 passed en 18 ficheros (nuevos: `format` 37, `viewport` 3, `header` 18, `categoryImage` 25, `categorySvg` 45, `ResultsPanel` 24, `viewState` 20, `zone` 1; ampliados: `circles` 41, `geodesy` 18, `loadAssets` 18) |
+| Build | `npm run build` | En verde. Las 11 imágenes salen como `assets/<nombre>-<hash>.svg` y ninguna como `data:` (ni en el JS ni en el worker) |
+| Lint | `npx eslint .` | Sin incidencias |
+| Tipos generados al día | `npm run api:check` | Salida 0 |
+| Caracteres invisibles en los ficheros tocados | Detección por categoría Unicode (Cf, Zs, Mn, Cc, Zl, Zp) | Ninguno |
+
+### Decisiones de la implementación
+- **Estado único.** `MapPage` guarda `request: loading | loaded | notRequested | failed`. `loaded` lleva la lista y la zona visible del momento de pedir (el argumento `bounds` de `loadAssetsForView`, nunca el cuadro de `requestBox`). Las tarjetas (`viewState`) y los círculos (`requestCircles`) se derivan de él; `loading` lo pone la página al arrancar la petición, y si el cuadro no se pide `notRequested` llega en el mismo lote y «Buscando bienes…» no se pinta.
+- **`loadAssetsForView`** cambia `show` y `clear` por `report(outcome)`. La comprobación de `isCurrent()` sigue antes de reportar, tanto en éxito como en fallo; un `AbortError` no reporta. Un error que `classifyFailure` propaga se reporta como `failed` con tipo `unexpected` y va a `console.error`.
+- **Fallo del estilo.** `MapPage` guarda `styleFailed` y `MapView` es controlado (`styleFailed`, `onStyleFailed`, `onStyleRetry`). Con el estilo fallido no se pide nada y el panel solo lleva el aviso.
+- **Volver a la zona inicial.** `resetSignal` (contador) que `MapView` convierte en `easeTo` sin `essential`. `onReady` y `onMoveEnd` entregan además centro y zoom para `atInitialView` (centro ±1e-6°, zoom ±0,01). Las constantes de la vista inicial pasan de `MapView` a `src/map/viewport.ts`, que no importa maplibre-gl.
+- **Cabecera con una tarjeta y lista incompleta.** «Mostrando 1 bien. Puede haber más: acerca el mapa para verlos todos» (singular), probado en `header.test.ts`.
+- **Precio.** `parsePriceCents` lee los céntimos del texto con una expresión regular y los trata como entero; `formatPrice` los pasa a `Intl.NumberFormat("es-ES")` en euros, sin decimales si los céntimos son cero. Una unidad desconocida lanza `RangeError` (la respuesta ya se validó con Zod; el tipo generado la trae como `string`).
+- **Imágenes.** `Map` slug → URL construido con `import.meta.glob(..., {query: "?no-inline", import: "default"})`. En dev la URL lleva la consulta `?no-inline` (`/src/assets/categories/ebike.svg?no-inline`) y carga; en el build, `assets/ebike-<hash>.svg`.
+
+### Error máximo de `isCircleVisible`
+El punto más cercano de la zona se halla recortando latitud y longitud por separado (`distanceToBoundsMeters`). En un borde de meridiano el punto más cercano real no está a la misma latitud, y el recorte se desvía de él. Medido contra el punto más cercano buscado por muestreo denso de los cuatro bordes (latitudes 0, 39,47, 60 y 80; distancias de 100 m a 4 km; radios 500, 1000 y 2000): el máximo observado fue de unos 2 cm (0,004 % de un círculo de 500 m), y a 84° de latitud con un círculo de 2 km también unos 2 cm, en parte error del propio muestreo. Está muy por debajo del 1 % del radio (5 m para 500 m). `geodesy.test.ts` lo fija con un umbral de 5 cm para cada una de esas latitudes. No hace falta una alternativa.
+
+### Lo observado en el navegador
+Chrome DevTools, `npm run dev` (puerto 5173, parado al acabar) y la API real de localhost:8000 por el proxy. Para los estados simulados se sobrescribió `window.fetch` con un `initScript` (la API real no se tocó). 375×667 con `emulate` móvil y 1280×800.
+
+| # | Comprobación | 1280 px | 375 px |
+|---|---|---|---|
+| 1 | Vista inicial con la API real | 24 tarjetas, cabecera «24 bienes en esta zona»; ninguna es «Piscina infantil con toldo» (el único bien pausado de `demo.py`) y los 24 títulos son los 24 activos | Igual |
+| 2 | Panel | Columna de 400×800 px a la izquierda; cabecera y aviso fijos arriba y la lista con su propio desplazamiento (el aviso no se mueve al desplazar) | 375×267 px abajo (40dvh); lista de unos 139 px visibles, es decir, una tarjeta y media |
+| 3 | Atribución y zoom | Visibles arriba a la derecha, sin tapar | Igual |
+| 4 | Desbordamiento horizontal | `scrollWidth` 1280, sin desbordamiento | `scrollWidth` 375 |
+| 5 | Imágenes | 24 `<img alt="">` cargadas (`naturalWidth` > 0 tras desplazar la lista); ningún elemento interactivo dentro de las tarjetas | Igual |
+| 6 | Círculos | Dibujados para los 24 bienes (los pares de la misma ubicación y radio comparten círculo) | Igual |
+| 7 | Zoom que deja fuera algunos círculos | — | Con zoom alto salen 7 tarjetas: solo las cuyo círculo toca la zona visible, incluida la parte tapada por el panel |
+| 8 | Vacío | «No hay bienes en esta zona» con «Volver a la zona inicial» (44 px) tras acercar; al pulsarlo, el mapa vuelve y el botón desaparece | Igual |
+| 9 | Zoom bajo | — | «Acerca el mapa para ver los bienes» con el botón (44 px); al pulsarlo vuelve la vista inicial y salen las 24 tarjetas |
+| 10 | Lista incompleta | — | «Mostrando 24 bienes. Puede haber más: acerca el mapa para verlos todos»; con una sola tarjeta, «Mostrando 1 bien. Puede haber más: acerca el mapa para verlos todos» |
+| 11 | Errores | — | Red, 500, 429, respuesta no válida y `RangeError`: cada uno con su mensaje, «Reintentar» de 44 px y sin tarjetas ni círculos; con la API real, «Reintentar» recupera la lista y la región anuncia «Buscando bienes…» y el resultado. El `RangeError` deja un único `console.error`; los demás, ninguno |
+| 12 | Tiempo agotado | — | A los 10 s, «El servidor tarda demasiado en responder.» con «Reintentar» que se recupera |
+| 13 | Estilo fallido (la descarga del estilo rechaza) | — | «No se ha podido cargar el mapa.» con «Reintentar» sobre el mapa; el panel solo lleva el aviso (sin cabecera, lista ni botones) y la API de bienes no recibe ninguna petición. Al reparar la descarga y pulsar «Reintentar» salen 24 tarjetas |
+| 14 | Región de estado | Un `MutationObserver` registra «Buscando bienes…» y el resultado una vez por petición; cuando el fallo llega al instante, solo el resultado | Igual |
+| 15 | Teclado | Tab llega a «Volver a la zona inicial» y Enter lo activa; contorno de 3 px #14181F con 2 px de separación | Tab llega a «Reintentar» (44 px) con el mismo contorno y Enter relanza la petición |
+| 16 | Consola | Sin errores; solo los dos avisos conocidos del estilo positron | Igual |
+
+### Movimiento reducido
+Se mide con `performance.now()` el tiempo entre pulsar «Volver a la zona inicial» y el inicio de la petición normal que sigue al `moveend`.
+
+| Emulación | Milisegundos | Qué significa |
+|---|---|---|
+| `no-preference` | 811 | 500 ms de animación del `easeTo` más los 300 ms del planificador |
+| `reduce` | 306, 304 y 304 | Solo los 300 ms de espera: sin animación |
+
+Con `reduce`, `transition-duration` de los botones del panel vale `0s`; con `no-preference` vale `0.15s` (`motion-safe:transition-colors`).
+
+### Pruebas de mecanismo
+Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t10-mutations/`, mutación, `npx vitest run` completo y restauración desde la copia.
+
+| # | Mutación | Fichero | sha256 antes → mutado → después (completos) | Tests que fallan |
+|---|---|---|---|---|
+| 1 | El título pintado con `dangerouslySetInnerHTML` | `src/panel/AssetCard.tsx` | `aa8e938c1c667ed9a75aaf28c119112746f7b633c31f5845169da5012cdc9d8b` → `aa31e69756190d25252a430cc1c419f68ce37a6c9c43514d8ae32f0dd0c66a3b` → `aa8e938c1c667ed9a75aaf28c119112746f7b633c31f5845169da5012cdc9d8b` | 5: los 4 de `el título … sale escapado y dentro de <bdi>` (`<img src=x onerror=alert(1)>`, `<script>`, `"><svg onload=alert(1)>` y `&lt;b&gt;`) y `pinta una tarjeta y una imagen por bien, todas con alt vacío`. ESLint también rechaza la línea (`24:16 error No se inyecta HTML  no-restricted-syntax`) |
+| 2 | Búsqueda de la imagen con `in` sobre un objeto | `src/panel/categoryImage.ts` | `4549d633545f8ebe6e36b5feec6566f3ddf9a50dc49663ff4d45f750d32a7bfd` → `7288e538deaa319139499de6cc4caba43398d054acc4151f331c68d2b657ecef` → `4549d633545f8ebe6e36b5feec6566f3ddf9a50dc49663ff4d45f750d32a7bfd` | 7: `un slug hostil (…) da la imagen de other y siempre una cadena` con `__proto__`, `constructor`, `toString`, `hasOwnProperty`, `valueOf` y `__defineGetter__`, y `usa la imagen de other si el slug es hostil` |
+| 3 | Un SVG con `<image href="https://evil.example/x.png"/>` | `src/assets/categories/other.svg` | `c875ff67540f8eaef55187772cd49bcf831e627cfb95d33184b06970a5b26c78` → `be4abfb1263cb9028b68f871e7244dd3a50cb8e81295ec88c96dcb07f1e4dec5` → `c875ff67540f8eaef55187772cd49bcf831e627cfb95d33184b06970a5b26c78` | 3, de `other.svg`: `solo contiene etiquetas de la lista blanca…`, `solo usa atributos de la lista blanca…` y `no tiene referencias externas ni scripts` |
+| 4 | `loaded` guarda los límites del cuadro pedido en vez de la zona visible | `src/map/loadAssets.ts` | `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` → `1319b1e88db08c6345f03cc00eaeab1100a9df60738cdfeae37db9a6b00e9c2b` → `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` | 4: `zone.test.ts > un bien dentro del cuadro pedido con el círculo fuera de la zona visible tiene círculo y no tarjeta` (el test clave) y tres de `loadAssets.test.ts` que comprueban la zona reportada |
+| 5 | Reportar sin comprobar `isCurrent()` | `src/map/loadAssets.ts` | `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` → `c74fa8bcbe92c14db0319132f2c55877347667f72642c6704a448b96c76ce527` → `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` | 4: `no reporta la respuesta de una petición que ya no es la actual`, `comprueba la vigencia al llegar la respuesta, no al pedir`, `ignora el fallo de una petición que ya no es la actual` e `ignora también un error inesperado de una petición que ya no es la actual` |
+
+Ninguna mutación sobrevivió. Cada restauración coincide con el sha256 original.
+
+### Revisión con web-design-guidelines (solo informe, sin cambios fuera de alcance)
+- Pasa: región `aria-live` siempre presente, `alt=""` en imágenes decorativas, dimensiones explícitas y `loading="lazy"`, números tabulares, `Intl` para precio, contorno de foco con `:focus-visible`, `overscroll-contain` en la lista, texto largo con `line-clamp` y `wrap-anywhere`, sin `transition: all`.
+- `ResultsPanel.tsx`: al recuperarse tras «Reintentar» el botón desaparece y el foco cae en `body`; el resultado sí se anuncia. Resuelto en «Arreglos posteriores a la revisión».
+- `AssetCard.tsx`: el precio y la unidad se separan con espacios normales, así que «12,50 € / día» puede partirse antes de «/»; un espacio duro lo evitaría. Resuelto en «Arreglos posteriores a la revisión».
+- `ResultsPanel.tsx`: la lista llega a 200 tarjetas sin virtualizar; las imágenes son perezosas y ligeras, y el tope lo fija la API.
+- El panel no tiene encabezados (la página tampoco tiene `h1`); la cabecera es el texto de la región de estado.
+- La lista con desplazamiento no tiene elementos enfocables; Chrome y Firefox la hacen enfocable por su cuenta.
+
+### Decisiones para revisar
+- **Parpadeo de los círculos.** Resuelto: `loading` conserva la última respuesta cargada solo para los círculos (ver «Arreglos posteriores a la revisión»).
+- **Altura de la lista en móvil.** A 375×667 el aviso y la cabecera ocupan unos 130 px de los 267 del panel y la lista deja ver una tarjeta y media. Es la altura fija del plan (`40dvh`, mínimo 240 px); la 007 reordena las alturas.
+- **Foco tras «Reintentar».** Resuelto: el foco pasa a la cabecera del panel (ver «Arreglos posteriores a la revisión»).
+- **Imagen por categoría de la semilla.** Solo hay 11 imágenes; una categoría nueva usa «other» hasta que se añada la suya.
+
+### Arreglos posteriores a la revisión
+Fecha: 2026-11-03 · Tres cambios sobre la T10. Ficheros: `frontend/src/state/viewState.ts` y su test, `frontend/src/pages/MapPage.tsx`, `frontend/src/panel/{ResultsPanel.tsx, AssetCard.tsx}` y `frontend/src/panel/ResultsPanel.test.ts`. El texto del aviso de ubicación aproximada no se ha tocado. Sin BD de desarrollo, sin Docker y sin dependencias nuevas. Esta subsección sustituye a las dos primeras decisiones de «Decisiones para revisar» (parpadeo de los círculos y foco tras «Reintentar») y al punto del espacio entre precio y unidad de la revisión de diseño.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests | `cd frontend && npx vitest run` | 552 passed en 18 ficheros (`viewState` 28, `ResultsPanel` 29, `zone` 1) |
+| Build | `npm run build` | En verde |
+| Lint | `npx eslint .` | Sin incidencias |
+| Tipos generados al día | `npm run api:check` | Salida 0 |
+| Caracteres invisibles en los ficheros tocados | Detección por categoría Unicode | Ninguno |
+
+Antes de implementar, los tests nuevos fallaron por la razón esperada: `startLoading is not a function`, la cabecera sin `tabindex` (`Target cannot be null or undefined`) y `</span> / día` sin espacio duro.
+
+#### 1. Los círculos no parpadean al mover
+- `RequestState` pasa a `loading` con `previous`: la última respuesta cargada o `null`. `startLoading(estado)` la guarda desde `loaded`, la conserva desde `loading` y la descarta desde `failed` y `notRequested`. `requestCircles` dibuja los círculos de `loaded` y los de `loading.previous`. `viewState` no la usa: en `loading` el panel sigue mostrando «Buscando bienes…» sin lista, y las tarjetas no se derivan de la respuesta anterior.
+- `MapPage` pone `setRequest(startLoading)` al arrancar la petición. Tras un fallo del estilo vuelve a `INITIAL_REQUEST`.
+- Tests: `viewState.test.ts` comprueba `loading` con previa (círculos de esa respuesta), `loading` sin previa, `failed` y `notRequested` (ninguno), `loading` tras `loaded` y `loading` tras `loading` (no pierden la respuesta) y que en `loading` no salgan tarjetas.
+
+| Comprobación en navegador | 1280 px | 375 px |
+|---|---|---|
+| Círculos de la fuente `circles` (`serialize().data.features.length`, leído desde el estado de React de `MapView`) en la vista inicial | 23 (24 bienes; el par de la misma ubicación y radio comparte círculo) | 23 |
+| Petición ralentizada a 1,5 s tras alejar (muestreo cada 100 ms) | 23 durante «24 bienes en esta zona» y durante «Buscando bienes…» (sin parpadeo); el panel solo muestra «Buscando bienes…» sin tarjetas | Igual |
+| Fallo de red | 0 círculos | 0 |
+| «Reintentar» con petición lenta tras un fallo | 0 círculos mientras carga y 23 al llegar la respuesta | — |
+| «Acerca el mapa para ver los bienes» | 0 círculos | — |
+
+#### 2. El foco pasa a la cabecera
+- La cabecera del panel (el contenedor de la región de estado y de los botones, no el aviso) lleva `tabIndex={-1}` y un `ref`; «Reintentar» y «Volver a la zona inicial» le pasan el foco al activarse, mientras el botón sigue montado. Enfocar un contenedor no cambia el texto de la región `aria-live`, así que no hay un anuncio extra.
+- Test (`ResultsPanel.test.ts`, `react-dom/server`): con resultados, error, vacío y estilo fallido hay un solo `tabindex="-1"`, antes de la región de estado y de los botones, y el contenedor se cierra antes del aviso.
+
+| Comprobación en navegador con Enter | 1280 px (1277×700 al ejecutarlo) | 375 px |
+|---|---|---|
+| Enter sobre «Volver a la zona inicial» | `document.activeElement` es el `<div tabindex="-1">` que contiene la región de estado; sigue siéndolo cuando el estado cambia y el botón desaparece | Igual |
+| Enter sobre «Reintentar» (desde Tab) | Igual | Igual (el botón se enfocó por código y Enter fue una pulsación real) |
+| Anuncios de la región tras pulsar | «Buscando bienes…» y el resultado, sin ninguno más | — |
+
+#### 3. Espacio duro entre el importe y «/ unidad»
+- `AssetCard.tsx` usa la entidad `&nbsp;` de JSX (sin carácter invisible literal). El test comprueba en el HTML `</span>` + espacio duro (construido con `String.fromCharCode(160)`) + `/ día`, y que no aparece `</span> / día`.
+- En el navegador, el precio de la primera tarjeta es `8[NBSP]€[NBSP]/ día` y ocupa una sola línea a 375 y 1280 px.
+
+#### Tarjetas visibles a 375 px con el aviso actual
+Con 375×667: el panel mide 267 px y la lista 138 px. La primera tarjeta (115 px) se ve entera y de la segunda (135 px) asoman unos 22 px; es decir, una tarjeta y un resto. Las tarjetas de dos líneas de título miden 135 px.
+
+#### Pruebas de mecanismo
+Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t10-mutations/`, mutación, `npx vitest run` completo y restauración desde la copia.
+
+| # | Mutación | Fichero | sha256 antes → mutado → después (completos) | Tests que fallan |
+|---|---|---|---|---|
+| 6a | `startLoading` descarta la respuesta cargada | `src/state/viewState.ts` | `07717570bb63365690e7da66e71e47776461c6a51a8dc05524a4e28ecf77e081` → `961cf506268b9f33e822e94f76d81c132f7645c91d1eae5b7622070b770a24b9` → `07717570bb63365690e7da66e71e47776461c6a51a8dc05524a4e28ecf77e081` | 3: `requestCircles > mientras se espera una respuesta nueva conserva los círculos…`, `startLoading > guarda la respuesta cargada…` y `startLoading > no pierde la última respuesta cargada…` |
+| 6b | `requestCircles` ignora la respuesta previa de `loading` | `src/state/viewState.ts` | igual antes → `5ee5a142c6c70800a7be5bbf857136d9cf813b447a8172e73305afa385c6fe0a` → igual después | 1: `requestCircles > mientras se espera una respuesta nueva conserva los círculos…` |
+| 6c | `startLoading` desde `loading` descarta la previa | `src/state/viewState.ts` | igual antes → `c69ed861d63ba910cd79a48b91d4045aed68ae6a7ce33ab818f080fd25f8d4a8` → igual después | 1: `startLoading > no pierde la última respuesta cargada si empieza otra petición mientras se espera` |
+| 6d | `startLoading` conserva la última respuesta tras `failed` o `notRequested` | `src/state/viewState.ts` | igual antes → `232a952708bdf3464bba3cfecc8baf8add65bd2ecb1ae8a1b149af560b299aa5` → igual después | 3: `tras failed…`, `tras notRequested…` y `tras un fallo con una respuesta cargada antes…` |
+| 5 (repetida) | Reportar sin comprobar `isCurrent()` | `src/map/loadAssets.ts` | `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` → `c74fa8bcbe92c14db0319132f2c55877347667f72642c6704a448b96c76ce527` → `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` | 4, los mismos que la vez anterior |
+
+Ninguna mutación sobrevivió. Cada restauración coincide con el sha256 original.

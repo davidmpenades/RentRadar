@@ -258,7 +258,8 @@ Spec: specs/006-public-map/spec.md (aprobada)
   - servidor: «Ha habido un problema en el servidor.»;
   - límite: «Has hecho muchas búsquedas seguidas. Espera un momento y vuelve a intentarlo.»;
   - respuesta no válida: «No se han podido leer los bienes.»;
-  - estilo: «No se ha podido cargar el mapa.».
+  - estilo: «No se ha podido cargar el mapa.»;
+  - error inesperado (fallo no clasificado): «Ha ocurrido un error inesperado. Vuelve a intentarlo.».
 - «Página no encontrada»: título y enlace «Ir al mapa» (`<a href="/map">`, 44 px).
 - Identidad:
   - tokens `@theme`: accent #1647B8, sky #E8EEFF, ink #14181F, muted #424B5A, y lemon #F5D547 (definido, sin uso hasta la 007);

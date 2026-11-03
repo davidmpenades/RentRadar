@@ -1,4 +1,5 @@
-import { destinationPoint, type GeoPoint } from "./geodesy";
+import { destinationPoint, distanceToBoundsMeters, type GeoPoint } from "./geodesy";
+import type { VisibleBounds } from "./requestBox";
 
 export type CircleSource = GeoPoint & { privacy_radius: number };
 
@@ -38,6 +39,11 @@ export function uniqueCircles(sources: readonly CircleSource[]): Circle[] {
     }
   }
   return [...circles.values()];
+}
+
+// Una tarjeta por cada círculo que se ve aunque sea en parte: su punto más cercano de la zona cae dentro del radio
+export function isCircleVisible(circle: GeoPoint & { radius: number }, bounds: VisibleBounds): boolean {
+  return distanceToBoundsMeters(circle, bounds) <= circle.radius;
 }
 
 export function circlesToFeatureCollection(circles: readonly Circle[]): CircleCollection {
