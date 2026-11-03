@@ -63,7 +63,7 @@
   - Commit: `build(frontend): scaffold app with api contract`
   - Hecho cuando: `npm ci --ignore-scripts`, vitest, build y eslint en verde; CI en verde con los dos controles de desfase.
 
-- [ ] **T8. Cuadro pedido, planificador y petición a la API.** RF-9, RF-12 (decisión de no pedir), RF-13 (contrato)
+- [x] **T8. Cuadro pedido, planificador y petición a la API.** RF-9, RF-12 (decisión de no pedir), RF-13 (contrato)
   - Depende de T7.
   - Qué: src/map/{requestBox.ts, scheduler.ts}, src/api/publicAssets.ts y sus tests.
   - Por qué: funciones puras con reloj y temporizador inyectados. Se descarta `toFixed`: daría claves distintas para el mismo cuadro.
@@ -86,6 +86,7 @@
   - Qué: src/panel/{ResultsPanel.tsx, AssetCard.tsx, header.ts}, src/state/viewState.ts, src/i18n/format.ts, src/assets/categories/*.svg y sus tests.
   - Por qué: tarjetas no interactivas y una sola altura, como fija la spec. Se descarta reutilizar el HTML del prototipo (usa `innerHTML`).
   - Pruebas: vitest de `headerText`, `isCircleVisible`, `viewState` y formato del precio; título como texto con `react-dom/server` (mutación). DevTools a 375 y 1280 px.
+  - La página decide qué muestra el panel si `classifyFailure` propaga un error inesperado (solo clasifica causas conocidas): nunca se queda en «Buscando bienes…».
   - Revisar: textos del catálogo y medidas del panel.
   - Commit: `feat(panel): list assets with empty and error states`
   - Hecho cuando: vitest, build y eslint en verde. Después, la validación de punta a punta (24 tarjetas en la vista inicial) queda registrada en validation.md.

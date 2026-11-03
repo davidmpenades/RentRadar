@@ -458,3 +458,37 @@ Fichero temporal sin versionar con un caso por línea, ya borrado (`eslint src/l
 |---|---|
 | `frontend/src/api/validate.ts` | `2faff7e0cb1a834e69739e8647b03993dabdb7e25904d2282ce09ef74e076068` |
 | `frontend/src/api/validate.test.ts` | `1f4c6dceed962e8f0ab6376f43c656546454061e0eba329160868c159ddc342e` |
+
+## Cuadro pedido, planificador y petición (T8)
+Fecha: 2026-11-03 · Ficheros: `frontend/src/map/{requestBox.ts, scheduler.ts}`, `frontend/src/api/publicAssets.ts` y sus tests (`requestBox.test.ts`, `scheduler.test.ts`, `publicAssets.test.ts`). No se ha accedido a la BD de desarrollo ni se han añadido dependencias. Los tests corren en entorno node, sin importar maplibre-gl, con un reloj y un fetch falsos que respetan `AbortSignal`; no usan `vi.useFakeTimers`, `AbortSignal.timeout` ni `AbortSignal.any`. Sin pruebas de mecanismo: la tarea no toca privacidad ni seguridad.
+
+Antes de implementar, los tres ficheros de tests fallaron por la razón esperada: `Cannot find module './requestBox'`, `'./scheduler'` y `'./publicAssets'`. Los cambios posteriores (fallo de red y margen en longitud) también se escribieron antes y fallaron por la suya: `NetworkError` sin definir y los índices de 80 y 85 grados distintos de los esperados.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests | `cd frontend && npx vitest run` | 197 passed en 4 ficheros: `validate` 81, `publicAssets` 64, `requestBox` 40, `scheduler` 12 |
+| Build | `npm run build` | `tsc -b && vite build` en verde (los tests también pasan por `tsc`) |
+| Lint | `npx eslint .` y `npx eslint` sobre los seis ficheros nuevos | Sin incidencias |
+| Tipos generados al día | `npm run api:check` | Salida 0 |
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Índices de `requestBox` calculados a mano frente al código | Coinciden en los cuadros de referencia: cerca del ecuador, 59–61 de latitud norte y sur, 80 y 85 grados, zona que cruza el ecuador, 2200 y 2201 celdas, 6 y 6,3 grados cuadrados, y los bordes de ±85 y ±180 |
+| 2 | Margen en longitud | Usa la latitud más alejada del ecuador del cuadro ya ampliado en latitud, antes de redondear. Se desvía de la fórmula del plan, que usaba la latitud de la zona visible: con ella faltaban unos 1,1 m de los 2 km a 60 grados, 3,6 m a 80 y 7,2 m a 85. Dos zonas con el borde escogido a mano (80 y 85 grados) dan índices distintos con una fórmula y con la otra: zona 79,5 / 5,103665 / 80 / 7,39633, oeste 99 y este 151 (con la latitud visible serían 100 y 150); zona 84,5 / 0,7051 / 84,96 / 0,7949, oeste 9 y este 21 (con la visible, 10 y 20). El margen no anula el coseno: tras comprobar ±85 en latitud, el cuadro ampliado no pasa de 85 grados |
+| 3 | `Math.ceil` de un valor entre −1 y 0 | Da `-0` (p. ej. norte −0,03: `north` sale `-0`); `boxToQuery` lo escribe `0.00` porque formatea desde el entero con `index < 0` y `Math.abs` |
+| 4 | Estados distintos de 200 y `Content-Type` que no es JSON, con `Response` real de Node | `bodyUsed` sigue en `false`: no se lee el cuerpo |
+| 5 | Cuerpo que nunca llega | Con un `ReadableStream` que falla al abortar la señal, `response.json()` rechaza con su motivo y el fallo sale como tiempo agotado; el temporizador sigue vivo al llegar las cabeceras (1 pendiente) y se cancela al validar (0) |
+| 6 | Tiempo máximo | A 9 999 ms sigue pendiente; a 10 000 ms falla con la señal interna abortada y sin temporizadores. La instancia real arma un temporizador de 10 000 ms |
+| 7 | Cancelación externa | Con la señal ya abortada no se llama a `fetch` ni se arranca ningún temporizador; abortada durante la petición o el cuerpo sale el mismo `AbortError`, sin temporizadores y con el listener quitado; `classifyFailure` lo propaga |
+| 8 | Fallo de red | Solo la llamada a `fetch` se envuelve: su `TypeError` pasa a `NetworkError`, con mensaje fijo, sin dirección ni mensaje original ni `cause`. Un `TypeError` de `response.json()` o de las cabeceras se propaga y `classifyFailure` no lo clasifica; si el temporizador ya disparó, el `TypeError` de `fetch` sale como tiempo agotado |
+| 9 | Respuesta de Vite | `index.html` con 200 y `text/html` se clasifica como respuesta no válida antes de `JSON.parse` |
+| 10 | Contrato | Un test lee `backend/openapi.json` (`resolveJsonModule`): la ruta pedida es una de sus rutas y los cuatro parámetros de consulta son `east`, `north`, `south` y `west` |
+| 11 | Planificador | Solo pide el último movimiento a los 300 ms; la anterior se aborta al vencer la espera (no al programar); `cancel()` repetido no falla y deja pedir de nuevo; una respuesta vieja no se pinta aunque llegue después de la nueva |
+
+### Decisiones para revisar
+- Paso de la cuadrícula de 0,05 grados, margen del cliente de 0,5 grados cuadrados (máximo de 2200 celdas) y espera de 300 ms (`REQUEST_DELAY_MS`), tal como fija el plan.
+- `createRequestScheduler` entrega a `run` la señal y `isCurrent()`; quien pide comprueba `isCurrent()` antes de pintar o de mostrar un error.
+- `classifyFailure` solo clasifica causas conocidas y propaga el resto (anotado en la T10).
+- Margen en longitud con la latitud del cuadro ya ampliado y no con la de la zona visible, que es lo que decía el plan (observación 2).
+- Un `TypeError` solo es un fallo de red si sale de la llamada a `fetch` (`NetworkError`); en cualquier otro punto es un error del código y se propaga.
