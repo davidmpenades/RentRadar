@@ -492,3 +492,80 @@ Antes de implementar, los tres ficheros de tests fallaron por la razón esperada
 - `classifyFailure` solo clasifica causas conocidas y propaga el resto (anotado en la T10).
 - Margen en longitud con la latitud del cuadro ya ampliado y no con la de la zona visible, que es lo que decía el plan (observación 2).
 - Un `TypeError` solo es un fallo de red si sale de la llamada a `fetch` (`NetworkError`); en cualquier otro punto es un error del código y se propaga.
+
+## Comprobaciones previas al mapa base (T9)
+Fecha: 2026-11-03 · No se ha tocado código ni la BD de desarrollo. Las dos peticiones a OpenFreeMap fueron un GET cada una, sin cookies ni cabeceras propias.
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | `maplibre-gl` 6.14.0 y su export | No tiene export por defecto: `import maplibregl from "maplibre-gl"` falla en el build con `MISSING_EXPORT`. Se importa con nombre (`import { Map, setWorkerUrl } from "maplibre-gl"`). El CSS entra por `maplibre-gl/dist/maplibre-gl.css` (`exports` admite `./dist/*`) |
+| 2 | Worker con Vite 8.3.5 | Por defecto busca `maplibre-gl-worker.mjs` junto al módulo (`src/util/web_worker.ts:32-41` y `:74`), que tras el empaquetado no existe. El worker no importa nada. `?url` lo copia tal cual como `.mjs`; `?worker&url` lo reempaqueta como `.js`. Se elige `?worker&url` y `setWorkerUrl` (`src/index.ts:177`) para no depender del tipo MIME de `.mjs` en producción. Build de prueba hecho; la carga real del worker, en dev y con `vite preview`, queda para la verificación en navegador de la T9 |
+| 3 | Estilo positron (`GET https://tiles.openfreemap.org/styles/positron`) | 200, `application/json`, 25 202 bytes, `access-control-allow-origin: *`. Versión 8, 55 capas (background, fill, line, symbol). Fuentes: raster `https://tiles.openfreemap.org/natural_earth/ne2sr/{z}/{x}/{y}.png` y vectorial por TileJSON `https://tiles.openfreemap.org/planet`. Sprite `https://tiles.openfreemap.org/sprites/ofm_f384/ofm`. Glifos `https://tiles.openfreemap.org/fonts/{fontstack}/{range}.pbf` |
+| 4 | TileJSON (`GET https://tiles.openfreemap.org/planet`) | 200, `application/json`, 19 254 bytes. `tiles`: `https://tiles.openfreemap.org/planet/20261101_080013_pt/{z}/{x}/{y}.pbf`, con versión en la ruta. No lleva `url` |
+| 5 | Hosts a los que el navegador hace peticiones | Solo `tiles.openfreemap.org`. Los demás hosts (`openfreemap.org`, `openmaptiles.org`, `openstreetmap.org`) aparecen únicamente como enlaces en el HTML de `attribution` del TileJSON y no generan peticiones hasta que se pulsan |
+| 6 | Atribución en `maplibre-gl` 6.14.0 | Las opciones de la fuente pisan al TileJSON (`src/source/load_tilejson.ts:39`, `extend(tileJSON, options)`). `AttributionControl` pasa cada texto por `DOM.sanitize` (lista blanca de etiquetas y atributos, `src/util/dom.ts`) y no por `innerHTML` directo; aun así el texto y los enlaces serían del tercero. El TileJSON de OpenFreeMap trae enlaces sin `rel`, de modo que `rel="noopener noreferrer"` distingue en el navegador la atribución propia |
+
+## Mapa base, círculos y fallo del estilo (T9)
+Fecha: 2026-11-03 · Ficheros: `frontend/src/app/{route.ts, NotFoundPage.tsx}`, `frontend/src/main.tsx`, `frontend/src/map/{style.ts, loadStyle.ts, loadAssets.ts, geodesy.ts, circles.ts, MapView.tsx}`, `frontend/src/pages/MapPage.tsx`, `frontend/src/i18n/es.ts`, `frontend/src/styles/index.css` y sus tests (`route.test.ts`, `style.test.ts`, `loadStyle.test.ts`, `loadAssets.test.ts`, `geodesy.test.ts`, `circles.test.ts`). `loadStyle.ts` (descarga del estilo con timeout, tope y validación) y `loadAssets.ts` (decisión de pintar o vaciar los círculos) son módulos puros añadidos para poder probar esas decisiones en node. No se ha accedido a la BD de desarrollo, no se han tocado servicios de Docker ni se han añadido dependencias. Los tests corren en entorno node sin importar maplibre-gl ni React, con fetch y temporizadores falsos que respetan `AbortSignal`.
+
+Antes de implementar, los seis ficheros de tests nuevos fallaron por la razón esperada (`Cannot find module './route'`, `'./geodesy'`, `'./circles'`, `'./style'`, `'./loadStyle'` y `'./loadAssets'`); los demás ficheros (los de la T7 y la T8) siguieron en verde.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests | `cd frontend && npx vitest run` | 344 passed en 10 ficheros: `validate` 81, `publicAssets` 64, `style` 57, `requestBox` 40, `circles` 28, `loadStyle` 23, `loadAssets` 16, `geodesy` 12, `scheduler` 12, `route` 11 |
+| Build | `npm run build` | `tsc -b && vite build` en verde (aviso de chunk > 500 kB por maplibre-gl, esperado) |
+| Lint | `npx eslint .` y `npx eslint` sobre los ficheros tocados | Sin incidencias |
+| Tipos generados al día | `npm run api:check` | Salida 0 |
+
+### Lo observado en el navegador
+Chrome DevTools, servidor de desarrollo (`npm run dev`, puerto 5173) y `npm run build` + `npx vite preview` (puerto 4173), con la API real de localhost:8000 a través del proxy de Vite. Los dos servidores se pararon al acabar.
+
+| # | Comprobación | 1280 px | 375 px |
+|---|---|---|---|
+| 1 | `/` y `/map/` | Acaban en `/map`; el historial sube una entrada por la navegación y ninguna por la redirección; Atrás desde `/` vuelve a la página anterior (`/otra`), no a la raíz | Igual |
+| 2 | Mapa | Pantalla completa (1280×800 en `.maplibregl-map`), mapa base visible en la vista inicial, panel de 400 px a la izquierda con todo el alto y el aviso | Panel de 375×267 px abajo (40dvh) con el aviso; sin desbordamiento horizontal (`scrollWidth` 375) |
+| 3 | Atribución | Visible arriba a la derecha: «OpenFreeMap © OpenMapTiles Data from OpenStreetMap». Los tres enlaces llevan `rel="noopener noreferrer"` y `target="_blank"`, que el TileJSON no trae. Con `AttributionControl({compact: false})` y sin `customAttribution` no sale el enlace «MapLibre» | Igual; el texto ocupa 325 px y llega a solaparse con el rótulo de un pueblo del mapa |
+| 4 | Controles | Zoom «Acercar» y «Alejar» de 44×44 px bajo la atribución; sin brújula | Igual |
+| 5 | Círculos | Dibujados desde la API real (25 bienes de demostración, 24 activos); sin marcador ni punto central; con zoom bajo se dibujan todos, solapados | Igual |
+| 6 | Peticiones de bienes | Una sola petición a `/api/v1/public/assets/` tras la carga. Tres clics en «Alejar» con 60 ms entre ellos y ocho pulsaciones de flecha dan una sola petición tras parar | Una petición tras la carga |
+| 7 | Red | Solo `localhost:5173` (o `4173`) y `https://tiles.openfreemap.org`; la fuente woff2 sale del propio origen | Igual |
+| 8 | Zoom fuera de rango | Con zoom bajo no se pide y los círculos desaparecen | — |
+| 9 | Petición de bienes con 500 (fetch simulado) | — | Los círculos desaparecen; sin errores en consola |
+| 10 | `/otra` | «Página no encontrada» y enlace «Ir al mapa» de 123×44 px con foco visible, que lleva a `/map` con Enter | Igual (123×44 px) |
+| 11 | Teclado | Tab recorre mapa (con etiqueta «Mapa de bienes en alquiler»), tres enlaces de atribución, «Acercar» y «Alejar»; las flechas mueven el mapa y `=` acerca; foco de 3 px #14181F con 2 px de separación | «Ir al mapa» y «Reintentar» con el mismo foco |
+| 12 | Estilo bloqueado (`VITE_MAP_STYLE_URL=http://tiles.openfreemap.org/styles/positron`, servidor aparte) | — | «No se ha podido cargar el mapa.» con «Reintentar» (44 px) en lugar del mapa; ninguna petición salvo al propio origen; Enter sobre «Reintentar» mantiene el mensaje; consola sin mensajes |
+| 13 | Fallo de red del estilo (fetch simulado, falla dos veces) | — | Mensaje y «Reintentar»; al pulsarlo se descarga el estilo, se crea el mapa y salen los círculos |
+| 14 | `vite preview` | El worker se carga desde `/assets/maplibre-gl-worker-*.js`; mapa, círculos y una petición de bienes | Igual |
+| 15 | `BlockedUrlError` en MapLibre | Con un estilo hostil en una página aparte (fuentes `http://evil.example/…` y `https://evil2.example/…`) y `createTransformRequest`, los errores llegan al evento `error` como la misma instancia de `BlockedUrlError`, con el mensaje fijo, y no sale ninguna petición hacia esos hosts | — |
+
+### Consola
+Durante la verificación salió un único error, `Failed to load resource: 404` de `/favicon.ico`, que `index.html` no declaraba (preexistente de la T7). Se arregló en esta tarea con `<link rel="icon" href="data:,">` y se volvió a comprobar en dev (2026-11-03): sin errores. Hay dos avisos (`warn`) de MapLibre sobre los filtros de las capas `highway-shield-non-us` y `highway-shield-us-interstate` del estilo positron de OpenFreeMap (`layers[…].filter[1]: Expected value to be of type number, but found null instead`): el filtro de esas capas lleva `null` donde se espera un número. No vienen de nuestro código y no se silencian.
+
+### Pruebas de mecanismo
+Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t9-mutations/`, mutación, `npx vitest run` y restauración desde la copia.
+
+| # | Mutación | Fichero | sha256 antes → mutado → después (completos) | Test que falla |
+|---|---|---|---|---|
+| 1 | `validateStyleUrl` acepta `http:` | `style.ts` | `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` → `2956d9c8757c7f3ef178d91e983c601f00ac60696d3424a62dc7e93e1ef6267d` → `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` | `validateStyleUrl > rechaza "http://tiles.openfreemap.org/styles/positron"` |
+| 2a | `isAllowedMapUrl` acepta `http:` | `style.ts` | `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` → `3febed67d1f739e5a7656aeb8625d86de4ba4b25d745608c1707bd53035e9ac0` → `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` | `rechaza http en un origen permitido` y `rechaza http en el origen propio` |
+| 2b | `isAllowedMapUrl` acepta otro host | `style.ts` | `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` → `3150c318c7b3d8f658fe1a58632961f24224f7b22baea110783f76778929831b` → `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` | 8 tests: otro host, subdominio parecido, prefijo parecido, otro puerto, host tras una arroba, entre otros |
+| 3 | El listener silencia cualquier error | `style.ts` | `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` → `c9d22ef6fc2ba4b4c22547aff4d7f3b862f0f40d99f3a9a4f412b5f16808b0be` → `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` | `no silencia cualquier otro error`, `no silencia algo que parece un BlockedUrlError sin serlo` y `registra un valor que no es un Error` |
+| 4 | Sin sustitución de la atribución | `style.ts` | `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` → `47e98d1d41e5fc008a55dac417e24346a9291a7f848af266177d2c1ceadf2be1` → `b871ef9ab5bc1346d5f579a7883fb760ce394e7dad03944acdb126865d3381e0` | `sustituye la atribución hostil de cada fuente`, `pone la atribución propia a una fuente que no traía ninguna`, `no muta el estilo original` y `descarga el estilo sin credenciales y fija la atribución` |
+| 5 | Pintar sin comprobar `isCurrent()` | `loadAssets.ts` | `32f04df8b0cd8537dbcab11d8c706e5daf5dc7674e9536327432cb140c93da8c` → `8e73d118dbee74d2e214bddf3e108f309af8209c2e8f8675c9762303554358b1` → `32f04df8b0cd8537dbcab11d8c706e5daf5dc7674e9536327432cb140c93da8c` | `no pinta la respuesta de una petición que ya no es la actual` y `comprueba la vigencia al llegar la respuesta, no al pedir` |
+
+Ninguna mutación sobrevivió. Cada restauración coincide con el sha256 original.
+
+### Decisiones para revisar
+- Además de `moveend`, `MapView` avisa de `movestart` y `MapPage` cancela entonces el planificador. Motivo observado: una animación interrumpida (varios clics seguidos en el zoom, o varias pulsaciones de flecha) emite `moveend` antes de empezar la siguiente, y la petición salía a los 300 ms en mitad de la animación; con el aviso de `movestart` sale una sola, tras parar el mapa.
+- `AttributionControl({compact: false})` sin `customAttribution` no pinta el enlace «MapLibre» (las opciones que se pasan sustituyen a las de por defecto).
+- Movimiento reducido: ver la sección siguiente. MapLibre ya lo respeta; solo falta comprobar nuestro propio movimiento de cámara en la T10.
+
+### Movimiento reducido
+Se comprobó en el código de `maplibre-gl` 6.14.0 y en el navegador. En el código, `zoomIn`, `zoomTo` y `flyTo` pasan por `easeTo`, que pone `duration = 0` si la opción `essential` no está y el sistema pide movimiento reducido (`src/ui/camera.ts:851` y `:1337`); la inercia del arrastre también lo respeta (`src/ui/handler_manager.ts:793`). La preferencia se lee de `matchMedia('(prefers-reduced-motion: reduce)')` (`src/util/browser.ts:87-93`). En el navegador (Chrome DevTools, dev, 1280 px, `emulate` con `prefersReducedMotion`) se mide, con `performance.now()` y `PerformanceResourceTiming`, los milisegundos entre pulsar «Acercar» y el inicio de la petición de bienes, tres veces por caso:
+
+| Emulación | Milisegundos hasta la petición | Qué significa |
+|---|---|---|
+| `reduce` | 309, 306 y 312 | Los 300 ms de espera del planificador y ninguna animación |
+| `no-preference` | 817, 807 y 822 | Los 500 ms de la animación más la espera |
+
+Ningún código nuestro pasa `essential`, así que el zoom de los botones, el teclado y el arrastre no se animan con movimiento reducido. Queda comprobar en la T10 el movimiento propio de «Volver a la zona inicial».

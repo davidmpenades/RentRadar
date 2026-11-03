@@ -72,7 +72,7 @@
   - Commit: `feat(map): compute requested box and fetch assets`
   - Hecho cuando: vitest, build y eslint en verde.
 
-- [ ] **T9. Rutas, mapa base, círculos y fallo del estilo.** RF-8, RF-10, RF-13 (estilo), RF-14
+- [x] **T9. Rutas, mapa base, círculos y fallo del estilo.** RF-8, RF-10, RF-13 (estilo), RF-14
   - PARAR: OK previo (terceros y URLs del estilo). Depende de T8.
   - Qué: src/app/{route.ts, NotFoundPage.tsx}, src/main.tsx (rutas: `/` y `/map/` normalizan a `/map`), src/map/{style.ts, geodesy.ts, circles.ts, MapView.tsx}, src/pages/MapPage.tsx (aviso y petición de bienes) y sus tests.
   - Por qué: polígono geodésico y estilo descargado y validado. Se descartan la capa `circle` y el evento `error` como detector del fallo del estilo.
@@ -95,6 +95,7 @@
   - Por qué: tarjetas no interactivas y una sola altura, como fija la spec. Se descarta reutilizar el HTML del prototipo (usa `innerHTML`).
   - Pruebas: vitest de `headerText`, `isCircleVisible`, `viewState` y formato del precio; título como texto con `react-dom/server` (mutación). DevTools a 375 y 1280 px.
   - La página decide qué muestra el panel si `classifyFailure` propaga un error inesperado (solo clasifica causas conocidas): nunca se queda en «Buscando bienes…».
+  - Movimiento reducido: el movimiento propio de «Volver a la zona inicial» no pasa `essential`, se comprueba en DevTools con la emulación y las transiciones CSS del panel se desactivan con `prefers-reduced-motion`.
   - Revisar: textos del catálogo y medidas del panel.
   - Commit: `feat(panel): list assets with empty and error states`
   - Hecho cuando: vitest, build y eslint en verde. Después, la validación de punta a punta (24 tarjetas en la vista inicial) queda registrada en validation.md.

@@ -14,3 +14,21 @@ body {
   background-color: var(--color-sky);
   color: var(--color-ink);
 }
+
+:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+}
+
+/* Los controles de MapLibre traen su propio foco y botones de 29 px */
+.maplibregl-map .maplibregl-ctrl-group button:focus:focus-visible,
+.maplibregl-map .maplibregl-ctrl-attrib-button:focus-visible {
+  outline: 3px solid var(--color-ink);
+  outline-offset: 2px;
+  box-shadow: none;
+}
+
+.maplibregl-ctrl-top-right .maplibregl-ctrl-group button {
+  width: 44px;
+  height: 44px;
+}
