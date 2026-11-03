@@ -181,7 +181,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
 **Frontend (funciones puras, sin importar maplibre-gl, vitest en entorno node)**
 - `resolveRoute(pathname)` → `redirectToMap` (`/` y `/map/`) | `map` (`/map`) | `notFound` (cualquier otra). La redirección es un `history.replaceState` a `/map`, sin entrada en el historial.
 - `requestBox(visible)`:
-  - ampliación en latitud de 2000/6 371 008,8 rad (≈ 0,017986°); en longitud, ese valor / cos(latitud de la zona visible más alejada del ecuador);
+  - ampliación en latitud de 2000/6 371 008,8 rad (≈ 0,017986°); en longitud, ese valor / cos(latitud más alejada del ecuador del cuadro ya ampliado en latitud), porque con la de la zona visible faltaban hasta unos 7 m de los 2 km a 85°;
   - índices enteros de paso 0,05°: `floor(sur·20)`, `floor(oeste·20)`, `ceil(norte·20)` y `ceil(este·20)`;
   - fuera de ±1700 (±85°) o ±3600 (±180°) → `outOfRange`; nunca recorta;
   - área en celdas `(N−S)·(E−O) ≤ 2200` (5,5 grados²), en aritmética entera; si no, `tooLarge`;
