@@ -75,9 +75,10 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
   - Las fechas que el modelo de usuario fija por su cuenta (alta) no entran como parámetro.
 
 ## Reglas para specs posteriores
-- **Registro y recuperación de contraseña**: responden de forma uniforme, exista o no el email, sin revelar si un email está registrado.
-- **Login**: compara el email sin distinguir mayúsculas, con la misma normalización de RF-2 (spec de autenticación).
-- **Respuestas públicas**: nunca incluyen el email, `is_staff`, `is_superuser` ni `last_login` de un usuario.
+- **Recuperación de contraseña**: responde de forma uniforme, exista o no el email, sin revelar si un email está registrado.
+- **Registro**: responde de forma explícita que el email ya existe (`email_taken`) hasta la spec 013, que lo hará uniforme con la verificación por correo.
+- **Login**: compara el email sin distinguir mayúsculas, con la misma normalización de RF-2 (spec 015).
+- **Respuestas públicas**: nunca incluyen el email de otros usuarios; `is_staff`, `is_superuser` y `last_login` no se incluyen nunca. Solo la sesión de la propia cuenta recibe su email.
 - **Propiedad de los recursos**: el propietario de cualquier recurso sale siempre del usuario de la sesión, nunca del cuerpo de la petición.
 - **Campos protegidos**: `is_staff`, `is_superuser` e `is_active` nunca se escriben desde la API pública.
 
