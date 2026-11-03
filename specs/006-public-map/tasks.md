@@ -74,7 +74,7 @@
 
 - [x] **T9. Rutas, mapa base, círculos y fallo del estilo.** RF-8, RF-10, RF-13 (estilo), RF-14
   - PARAR: OK previo (terceros y URLs del estilo). Depende de T8.
-  - Qué: src/app/{route.ts, NotFoundPage.tsx}, src/main.tsx (rutas: `/` y `/map/` normalizan a `/map`), src/map/{style.ts, geodesy.ts, circles.ts, MapView.tsx}, src/pages/MapPage.tsx (aviso y petición de bienes) y sus tests.
+  - Qué: src/app/{route.ts, NotFoundPage.tsx}, src/main.tsx (rutas: `/` y `/map/` normalizan a `/map`), src/map/{style.ts, geodesy.ts, circles.ts, MapView.tsx}, src/pages/MapPage.tsx (petición de bienes) y sus tests.
   - Por qué: polígono geodésico y estilo descargado y validado. Se descartan la capa `circle` y el evento `error` como detector del fallo del estilo.
   - Petición de bienes (RF-9, RF-10): la T9 cablea `moveend`, `requestBox`, el planificador, `fetchPublicAssets` y `setData` de los círculos. `MapPage` guarda solo los bienes:
     - comprueba `isCurrent()` antes de pintar;
@@ -85,7 +85,7 @@
   - Atribución: al validar el estilo, el campo `attribution` de cada fuente se sustituye por un texto fijo del código, con los enlaces escritos aquí (`rel="noopener noreferrer"`). Las opciones de la fuente pisan al TileJSON, y la atribución del tercero no se pinta.
   - Errores de MapLibre: `transformRequest` lanza `BlockedUrlError` (mensaje fijo, sin la URL) para toda URL que no pase `isAllowedMapUrl`. El listener del evento `error` solo silencia esa clase; el resto va a `console.error`.
   - Pruebas: vitest de `resolveRoute`, haversine 99–101 %, círculos únicos, `validateStyleUrl`, `validateStyleJson`, `isAllowedMapUrl`, la sustitución de la atribución (con una atribución hostil en la entrada y sin mutar el estilo original), el listener (un error que no sea `BlockedUrlError` no se silencia) y la decisión de pintar con `isCurrent()`. Mutaciones. DevTools a 375 y 1280 px: la atribución visible lleva los enlaces propios (`rel="noopener noreferrer"`, que el TileJSON no trae), el worker carga en dev y en `vite preview`, una sola petición tras parar el mapa y consola limpia.
-  - Revisar: atribución y aviso visibles; red solo al propio origen y a OpenFreeMap.
+  - Revisar: atribución visible; red solo al propio origen y a OpenFreeMap.
   - Commit: `feat(map): render base map and asset circles`
   - Hecho cuando: vitest, build y eslint en verde; DevTools sin errores en consola.
 
@@ -96,10 +96,15 @@
   - Pruebas: vitest de `headerText`, `isCircleVisible`, `viewState` y formato del precio; título como texto con `react-dom/server` (mutación). DevTools a 375 y 1280 px.
   - La página decide qué muestra el panel si `classifyFailure` propaga un error inesperado (solo clasifica causas conocidas): nunca se queda en «Buscando bienes…».
   - Estado único en `MapPage`: la petición es `loading | loaded | notRequested | failed`, y los círculos y el panel se derivan de él. `loaded` guarda la zona visible del momento de pedir (`getBounds`), nunca el cuadro de `requestBox`; las tarjetas son los bienes cuyo círculo toca esa zona y los círculos del mapa son todos los de la respuesta.
-  - Un error no clasificado llega al panel como el tipo `unexpected` de `viewState` («Ha ocurrido un error inesperado. Vuelve a intentarlo.», con «Reintentar») y va a `console.error`. Con el estilo fallido el panel muestra solo el aviso.
+  - Un error no clasificado llega al panel como el tipo `unexpected` de `viewState` («Ha ocurrido un error inesperado. Vuelve a intentarlo.», con «Reintentar») y va a `console.error`. Con el estilo fallido el panel no se pinta.
   - Imágenes: se elige por `Map` slug → URL, con `?no-inline` para que salgan como ficheros. Un test lee los SVG con `?raw` y exige una lista blanca de etiquetas y atributos.
   - Mutaciones: título con `dangerouslySetInnerHTML`, búsqueda de la imagen con `in`, SVG con referencia externa, tarjetas filtradas con el cuadro pedido y pintar sin `isCurrent()`.
   - Movimiento reducido: el movimiento propio de «Volver a la zona inicial» no pasa `essential`, se comprueba en DevTools con la emulación y las transiciones CSS del panel se desactivan con `prefers-reduced-motion`.
   - Revisar: textos del catálogo y medidas del panel.
   - Commit: `feat(panel): list assets with empty and error states`
   - Hecho cuando: vitest, build y eslint en verde. Después, la validación de punta a punta (24 tarjetas en la vista inicial) queda registrada en validation.md.
+  - Cambio posterior (sdd-change): se quita el aviso de ubicación aproximada y, con el estilo fallido, el panel no se pinta (RF-8, RF-13).
+    - Qué: src/i18n/es.ts, src/panel/ResultsPanel.tsx y sus tests.
+    - Pruebas: vitest (sin aviso en ningún estado; con `styleError` el panel no pinta nada). DevTools a 375 y 1280 px: tarjetas visibles a 375 px frente a la referencia anterior (una tarjeta entera y unos 22 px de la segunda) y estilo fallido a pantalla completa sin caja vacía, registrado en validation.md.
+    - Commit: `feat(panel): drop location notice and hide panel on style error`
+    - Hecho cuando: vitest, build y eslint en verde y la comprobación en navegador registrada.

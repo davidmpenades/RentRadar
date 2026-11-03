@@ -205,7 +205,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
 - `circlePolygon(center, radius, 64)` (destino geodésico); `circleKey = lat|lon|radius`.
 - `isCircleVisible(circle, bounds)`: haversine del centro al punto del rectángulo más cercano ≤ radio.
 - `headerText(count, incomplete)`.
-- `viewState(...)` → `loading | results | empty | zoomIn | error(kind) | styleError`. `atInitialView` compara el centro (±1e-6°) y el zoom (±0,01).
+- `viewState(...)` → `loading | results | empty | zoomIn | error(kind) | styleError` (con `styleError` el panel no se pinta). `atInitialView` compara el centro (±1e-6°) y el zoom (±0,01).
 - `validateStyleUrl(url)`: `new URL`, `https:`, sin usuario ni contraseña.
 - `isAllowedMapUrl(url, allowedOrigins)`: https y un origen permitido (el del estilo y el propio).
 - `validateStyleJson(json)`: `version === 8`, `sources` es un objeto y `layers` un array.
@@ -227,7 +227,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
 ## Interfaz
 - Móvil primero (375 px).
   - Mapa a pantalla completa.
-  - El panel ocupa abajo una sola altura de `40dvh` (mínimo 240 px). La cabecera (número de bienes) y el aviso de ubicación aproximada quedan fijos arriba; la lista se desplaza dentro.
+  - El panel ocupa abajo una sola altura de `40dvh` (mínimo 240 px). La cabecera (número de bienes) queda fija arriba; la lista se desplaza dentro.
 - Desde 900 px: columna fija a la izquierda de 400 px, con todo el alto. El mapa sigue a pantalla completa debajo: la zona visible incluye la parte tapada.
 - La atribución usa `AttributionControl({compact: false})` arriba a la derecha y el panel nunca la tapa. Dice «OpenFreeMap © OpenMapTiles Data from OpenStreetMap».
 - El zoom usa `NavigationControl({showCompass: false})` debajo de ella. El CSS sube los botones a 44×44 px.
@@ -251,7 +251,7 @@ Spec: specs/006-public-map/spec.md (aprobada)
   - «Acerca el mapa para ver los bienes»;
   - «Volver a la zona inicial», oculto en la vista inicial;
   - error de la petición con «Reintentar», sin círculos.
-  - Si falla el estilo, el mensaje y «Reintentar» sustituyen al mapa. Un `GPUInitializationError` (sin WebGL2) se trata igual.
+  - Si falla el estilo, el mensaje y «Reintentar» ocupan la pantalla completa y no se pinta el panel (ni su cabecera ni una caja vacía). Un `GPUInitializationError` (sin WebGL2) se trata igual.
 - Mensajes del catálogo:
   - red: «No hay conexión. Comprueba tu red y vuelve a intentarlo.»;
   - tiempo agotado: «El servidor tarda demasiado en responder.»;
@@ -300,7 +300,7 @@ La partición de la spec ya está decidida: se hizo por profundidad y la interac
 | Margen del área en el cliente | 0,5 grados²: se pide si el área es ≤ 5,5 (≤ 2200 celdas) |
 | Tiempo de espera | 300 ms tras `moveend`. La primera petición se lanza a mano tras `load`; redimensionar emite `moveend` |
 | Tiempo máximo de espera | 10 s; luego se aborta y sale el error `timeout` |
-| Panel por debajo de 900 px | `40dvh`, mínimo 240 px; cabecera y aviso fijos |
+| Panel por debajo de 900 px | `40dvh`, mínimo 240 px; cabecera fija |
 | Ancho de la columna | 400 px desde 900 px |
 | Gramática ASCII | `-?(?:0\|[1-9][0-9]*)(?:\.[0-9]+)?` con `re.fullmatch`; longitud ≤ 32 comprobada antes |
 | Formato, códigos y versión | Ver Contrato. Ruta `/api/v1/` |
@@ -372,6 +372,7 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 - `Dockerfile`: sin cambios, pero la imagen se reconstruye.
 - `ci.yml`: paso de desfase y job de frontend.
 - `.gitignore` ya ignora `node_modules/` y `dist/`.
+- Cambio posterior a la T10 (sdd-change): `frontend/src/i18n/es.ts` pierde el aviso, y `frontend/src/panel/ResultsPanel.tsx` y su test no lo pintan y, con `styleError`, no pintan el panel.
 
 ## Riesgos
 | Riesgo | Mitigación |
@@ -398,12 +399,12 @@ npm (19 dependencias, versiones exactas, sin `^`; `package-lock.json` en git; `n
 | RF-5 | pytest con la caché vaciada y `timer` falso: 60 POST → 405 y la siguiente → 429; 60 inválidas → 400 y luego 429; con el límite superado, POST y OPTIONS → 429; las 429 no alargan la espera; `X-Forwarded-For` distintos cuentan para una IP; otra `REMOTE_ADDR` aparte; con `force_login` también cuenta; `Retry-After` entero ≥ 1 igual a `retry_after`; `no-store` |
 | RF-6 | pytest: 25 bienes, 24 activos y 1 pausado; las 11 categorías; los tres radios; un par con la misma ubicación pública y el mismo radio; haversine < 4 km desde el centro; altas por el servicio (25 y 24 llamadas); la segunda ejecución no crea nada y lo dice; un fallo a mitad no deja nada |
 | RF-7 | pytest **sin** `django_db`: con `ENVIRONMENT` en `production` o ausente, CommandError con el mensaje fijo y ningún acceso a la BD. `test_settings` comprueba `ENVIRONMENT` de cada módulo |
-| RF-8 | Chrome DevTools a 375 y 1280 px (validation.md): `/` y `/map/` → `/map` sin entrada en el historial, mapa a pantalla completa en la vista inicial, mapa base, panel, aviso y atribución visibles. vitest de `resolveRoute` |
+| RF-8 | Chrome DevTools a 375 y 1280 px (validation.md): `/` y `/map/` → `/map` sin entrada en el historial, mapa a pantalla completa en la vista inicial, mapa base, panel y atribución visibles. vitest de `resolveRoute` |
 | RF-9 | vitest: ampliación con la latitud más alejada (59–61), redondeo, rechazo fuera de ±85, ±180 y en el antimeridiano, margen (6,3 y 6 justos no piden), formato estable; planificador con temporizadores falsos (solo la última pide, la vieja no se pinta) y timeout. DevTools: una sola petición tras parar, aciertos de caché dentro del mismo cuadro |
 | RF-10 | vitest: haversine del centro a cada vértice entre el 99 % y el 101 % (tres radios, varias latitudes); la misma clave da un solo círculo y radios distintos, dos. DevTools: círculos sin marcador, sin agrupar a zoom bajo |
 | RF-11 | vitest: `headerText` (1, N, incompleta), `isCircleVisible` (círculo de 2 km que asoma por el borde), orden de la respuesta. DevTools: lista del panel |
 | RF-12 | vitest: `viewState` (vacío, «acerca», sin botón en la vista inicial). DevTools: vacío y su salida |
-| RF-13 | vitest: `validateResponse` (1500, `null`, campo de más, otra moneda, precio mal formado, 201 bienes, ids repetidos), `Content-Type` incorrecto, JSON roto, `classifyFailure`, `validateStyleUrl` y `validateStyleJson`. DevTools: sin conexión, respuesta 500 y 429 simuladas, estilo bloqueado y con URL http |
+| RF-13 | vitest: `validateResponse` (1500, `null`, campo de más, otra moneda, precio mal formado, 201 bienes, ids repetidos), `Content-Type` incorrecto, JSON roto, `classifyFailure`, `validateStyleUrl` y `validateStyleJson`. DevTools: sin conexión, respuesta 500 y 429 simuladas, estilo bloqueado y con URL http (mensaje y «Reintentar» a pantalla completa, sin panel ni caja vacía) |
 | RF-14 | vitest de `resolveRoute` (`/otra` → `notFound`). DevTools: «Página no encontrada» con «Ir al mapa» y teclado |
 
 | Requisito no funcional y criterio de finalización | Verificación |
