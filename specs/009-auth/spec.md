@@ -1,5 +1,5 @@
 # Spec 009 — Registro, sesión y salida
-Estado: borrador
+Estado: aprobada
 Depende de: spec 004 (usuarios, alta con contraseña obligatoria, normalización del email y "Reglas para specs posteriores"), spec 005 (el propietario de un recurso sale de la sesión) y spec 006 (interfaz web, página del mapa, formato de errores de la API y límite de peticiones por IP).
 
 ## Contexto y objetivo
@@ -14,7 +14,7 @@ Incluye:
 
 La autenticación es la sesión de Django con CSRF, en el mismo origen que la página. JWT y la aplicación móvil quedan fuera por ahora. Se prueba de punta a punta sin cuentas creadas a mano: el registro abre la sesión y con ella se comprueban «quién soy» y la salida.
 
-La **entrada** (con su error uniforme de credenciales incorrectas, sus límites de intentos y la página `/login`) es la spec 015. La navegación completa llega en la spec 008. La verificación de email y la recuperación de contraseña, en la 013, y el borrado de cuenta y los textos legales, en la 014. Orden: 009 → 015 → 013 → 014 → 011. Hasta la 013 el registro **no** es uniforme: avisa de que un email ya existe (ver «Riesgos propuestos para aceptar»).
+La **entrada** (con su error uniforme de credenciales incorrectas, sus límites de intentos y la página `/login`) es la spec 015. La navegación completa llega en la spec 008. La verificación de email y la recuperación de contraseña, en la 013, y el borrado de cuenta y los textos legales, en la 014. Orden: 009 → 015 → 013 → 014 → 011. Hasta la 013 el registro **no** es uniforme: avisa de que un email ya existe (ver «Riesgos aceptados»).
 
 ## Usuarios
 - **Visitante**: cualquier persona que abre RentRadar, sin sesión.
@@ -176,7 +176,7 @@ Se hacen con `/sdd-change` una vez aprobada esta; solo cambian textos, sin códi
 4. **RF-13 (error del estilo)**: el mensaje y «Reintentar» ocupan la zona bajo la barra superior, que se conserva; no se muestran el mapa ni el panel. La página «Página no encontrada» (RF-14) también va bajo la barra.
 5. **Regla de privacidad de la URL** (requisitos no funcionales, privacidad): «La dirección de la página no cambia al mover el mapa (ni fragmento ni parámetros), el historial no gana entradas y la vista no se guarda en el almacenamiento del navegador» pasa a «La zona del mapa nunca va a la URL ni al almacenamiento del navegador: mover el mapa no cambia la dirección ni añade entradas al historial. La navegación entre páginas (`/map`, `/register` y después `/login`) sí usa el historial».
 
-## Riesgos propuestos para aceptar
+## Riesgos aceptados
 - **Enumeración de emails**: el registro revela si un email existe (`email_taken`). Se mitiga con el límite de 10 registros por hora y IP. La spec 013 lo corrige.
 - **Suplantación del email**: sin verificación, alguien puede registrar el email de otra persona y bloquear que ella lo use. Lo corrige la spec 013.
 - **Sin recuperación de contraseña** hasta la 013: quien la pierda pierde la cuenta. No afecta a nadie real, porque el registro no se abre al público antes.
