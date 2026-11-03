@@ -15,7 +15,8 @@ Depende de: spec 009 (registro, sesión y salida). Orden: 009 → 015 → 013 �
 
 ## Lo que hereda de la 009
 - Sesión de Django con CSRF de doble envío; el error es `csrf_failed` y el cliente reintenta una vez tras volver a preguntar «quién soy».
-- Orden de comprobaciones: método → límite por IP → CSRF → tamaño y forma → (límite por IP y email) → validación → comprobación de credenciales.
+- Orden de comprobaciones: límite por IP → método → CSRF → tamaño y forma → (límite por IP y email) → validación → comprobación de credenciales. Con el límite superado, cualquier método recibe el error de límite, como en la 006 y en el registro de la 009.
+- Tiempo máximo de 10 s en las peticiones que cambian el estado: el error general permite reintentar. Antes de dar por fallida una petición vencida, el cliente pregunta «quién soy».
 - Códigos `invalid_request` y `payload_too_large`, formato único de errores y `no-store`.
 - La sesión anterior se vacía siempre al abrir una nueva. Si la entrada falla, la sesión actual no se toca.
 - Respuestas mínimas (solo el email propio), barra superior sin email, `/login/` normalizado a `/login`, navegación entre páginas con historial.
