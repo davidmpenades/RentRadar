@@ -720,3 +720,26 @@ Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t10-mutations/`,
 | 5 (repetida) | Reportar sin comprobar `isCurrent()` | `src/map/loadAssets.ts` | `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` → `c74fa8bcbe92c14db0319132f2c55877347667f72642c6704a448b96c76ce527` → `30c17817ead17e66730307fa1ac6531f77965d625a29fb344dc62f5f290fd47b` | 4, los mismos que la vez anterior |
 
 Ninguna mutación sobrevivió. Cada restauración coincide con el sha256 original.
+
+## Cambio posterior: sin aviso de ubicación aproximada y sin panel con el estilo fallido
+Fecha: 2026-11-03 · Cambio de requisitos (RF-8 y RF-13) ya reflejado en spec, plan y tasks. Ficheros: `frontend/src/i18n/es.ts` (sin `map.notice`), `frontend/src/panel/ResultsPanel.tsx` (sin el párrafo del aviso; con `styleError` devuelve `null`) y `frontend/src/panel/ResultsPanel.test.ts`. Motivo: los círculos y la línea «Zona de unos 500 m / 1 km / 2 km» de cada tarjeta ya dicen que la ubicación es una zona; el aviso ocupaba cuatro líneas del panel en móvil y su frase «Nunca se muestra la dirección» dejaría de ser cierta cuando las reservas revelen la dirección al confirmar. Las secciones anteriores de este fichero describen el estado previo y no se reescriben. Sin BD de desarrollo, sin Docker y sin dependencias nuevas. Sin pruebas de mecanismo: el cambio no toca privacidad ni seguridad.
+
+Antes de implementar, dos tests fallaron por la razón esperada: el HTML contenía «Ubicación aproximada» y con `styleError` el panel pintaba su `<aside>`.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests | `cd frontend && npx vitest run` | 553 passed en 18 ficheros |
+| Build | `npm run build` | En verde |
+| Lint | `npx eslint .` | Sin incidencias |
+| Tipos generados al día | `npm run api:check` | Salida 0 |
+
+### Lo observado en el navegador
+Chrome DevTools, `npm run dev` (parado al acabar) y la API real de localhost:8000 por el proxy. El fallo del estilo se fuerza con un `initScript` que hace rechazar el `fetch` de `/styles/positron`.
+
+| # | Comprobación | 1280 px | 375 px |
+|---|---|---|---|
+| 1 | Vista inicial | 24 tarjetas, «24 bienes en esta zona», sin el texto «Ubicación aproximada»; panel de 400×800 px; cabecera de 25 px y lista de 751 px de alto; sin desbordamiento horizontal; atribución visible | 24 tarjetas, sin el texto del aviso; panel de 267 px con cabecera de 25 px y lista de 218 px; sin desbordamiento horizontal |
+| 2 | Tarjetas visibles | — | La primera entera (115 px) y el 76 % de la segunda: unas 1,8 tarjetas, frente a una entera y unos 22 px de la segunda (lista de 138 px) con el aviso |
+| 3 | Estilo fallido | Sin `<aside>` ni región de estado; la alerta mide 1280×800 (todo el viewport) y los únicos elementos visibles dentro de `main` son el contenedor de la alerta, el mensaje «No se ha podido cargar el mapa.» y «Reintentar» (44 px); sin canvas, sin caja vacía y sin peticiones de bienes | Igual con 375×667 y el botón de 130×44 px |
+| 4 | Reintentar con teclado | — | Con la descarga reparada, Enter sobre «Reintentar» devuelve el mapa y el panel con las 24 tarjetas; la alerta desaparece |
+| 5 | Consola | Sin errores | Sin errores |

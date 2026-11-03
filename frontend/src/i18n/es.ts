@@ -25,8 +25,6 @@ export const es = {
     },
   },
   map: {
-    notice:
-      "Ubicación aproximada: cada bien está en algún punto dentro de su círculo, de 500 m a 2 km de radio según el anuncio. Nunca se muestra la dirección.",
     styleError: "No se ha podido cargar el mapa.",
     retry: "Reintentar",
     // Textos de los controles de MapLibre, con las claves que él define

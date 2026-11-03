@@ -97,29 +97,36 @@ describe("ResultsPanel", () => {
     expect(html).toContain("5 bienes en esta zona");
   });
 
-  it("lleva siempre la región de estado y el aviso de ubicación aproximada", () => {
+  it("lleva siempre la región de estado en los estados con panel", () => {
     const views: ViewState[] = [
       { kind: "loading" },
       { kind: "results", cards: [asset(1)], incomplete: false },
       { kind: "empty", canReset: true },
       { kind: "zoomIn", canReset: false },
       { kind: "error", failure: "network" },
-      { kind: "styleError" },
     ];
     for (const view of views) {
       const html = panel(view);
       expect(html).toMatch(/role="status"/);
       expect(html).toContain('aria-live="polite"');
-      expect(html).toContain(es.map.notice);
     }
   });
 
-  it("con el estilo fallido solo enseña el aviso: ni cabecera, ni lista, ni botones", () => {
-    const html = panel({ kind: "styleError" });
-    expect(html).not.toContain("<ul");
-    expect(html).not.toContain("<button");
-    expect(html).not.toContain("<img");
-    expect(html).toContain(es.map.notice);
+  it("no enseña el aviso de ubicación aproximada en ningún estado", () => {
+    const views: ViewState[] = [
+      { kind: "loading" },
+      { kind: "results", cards: [asset(1)], incomplete: true },
+      { kind: "empty", canReset: true },
+      { kind: "zoomIn", canReset: true },
+      { kind: "error", failure: "unexpected" },
+      { kind: "styleError" },
+    ];
+    for (const view of views) expect(panel(view)).not.toContain("Ubicación aproximada");
+    expect(Object.hasOwn(es.map, "notice")).toBe(false);
+  });
+
+  it("con el estilo fallido no pinta nada: ni panel, ni cabecera, ni lista, ni botones", () => {
+    expect(panel({ kind: "styleError" })).toBe("");
   });
 
   it("anuncia la carga en la región de estado", () => {
@@ -147,22 +154,18 @@ describe("ResultsPanel", () => {
     ["resultados", { kind: "results", cards: [asset(1)], incomplete: false }],
     ["error", { kind: "error", failure: "network" }],
     ["vacío", { kind: "empty", canReset: true }],
-    ["estilo fallido", { kind: "styleError" }],
-  ])("la cabecera (%s) es enfocable por código y contiene la región de estado y los botones, no el aviso", (_name, view) => {
+    ["carga", { kind: "loading" }],
+  ])("la cabecera (%s) es enfocable por código y contiene la región de estado y los botones", (_name, view) => {
     const html = panel(view);
     expect(html.match(/tabindex="-1"/g)).toHaveLength(1);
     const header = html.indexOf('tabindex="-1"');
     const status = html.indexOf('role="status"');
-    const notice = html.indexOf(es.map.notice);
     expect(header).toBeLessThan(status);
-    expect(status).toBeLessThan(notice);
     const button = html.indexOf("<button");
-    if (button !== -1) {
-      expect(button).toBeGreaterThan(status);
-      expect(button).toBeLessThan(notice);
-    }
-    // El div de la cabecera se cierra antes del aviso: lo que va entre ambos es su cierre
-    expect(html.slice(html.lastIndexOf("</div>", notice), notice)).toMatch(/^<\/div><p /);
+    if (button !== -1) expect(button).toBeGreaterThan(status);
+    // La cabecera se cierra antes de la lista, que se desplaza por debajo y no forma parte de ella
+    const list = html.indexOf("<ul");
+    if (list !== -1) expect(html.slice(header, list).match(/<\/div>/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
   it("los botones miden al menos 44 px", () => {
