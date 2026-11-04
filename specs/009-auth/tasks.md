@@ -26,7 +26,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - `apps/core/csrf.py` (`enforce_csrf` y `CsrfEnforcedMixin`); `apps/core/request_body.py` (`read_json_object` y `read_text_fields`); fixture `csrf_client` en `backend/conftest.py`; vistas de prueba en `apps/core/tests`.
   - Toca tests existentes: `apps/core/tests/test_api_import.py` (`MODULES`).
   - Commit: `feat(core): explicit csrf check and bounded json body`
-  - Hecho cuando: con `csrf_client`, cada variante sin token válido da 403 `csrf_failed` con `no-store`, sin el motivo y sin leer el cuerpo; un método no admitido da 405; 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` da 413; tipos, listas, JSON inválido, anidamiento y `RecursionError` simulado dan 400; un cuerpo vacío da `{}`.
+  - Hecho cuando: con `csrf_client`, cada variante sin token válido da 403 `csrf_failed` con `no-store`, sin el motivo y sin leer el cuerpo; un método no admitido da 405; 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` da 413; tipos, listas, JSON inválido, listas anidadas y `RecursionError` simulado dan 400; un cuerpo vacío da `{}`; un objeto anidado en una clave desconocida se acepta (no es un 400).
   - Pruebas de mecanismo: CSRF solo con usuario autenticado; `PermissionDenied`; `CSRFCheck` que acepta siempre; leer el cuerpo antes; CSRF antes de `super().initial()`; quitar `Transfer-Encoding`, la longitud declarada o el `+ 1`; quitar la captura de `RecursionError`; números como texto.
   - Evidencia: `validation.md`, sección T3.
 
@@ -47,7 +47,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Se regeneran `backend/openapi.json` y `frontend/src/api/schema.gen.ts`. Cambio de contrato aprobado por el usuario.
   - Commit: `feat(users): register, session and logout endpoints`
   - Hecho cuando:
-    - los tests de `test_register_api.py`, `test_session_api.py`, `test_logout_api.py` y `test_auth_contract.py` fallan primero y luego pasan: sesión nueva al registrarse, registro rechazado sin tocar la sesión, salida con y sin sesión, cookie retirada siempre, «quién soy» en todos sus casos, sin renovación, `no-store` en todo, `Vary: Cookie`, respuestas mínimas, 405 por método, 429 en el endpoint real, sin `Access-Control-*` y logs sin email ni contraseña;
+    - los tests de `test_register_api.py`, `test_session_api.py`, `test_logout_api.py` y `test_auth_contract.py` fallan primero y luego pasan: sesión nueva al registrarse, registro rechazado sin tocar la sesión, salida con y sin sesión, cookie retirada siempre, «quién soy» en todos sus casos, sin renovación, `no-store` en todo, `Vary: Cookie`, respuestas mínimas, 405 por método, 429 en el endpoint real, sin `Access-Control-*` y logs sin email ni contraseña, y un objeto anidado en una clave desconocida que sigue a la validación (`email_empty` y `password_required`);
     - `spectacular --validate --fail-on-warn`, `npm run api:check` y `npm run build` en verde.
   - Pruebas de mecanismo: quitar `flush()` del registro; `flush()` y `login()` antes de validar; quitar `flush()` y `delete_cookie` de la salida; quitar el mixin de `LogoutView`; `ModelSerializer`; quitar `no-store`; pasar `is_staff`. `Vary: Cookie` se anota como equivalente.
   - Evidencia: `validation.md`, sección T5.

@@ -171,6 +171,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   6. `JSONParser().parse(BytesIO(raw), "application/json", {})` capturando `ParseError` y `RecursionError` → `invalid_request`;
   7. raíz que no es `dict` → `invalid_request`.
   - Nunca usa `request.data` ni `request.body`.
+  - Sin límite de profundidad propio: un objeto anidado en una clave desconocida se acepta. La captura de `RecursionError` es defensiva (en este Python, 2048 listas anidadas caben en 4 KiB y se analizan sin error): su test la simula.
 - `read_text_fields(data, names) -> dict[str, str | None]`: cada nombre ausente da `None`; `str` o `None` pasan; otro tipo → `invalid_request`.
 - `ip_bucket(address) -> str`:
   - IPv4 → tal cual;
@@ -370,7 +371,7 @@ Los que la spec ya recoge en «Riesgos aceptados» (el usuario los aceptó) no s
 | RF-5 | pytest (T5): 204; la fila desaparece; el identificador anterior ya no autentica en «quién soy»; la cookie se retira siempre (con sesión, caducada, mal formada y sin cookie); sin sesión no cambia nada; `csrftoken` intacta |
 | RF-6 | pytest (T5): anónimo → `{"user": null}` y `csrftoken`; con sesión → email; cuenta desactivada, sesión caducada (fila con `expire_date` un segundo en el pasado) y cookie mal formada → `null` sin error; HEAD sin cuerpo; `expire_date` no cambia tras «quién soy» (sin renovación) |
 | RF-7 | pytest (T3): mixin con vistas de prueba (sin cabecera, vacía, sin cookie, distinta, cookie mal formada, Origin ajeno; 403 `csrf_failed`, `no-store`, sin motivo en el cuerpo ni en el log; `LimitedStream.read` parcheado para que lance; método no admitido → 405). pytest (T5): registro y salida con y sin sesión: sin cuenta ni fila nuevas y sesión intacta; guarda del URLconf. vitest (T6): un solo reintento tras «quién soy» |
-| RF-8 | pytest (T3): 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` → 413; `text/plain` y multipart → 400; JSON inválido, BOM, `NaN`, lista, `"[" * 2048 + "]" * 2048`; `RecursionError` simulado → 400; email numérico, contraseña lista u objeto, booleano → 400; cuerpo vacío → `{}`. pytest (T5): sobre el endpoint, también un email de 4 KB → `email_too_long` sin 500 |
+| RF-8 | pytest (T3): 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` → 413; `text/plain` y multipart → 400; JSON inválido, BOM, `NaN`, lista, `"[" * 2048 + "]" * 2048` (400 porque la raíz no es un objeto); `RecursionError` simulado → 400; email numérico, contraseña lista u objeto, booleano → 400; cuerpo vacío → `{}`; objeto anidado en una clave desconocida (unos 600 niveles dentro de 4096 bytes) → se acepta. pytest (T5): sobre el endpoint, también un email de 4 KB → `email_too_long` sin 500 y ese objeto anidado → `invalid_fields` con `email_empty` y `password_required` |
 | RF-9 | vitest (T6): `whoAmI` con 5 s (temporizador inyectado), 500, red, forma inválida y `Content-Type` ajeno → `anonymous`. vitest (T7): `topBarAction`, `isPlainLeftClick` y el marcado de `TopBar` (`react-dom/server`): sin acciones en `unknown`, la marca es un enlace a `/map`, el email nunca aparece. DevTools (T9): 375 y 1280 px sin desbordar; «quién soy» bloqueado → «Registrarse» y el mapa funciona; la marca lleva a `/map` |
 | RF-10 | vitest (T8): `emptyFieldErrors`, `createSubmitGuard` (doble envío), `shouldLeaveRegister`. vitest (T6): 201 con forma inválida → «quién soy». DevTools (T9): envío deshabilitado, `/map` sin entrada nueva en el historial (`history.length`), «Atrás» no vuelve al formulario, barra en «Salir», Intro envía |
 | RF-11 | vitest (T8): `fieldMessages`, `firstFocusTarget`, `formStateAfter` (email conservado, contraseña vacía, envío habilitado, también con `failed("timeout")`). vitest (T6): reintento único y error general tras el segundo `csrf_failed`; registro vencido a los 10 s con temporizador inyectado → pregunta «quién soy»: con sesión `registered`, sin ella `failed("timeout")`. DevTools (T9): foco y anuncios con el teclado; registro que no responde (`fetch` simulado que no resuelve) → error general y reintento |
@@ -413,7 +414,7 @@ Cada mutación se hace sobre una copia del fichero, con el sha256 antes y despu�
   - leer el cuerpo antes de CSRF;
   - CSRF antes de `super().initial()`;
   - quitar la comprobación de `Transfer-Encoding`, la de la longitud declarada o el `+ 1` de la lectura;
-  - quitar la captura de `RecursionError`;
+  - quitar la captura de `RecursionError` (con el error simulado: con datos reales no se produce en este Python);
   - aceptar números como texto.
 - **T4**:
   - agrupar en /48 y en /128;
@@ -440,7 +441,7 @@ Cada mutación se hace sobre una copia del fichero, con el sha256 antes y despu�
   - no preguntar «quién soy» tras un registro vencido.
 
 ### Comprobaciones en el contenedor
-- **Verificado** (Django 5.2.18, DRF 3.18.3, drf-spectacular 0.30.0, Python 3.13.16): `login()`, validadores, JSON anidado dentro de 4 KiB, throttle, prototipo de CSRF, middleware con la lista pública, lectura de `request.body` por DRF, y el proxy de Vite 8.3.5 contra un backend de prueba. Los tests de T2, T3 y T5 lo fijan en la suite.
+- **Verificado** (Django 5.2.18, DRF 3.18.3, drf-spectacular 0.30.0, Python 3.13.16): `login()`, validadores, JSON anidado dentro de 4 KiB (2048 listas anidadas se analizan sin `RecursionError`: dan 400 por la raíz, y un objeto anidado se acepta), throttle, prototipo de CSRF, middleware con la lista pública, lectura de `request.body` por DRF, y el proxy de Vite 8.3.5 contra un backend de prueba. Los tests de T2, T3 y T5 lo fijan en la suite.
 - **No verificado, y dónde queda cubierto:**
   - motor de sesión de BD y PostgreSQL: T5, en la BD de test;
   - email con sustituto: T2, que lo rechaza sin ninguna consulta (`CaptureQueriesContext`);

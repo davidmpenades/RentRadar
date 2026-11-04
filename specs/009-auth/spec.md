@@ -44,6 +44,7 @@ La **entrada** (con su error uniforme de credenciales incorrectas, sus límites 
 - **Barra superior**: franja superior de la página, con la marca (un enlace a la página del mapa) y las acciones de sesión, en todas las páginas. No es la «cabecera» del panel de resultados de la 006.
 - **IP del visitante**: la dirección de la conexión; en IPv6, su prefijo /64, de modo que las direcciones de un mismo /64 comparten el límite. Detrás de un proxy sería la del proxy hasta que la spec 011 fije cuál es de confianza.
 - **Página de registro**: página propia de RentRadar, con la dirección definitiva `/register`. La dirección con barra final (`/register/`) se normaliza a ella.
+- **Demasiado anidado**: un JSON que el analizador de la API no admite por su profundidad. No hay un límite de profundidad propio: un objeto válido anidado dentro de una clave desconocida no es demasiado anidado; se acepta y esa clave se ignora como cualquier campo desconocido.
 
 ### Valores de esta spec
 | Valor | Fijado |
@@ -72,7 +73,7 @@ En el límite cuentan las peticiones aceptadas y las rechazadas por CSRF, por cu
 - RF-5: CUANDO el cliente pide salir con un token CSRF válido, EL SISTEMA destruye la sesión en el servidor si la hay y retira siempre la cookie de sesión, aunque la sesión esté caducada o mal formada. El identificador anterior deja de autenticar. Sin sesión responde bien y no cambia nada.
 - RF-6: CUANDO el cliente pregunta «quién soy», EL SISTEMA responde con el email de la sesión válida o, si no la hay, con la indicación de que no hay sesión, sin devolver un error, y deja el token CSRF en su cookie.
 - RF-7: SI una petición de registro o de salida no lleva un token CSRF válido, ENTONCES EL SISTEMA la rechaza con el error `csrf_failed` antes de leer el cuerpo, sin crear cuenta ni sesión y sin tocar la sesión actual. Vale también para la salida sin sesión.
-- RF-8: SI el cuerpo de una petición de registro no es JSON válido, es demasiado anidado, no es un objeto, o lleva el email o la contraseña con un tipo que no es texto (número, lista u objeto), ENTONCES EL SISTEMA la rechaza como `invalid_request`; y SI declara más de 4 KiB, llega con codificación troceada (`Transfer-Encoding`, de cualquier tamaño) o se leen más de 4 KiB, la rechaza como `payload_too_large`. En ambos casos no crea nada. Un email o una contraseña ausentes, nulos o vacíos no son `invalid_request`: los trata RF-2.
+- RF-8: SI el cuerpo de una petición de registro no es JSON válido, está demasiado anidado (ver «Definiciones»), no es un objeto, o lleva el email o la contraseña con un tipo que no es texto (número, lista u objeto), ENTONCES EL SISTEMA la rechaza como `invalid_request`; y SI declara más de 4 KiB, llega con codificación troceada (`Transfer-Encoding`, de cualquier tamaño) o se leen más de 4 KiB, la rechaza como `payload_too_large`. En ambos casos no crea nada. Un email o una contraseña ausentes, nulos o vacíos no son `invalid_request`: los trata RF-2.
 
 ### Interfaz
 - RF-9: MIENTRAS el cliente aún no sabe si hay sesión, la barra superior no muestra acciones de sesión; después muestra «Registrarse» si no hay sesión y «Salir» si la hay, y nunca el email de la cuenta. La marca de la barra es un enlace a la página del mapa. Si «quién soy» falla, no responde en 5 s o su respuesta tiene una forma inválida, se trata como sin sesión y no bloquea el mapa.
@@ -136,7 +137,9 @@ En el límite cuentan las peticiones aceptadas y las rechazadas por CSRF, por cu
 - Dos direcciones IPv6 del mismo /64 comparten el límite (RF-3).
 - Petición sin token CSRF desde una IP que ya superó el límite: error de límite, no de CSRF (RF-3, RF-7).
 - Petición de registro o de salida sin token CSRF, con la cabecera vacía, sin cookie o con una cabecera que no coincide con la cookie: rechazada con `csrf_failed`, sin efectos, también la salida sin sesión (RF-5, RF-7).
-- Cuerpo que no es JSON, que es una lista, con el email como número, la contraseña como lista u objeto, o JSON anidado a gran profundidad dentro de 4 KiB: `invalid_request`, sin error del servidor (RF-8).
+- Cuerpo que no es JSON, que es una lista, con el email como número o la contraseña como lista u objeto: `invalid_request`, sin error del servidor (RF-8).
+- Miles de listas anidadas dentro de 4 KiB: `invalid_request` porque la raíz no es un objeto, sin error del servidor. Si el analizador no lo admitiera por su profundidad, también `invalid_request` (RF-8).
+- Objeto válido anidado en una clave desconocida (por ejemplo `{"x": {"x": {…}}}`, dentro de 4 KiB): no es demasiado anidado. La clave se ignora, no hay error del servidor y la petición sigue a RF-2: sin credenciales da `email_empty` y `password_required`, y con ellas en la raíz se trata como cualquier otro registro (RF-8, RF-2).
 - Cuerpo troceado (`Transfer-Encoding`), de cualquier tamaño, o que declara o aporta más de 4 KiB: `payload_too_large` (RF-8). Cuerpo vacío con tipo JSON: se trata como un objeto vacío y da `email_empty` y `password_required` (RF-2).
 - Salir con una sesión caducada o con una cookie de sesión mal formada: respuesta correcta y cookie retirada (RF-5).
 - «Quién soy» con cuenta desactivada, sesión de 14 días y un segundo o cookie mal formada: responde sin sesión y sin error (RF-6).
@@ -162,6 +165,7 @@ En el límite cuentan las peticiones aceptadas y las rechazadas por CSRF, por cu
 - JWT, tokens de API y aplicación móvil; registro con terceros (Google, Apple); segundo factor; captcha.
 - Aviso por correo de una cuenta nueva.
 - Normalización Unicode de las contraseñas: se comparan tal como llegan.
+- Un límite de profundidad del JSON propio de RentRadar: lo fija el analizador, y el tope real de la petición es el de 4 KiB.
 - Registro uniforme (que responda igual exista o no el email): llega con la spec 013.
 - Navegación completa, menú y perfil (spec 008); páginas protegidas y datos del usuario más allá del email.
 - Panel de administración y entrada del staff.
