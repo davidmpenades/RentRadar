@@ -38,12 +38,12 @@ Spec: specs/009-auth/spec.md (aprobada, alineada con el comportamiento verificad
 | backend/apps/core/tests/test_api_import.py | M | (T3) `MODULES` gana los dos módulos nuevos | — |
 | backend/conftest.py | M | (T3) Fixture `csrf_client` (`Client(enforce_csrf_checks=True)`) | RF-7 |
 | backend/apps/users/throttling.py, tests/test_throttling.py | C | (T4) `ip_bucket(address)` puro y `RegistrationThrottle` | RF-3 |
-| backend/apps/users/serializers.py | C | (T5) `SessionUserSerializer`, `SessionSerializer`, `RegistrationRequestSerializer` (solo documenta) y `RegistrationErrorSerializer` | RF-1, RF-6, RNF |
-| backend/apps/users/views.py | C | (T5) `RegisterView`, `CurrentSessionView` y `LogoutView`; `public_field_errors(message_dict)` | RF-1…RF-8 |
-| backend/apps/users/urls.py; backend/config/urls.py | C; M | (T5) `auth/register/`, `auth/session/` y `auth/logout/` bajo `api/v1/` | RF-1, RF-5, RF-6 |
-| backend/apps/users/tests/test_register_api.py, test_session_api.py, test_logout_api.py, test_auth_contract.py | C | (T5) Contrato HTTP, sesión, cookies, cabeceras y OpenAPI | RF-1…RF-8 |
-| backend/apps/core/tests/test_csrf_guard.py | C | (T5) Toda vista del URLconf que atiende métodos no seguros hereda el mixin | RF-7 |
-| backend/openapi.json; frontend/src/api/schema.gen.ts | M | (T5) Contrato regenerado | RNF Contrato |
+| backend/apps/users/serializers.py | C | (T5a) `SessionUserSerializer`, `SessionSerializer`, `RegistrationRequestSerializer` (solo documenta) y `RegistrationErrorSerializer` | RF-1, RF-6, RNF |
+| backend/apps/users/views.py | C | (T5a) `RegisterView` y `public_field_errors(message_dict)`; (T5b) `CurrentSessionView` y `LogoutView` | RF-1…RF-8 |
+| backend/apps/users/urls.py; backend/config/urls.py | C; M | (T5a) `auth/register/` y la inclusión bajo `api/v1/`; (T5b) `auth/session/` y `auth/logout/` | RF-1, RF-5, RF-6 |
+| backend/apps/users/tests/test_register_api.py, test_session_api.py, test_logout_api.py, test_auth_contract.py | C | (T5a) `test_register_api.py` y el registro en `test_auth_contract.py`; (T5b) `test_session_api.py`, `test_logout_api.py` y el resto de `test_auth_contract.py`. Contrato HTTP, sesión, cookies, cabeceras y OpenAPI | RF-1…RF-8 |
+| backend/apps/core/tests/test_csrf_guard.py | C | (T5a) Toda vista del URLconf que atiende métodos no seguros hereda el mixin; en la T5b cubre la salida sin tocarla | RF-7 |
+| backend/openapi.json; frontend/src/api/schema.gen.ts | M | (T5a y T5b) Contrato regenerado | RNF Contrato |
 | frontend/src/api/timeout.ts, timeout.test.ts | C | (T6) `runWithTimeout`; `publicAssets.ts` y `loadStyle.ts` pasan a usarlo | RF-9, RF-11, RF-12 |
 | frontend/src/api/publicAssets.ts, frontend/src/map/loadStyle.ts | M | (T6) Usan `runWithTimeout`; su comportamiento y sus tests no cambian | — |
 | frontend/src/api/session.ts, session.test.ts | C | (T6) Cliente de sesión: `readCsrfToken`, `createSessionClient` (`whoAmI` con 5 s; `register` y `logout` con 10 s), esquemas Zod y reintento único | RF-6, RF-7, RF-9, RF-10, RF-11, RF-12 |
@@ -64,7 +64,7 @@ Spec: specs/009-auth/spec.md (aprobada, alineada con el comportamiento verificad
   - La sesión usa el motor de BD por defecto (`django.contrib.sessions`, ya instalado).
   - El usuario es el de la 004, sin cambios.
   - Las cuentas se crean por el servicio.
-- `config/tests/test_migrations.py` (`makemigrations --check`, en la BD de test) sigue en verde en T1 y en T5.
+- `config/tests/test_migrations.py` (`makemigrations --check`, en la BD de test) sigue en verde en T1, T5a y T5b.
 - No se ejecuta `migrate`.
 
 ## Contrato de API
@@ -195,7 +195,8 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
 - `CurrentSessionView(APIView)`:
   - `authentication_classes = [SessionAuthentication]`, `AllowAny`, `http_method_names = ["get", "head"]`;
   - `get_token(request._request)`; `user` si `is_authenticated`, si no `None`;
-  - `no-store` y `patch_vary_headers(("Cookie",))`.
+  - `no-store` y `patch_vary_headers(("Cookie",))`;
+  - `initial` rechaza con 405 un método no admitido antes de `super().initial()`: `SessionAuthentication` exige CSRF a quien tiene sesión, y sin esto un POST sin token daría 403 `forbidden`.
 - `LogoutView(CsrfEnforcedMixin, APIView)`: `authentication_classes = []`, `AllowAny`, `["post"]`; `request._request.session.flush()`; 204; `delete_cookie(SESSION_COOKIE_NAME, path=..., domain=..., samesite=...)`; `no-store`.
 - Ninguna de las tres marca su respuesta como sin cookies.
 - Serializers en lista blanca, nunca `ModelSerializer`:
@@ -319,7 +320,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
 ### Notas para el plan de la spec: resolución
 | Nota | Resolución |
 |---|---|
-| CSRF explícito | D1. `apps/core/csrf.py`; fixture `csrf_client`; guarda del URLconf; mutaciones en T3 y T5, con registro y salida sin sesión |
+| CSRF explícito | D1. `apps/core/csrf.py`; fixture `csrf_client`; guarda del URLconf; mutaciones en T3, T5a (registro) y T5b (salida sin sesión) |
 | `AuthenticationMiddleware` | D2. Tras `CsrfViewMiddleware`; la lista pública probada con la pila real (T1) |
 | Tests existentes | Ver Blast radius |
 | Comprobaciones en el contenedor | Ver Estrategia de tests, «Comprobaciones en el contenedor» |
@@ -333,8 +334,8 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `apps/users/services.py`, `tests/test_services.py` l.15-26 y la lista de emails, `tests/test_leaks.py` l.22-24 (T2);
   - `apps/core/tests/test_api_import.py` l.9 (T3);
   - `backend/conftest.py`, solo el fixture nuevo (T3);
-  - `config/urls.py` (T5);
-  - `backend/openapi.json` y `frontend/src/api/schema.gen.ts` (T5);
+  - `config/urls.py` (T5a);
+  - `backend/openapi.json` y `frontend/src/api/schema.gen.ts` (T5a y T5b);
   - `frontend/src/api/publicAssets.ts` y `src/map/loadStyle.ts` (T6);
   - `vite.config.ts` (T6);
   - `main.tsx`, `MapPage.tsx` l.78, `NotFoundPage.tsx` l.5 y `i18n/es.ts` (T7);
@@ -358,20 +359,20 @@ Los que la spec ya recoge en «Riesgos aceptados» (el usuario los aceptó) no s
 | Proxy de Vite con `changeOrigin` verdadero rechaza todo POST (decisión de la T7 de la 006 corregida) | D10 en T6; en T9 se comprueba que Django recibe `Host: localhost:5173` y que el registro funciona sin `CSRF_TRUSTED_ORIGINS` |
 | Un registro vencido por tiempo puede haberse completado en el servidor | Antes de dar el error, el cliente pregunta «quién soy» (D18) |
 | El aviso de fallo de «Salir» cambia el alto de la zona de contenido y el mapa debe reajustar su tamaño | Se comprueba en T9 a 375 y a 1280 px; si MapLibre no reajusta, la tarea de holgura lo corrige |
-| T5 puede pasar de 30 min | Se parte con la tarea de holgura: T5a registro y T5b «quién soy», salida y guarda, cada una con su regeneración del contrato |
+| T5 pasaba de 30 min | Partida con la tarea de holgura: T5a registro y guarda, y T5b «quién soy» y salida, cada una con su regeneración del contrato |
 | Registrar en el navegador crea cuentas en la BD de desarrollo | Solo con autorización expresa en ese momento, con `@example.com`; el límite se prueba el último |
 
 ## Estrategia de tests
 | RF | Cómo se verifica |
 |---|---|
-| RF-1 | pytest (T2): email normalizado, hash (`identify_hasher`), `is_staff` y `is_superuser` en falso. pytest (T5): 201 con el cuerpo exacto; `sessionid` HttpOnly, Lax y Max-Age 1209600; «quién soy» después devuelve el email; `is_staff: true` y campos desconocidos ignorados. DevTools (T9) |
-| RF-2 | pytest (T2): cada código y el orden completo (email antes que contraseña; required, too_long, too_short, common, numeric, similar); `email_taken` junto a los de contraseña; `Ana@Correo.ES` frente a `ana@correo.es`; 9, 10, 128 y 129 caracteres; `1234567890` → common y numeric; común en mayúsculas y con espacios; igual al email → similar; espacios conservados (`check_password`); vacíos y `null`; NUL en email y contraseña, y sustituto suelto en ambos; email con sustituto en el dominio → `email_invalid` en `register_user`, `create_user`, `create_superuser` y `change_user_email`, sin SQL sobre `users_user`; `password_invalid` va solo; carrera con `skip_validation` → `email_taken`. pytest (T5): 400 `invalid_fields` con `list(params) == ["email", "password"]`; sesión intacta (métodos de `SessionStore` parcheados para lanzar; fila y clave sin cambios); sin valores. DevTools (T9): email repetido y contraseña débil |
-| RF-3 | pytest (T4): `ip_bucket` (IPv4, mismo /64, otro /64, IPv4 mapeada, `%eth0`, vacía, inválida); con una vista de prueba y `timer` falso: 10 pasan y la 11.ª da 429; cuentan las inválidas, las 413, las 405 y las rechazadas por CSRF, no las 429; `X-Forwarded-For` ignorado; el límite va antes que CSRF y que el método; la ventana se libera. pytest (T5): sobre el endpoint real, `Retry-After` igual a `retry_after` y `no-store`. vitest (T6): `waitMinutes` (0→1, 60→1, 61→2, 3600→60). DevTools (T9, el último) |
-| RF-4 | pytest (T5): con una sesión anónima con datos, de otra cuenta o de la misma, `sessionid` y `csrftoken` cambian, los datos desaparecen y la fila anterior no existe |
-| RF-5 | pytest (T5): 204; la fila desaparece; el identificador anterior ya no autentica en «quién soy»; la cookie se retira siempre (con sesión, caducada, mal formada y sin cookie); sin sesión no cambia nada; `csrftoken` intacta |
-| RF-6 | pytest (T5): anónimo → `{"user": null}` y `csrftoken`; con sesión → email; cuenta desactivada, sesión caducada (fila con `expire_date` un segundo en el pasado) y cookie mal formada → `null` sin error; HEAD sin cuerpo; `expire_date` no cambia tras «quién soy» (sin renovación) |
-| RF-7 | pytest (T3): mixin con vistas de prueba (sin cabecera, vacía, sin cookie, distinta, cookie mal formada, Origin ajeno; 403 `csrf_failed`, `no-store`, sin motivo en el cuerpo ni en el log; `LimitedStream.read` parcheado para que lance; método no admitido → 405). pytest (T5): registro y salida con y sin sesión: sin cuenta ni fila nuevas y sesión intacta; guarda del URLconf. vitest (T6): un solo reintento tras «quién soy» |
-| RF-8 | pytest (T3): 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` → 413; `text/plain` y multipart → 400; JSON inválido, BOM, `NaN`, lista, `"[" * 2048 + "]" * 2048` (400 porque la raíz no es un objeto); `RecursionError` simulado → 400; email numérico, contraseña lista u objeto, booleano → 400; cuerpo vacío → `{}`; objeto anidado en una clave desconocida (unos 600 niveles dentro de 4096 bytes) → se acepta. pytest (T5): sobre el endpoint, también un email de 4 KB → `email_too_long` sin 500 y ese objeto anidado → `invalid_fields` con `email_empty` y `password_required` |
+| RF-1 | pytest (T2): email normalizado, hash (`identify_hasher`), `is_staff` y `is_superuser` en falso. pytest (T5a): 201 con el cuerpo exacto; `sessionid` HttpOnly, Lax y Max-Age 1209600; la sesión nueva es de la cuenta creada; `is_staff: true` y campos desconocidos ignorados. pytest (T5b): «quién soy» después del registro devuelve el email. DevTools (T9) |
+| RF-2 | pytest (T2): cada código y el orden completo (email antes que contraseña; required, too_long, too_short, common, numeric, similar); `email_taken` junto a los de contraseña; `Ana@Correo.ES` frente a `ana@correo.es`; 9, 10, 128 y 129 caracteres; `1234567890` → common y numeric; común en mayúsculas y con espacios; igual al email → similar; espacios conservados (`check_password`); vacíos y `null`; NUL en email y contraseña, y sustituto suelto en ambos; email con sustituto en el dominio → `email_invalid` en `register_user`, `create_user`, `create_superuser` y `change_user_email`, sin SQL sobre `users_user`; `password_invalid` va solo; carrera con `skip_validation` → `email_taken`. pytest (T5a): 400 `invalid_fields` con `list(params) == ["email", "password"]`; sesión intacta (métodos de `SessionStore` parcheados para lanzar; fila y clave sin cambios); sin valores. DevTools (T9): email repetido y contraseña débil |
+| RF-3 | pytest (T4): `ip_bucket` (IPv4, mismo /64, otro /64, IPv4 mapeada, `%eth0`, vacía, inválida); con una vista de prueba y `timer` falso: 10 pasan y la 11.ª da 429; cuentan las inválidas, las 413, las 405 y las rechazadas por CSRF, no las 429; `X-Forwarded-For` ignorado; el límite va antes que CSRF y que el método; la ventana se libera. pytest (T5a): sobre el endpoint real, cada una de las 10 peticiones previas da su propio código y nunca 429 (sin token y token distinto → 403, `Content-Length` > 4096 y `Transfer-Encoding` → 413, JSON inválido e `invalid_fields` → 400, PUT → 405); la 11.ª, válida, da 429 con `Retry-After` igual a `retry_after` y `no-store`; al terminar cada caso no hay ninguna cuenta. vitest (T6): `waitMinutes` (0→1, 60→1, 61→2, 3600→60). DevTools (T9, el último) |
+| RF-4 | pytest (T5a): con una sesión anónima con datos, de otra cuenta o de la misma, `sessionid` y `csrftoken` cambian, los datos desaparecen y la fila anterior no existe |
+| RF-5 | pytest (T5b): 204; la fila desaparece; el identificador anterior ya no autentica en «quién soy»; la cookie se retira siempre (con sesión, caducada, mal formada y sin cookie); sin sesión no cambia nada; `csrftoken` intacta |
+| RF-6 | pytest (T5b): anónimo → `{"user": null}` y `csrftoken`; con sesión → email; cuenta desactivada, sesión caducada (fila con `expire_date` un segundo en el pasado) y cookie mal formada → `null` sin error; HEAD sin cuerpo; `expire_date` no cambia tras «quién soy» (sin renovación) |
+| RF-7 | pytest (T3): mixin con vistas de prueba (sin cabecera, vacía, sin cookie, distinta, cookie mal formada, Origin ajeno; 403 `csrf_failed`, `no-store`, sin motivo en el cuerpo ni en el log; `LimitedStream.read` parcheado para que lance; método no admitido → 405). pytest (T5a): registro con y sin sesión: sin cuenta ni fila nuevas y sesión intacta; guarda del URLconf. pytest (T5b): salida con y sin sesión, igual; la guarda cubre la salida sin tocarla. vitest (T6): un solo reintento tras «quién soy» |
+| RF-8 | pytest (T3): 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` → 413; `text/plain` y multipart → 400; JSON inválido, BOM, `NaN`, lista, `"[" * 2048 + "]" * 2048` (400 porque la raíz no es un objeto); `RecursionError` simulado → 400; email numérico, contraseña lista u objeto, booleano → 400; cuerpo vacío → `{}`; objeto anidado en una clave desconocida (unos 600 niveles dentro de 4096 bytes) → se acepta. pytest (T5a): sobre el endpoint, también un email de 4 KB → `email_too_long` sin 500 y ese objeto anidado → `invalid_fields` con `email_empty` y `password_required` |
 | RF-9 | vitest (T6): `whoAmI` con 5 s (temporizador inyectado), 500, red, forma inválida y `Content-Type` ajeno → `anonymous`. vitest (T7): `topBarAction`, `isPlainLeftClick` y el marcado de `TopBar` (`react-dom/server`): sin acciones en `unknown`, la marca es un enlace a `/map`, el email nunca aparece. DevTools (T9): 375 y 1280 px sin desbordar; «quién soy» bloqueado → «Registrarse» y el mapa funciona; la marca lleva a `/map` |
 | RF-10 | vitest (T8): `emptyFieldErrors`, `createSubmitGuard` (doble envío), `shouldLeaveRegister`. vitest (T6): 201 con forma inválida → «quién soy». DevTools (T9): envío deshabilitado, `/map` sin entrada nueva en el historial (`history.length`), «Atrás» no vuelve al formulario, barra en «Salir», Intro envía |
 | RF-11 | vitest (T8): `fieldMessages`, `firstFocusTarget`, `formStateAfter` (email conservado, contraseña vacía, envío habilitado, también con `failed("timeout")`). vitest (T6): reintento único y error general tras el segundo `csrf_failed`; registro vencido a los 10 s con temporizador inyectado → pregunta «quién soy»: con sesión `registered`, sin ella `failed("timeout")`. DevTools (T9): foco y anuncios con el teclado; registro que no responde (`fetch` simulado que no resuelve) → error general y reintento |
@@ -380,17 +381,17 @@ Los que la spec ya recoge en «Riesgos aceptados» (el usuario los aceptó) no s
 
 | Requisito no funcional | Verificación |
 |---|---|
-| Permisos y métodos | pytest (T5): 405 con `Allow` y formato en PUT, PATCH, DELETE, OPTIONS y HEAD del registro y de la salida, y en POST de «quién soy»; ninguna operación acepta identificadores |
-| Orden de comprobaciones | pytest (T4, T5): límite antes que método y CSRF; CSRF antes que el cuerpo; cuerpo antes que la validación; con el límite superado, cualquier método del registro da 429 |
-| Sesión y cookies | pytest (T1): ajustes por entorno. pytest (T5): atributos de las cookies, `csrftoken` legible (sin HttpOnly), Max-Age |
+| Permisos y métodos | pytest (T5a): 405 con `Allow` y formato en PUT, PATCH, DELETE, OPTIONS y HEAD del registro. pytest (T5b): lo mismo en la salida, y en POST, PUT y DELETE de «quién soy» con y sin sesión y sin token, con `Allow: GET, HEAD`. Ninguna operación acepta identificadores |
+| Orden de comprobaciones | pytest (T4, T5a): límite antes que método y CSRF; CSRF antes que el cuerpo; cuerpo antes que la validación; con el límite superado, cualquier método del registro da 429 |
+| Sesión y cookies | pytest (T1): ajustes por entorno. pytest (T5a y T5b): atributos de las cookies, `csrftoken` legible (sin HttpOnly), Max-Age |
 | Lista pública sin cambios | pytest (T1): `test_public_list_session.py` |
-| Caché | pytest (T5): `no-store` en 201, 200, 204, 400, 403, 405, 413 y 429; `Vary: Cookie` en «quién soy» |
-| Respuestas mínimas | pytest (T5): claves exactas `{"user"}` y `{"email"}` con un usuario staff; ni `id` ni `last_login` |
-| Desconfianza de la entrada | pytest (T2, T3, T5): nunca 500 con NUL, sustitutos, anidamiento ni tipos. vitest (T6): esquemas estrictos |
-| Errores | pytest (T1, T5): códigos y estados. vitest (T8): un mensaje en castellano por código |
-| Privacidad y logs | pytest (T2): `test_leaks.py` con `register_user`. pytest (T5): petición con marca centinela, `caplog` a DEBUG con `force_debug_cursor` y la configuración real del logger comprobada antes; ni email ni contraseña en logs ni en errores; clave del contador sin el email |
-| Contrato | pytest (T5): `test_auth_contract.py`. CI: desfase de `openapi.json` y `api:check` |
-| Mismo origen | pytest (T5): sin `Access-Control-*`. DevTools (T9): solo `localhost:5173`; Django recibe `Host: localhost:5173` y el registro funciona sin `CSRF_TRUSTED_ORIGINS` |
+| Caché | pytest (T5a): `no-store` en 201, 400, 403, 405, 413 y 429. pytest (T5b): en 200, 204, 403 y 405, y `Vary: Cookie` en «quién soy» |
+| Respuestas mínimas | pytest (T5a y T5b): claves exactas `{"user"}` y `{"email"}` con un usuario staff; ni `id` ni `last_login` |
+| Desconfianza de la entrada | pytest (T2, T3, T5a): nunca 500 con NUL, sustitutos, anidamiento ni tipos. vitest (T6): esquemas estrictos |
+| Errores | pytest (T1, T5a, T5b): códigos y estados. vitest (T8): un mensaje en castellano por código |
+| Privacidad y logs | pytest (T2): `test_leaks.py` con `register_user`. pytest (T5a): petición con marca centinela, `caplog` a DEBUG con `force_debug_cursor` y la configuración real del logger comprobada antes; ni email ni contraseña en logs ni en errores; clave del contador sin el email |
+| Contrato | pytest (T5a y T5b): `test_auth_contract.py`. CI: desfase de `openapi.json` y `api:check` |
+| Mismo origen | pytest (T5a y T5b): sin `Access-Control-*`. DevTools (T9): solo `localhost:5173`; Django recibe `Host: localhost:5173` y el registro funciona sin `CSRF_TRUSTED_ORIGINS` |
 | Dependencias | T9: `git diff` de `requirements*` y `package*.json` vacío |
 | Accesibilidad, móvil e idioma | DevTools (T9): 375 y 1280 px, teclado, foco visible, 44 px, movimiento reducido, consola sin errores propios |
 
@@ -422,14 +423,20 @@ Cada mutación se hace sobre una copia del fichero, con el sha256 antes y despu�
   - heredar de `AnonRateThrottle`;
   - anotar también las rechazadas por el límite;
   - no desenvolver la IPv4 mapeada.
-- **T5**:
+- **T5a**:
   - quitar `flush()` del registro;
   - `flush()` y `login()` antes de validar;
-  - quitar `flush()` y `delete_cookie` de la salida;
-  - quitar el mixin de `LogoutView` (falla la salida sin sesión y la guarda);
   - `ModelSerializer` con todos los campos;
   - quitar `no-store` del éxito;
-  - pasar `is_staff` al servicio.
+  - pasar `is_staff` al servicio;
+  - quitar el mixin de `RegisterView` (falla el registro sin token y la guarda);
+  - `throttle_classes = []` en `RegisterView`;
+  - leer el cuerpo en un `initial()` propio antes de `super().initial()` (el 413 dejaría de contar);
+  - comprobar CSRF en una clase de autenticación, que corre antes del límite (el 403 dejaría de contar y ganaría al 429).
+- **T5b**:
+  - quitar `flush()` y `delete_cookie` de la salida;
+  - quitar el mixin de `LogoutView` (falla la salida sin sesión y la guarda);
+  - quitar el rechazo del método antes de autenticar en «quién soy» (con sesión y sin token daría 403).
   - Quitar el `Vary: Cookie` explícito es una mutación equivalente mientras la sesión se lea: se anota en `validation.md`.
 - **T6**:
   - quitar el reintento;
@@ -441,9 +448,9 @@ Cada mutación se hace sobre una copia del fichero, con el sha256 antes y despu�
   - no preguntar «quién soy» tras un registro vencido.
 
 ### Comprobaciones en el contenedor
-- **Verificado** (Django 5.2.18, DRF 3.18.3, drf-spectacular 0.30.0, Python 3.13.16): `login()`, validadores, JSON anidado dentro de 4 KiB (2048 listas anidadas se analizan sin `RecursionError`: dan 400 por la raíz, y un objeto anidado se acepta), throttle, prototipo de CSRF, middleware con la lista pública, lectura de `request.body` por DRF, y el proxy de Vite 8.3.5 contra un backend de prueba. Los tests de T2, T3 y T5 lo fijan en la suite.
+- **Verificado** (Django 5.2.18, DRF 3.18.3, drf-spectacular 0.30.0, Python 3.13.16): `login()`, validadores, JSON anidado dentro de 4 KiB (2048 listas anidadas se analizan sin `RecursionError`: dan 400 por la raíz, y un objeto anidado se acepta), throttle, prototipo de CSRF, middleware con la lista pública, lectura de `request.body` por DRF, y el proxy de Vite 8.3.5 contra un backend de prueba. Los tests de T2, T3, T5a y T5b lo fijan en la suite.
 - **No verificado, y dónde queda cubierto:**
-  - motor de sesión de BD y PostgreSQL: T5, en la BD de test;
+  - motor de sesión de BD y PostgreSQL: T5a y T5b, en la BD de test;
   - email con sustituto: T2, que lo rechaza sin ninguna consulta (`CaptureQueriesContext`);
   - cuerpo troceado bajo `runserver`: T9, con curl;
   - Vite contra Django, `document.cookie` e History API: T9, en el navegador.

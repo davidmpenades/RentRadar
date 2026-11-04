@@ -1,6 +1,6 @@
 # Tareas 009 — Registro, sesión y salida
 Spec: specs/009-auth/spec.md · Plan: specs/009-auth/plan.md
-Máximo 10 tareas: hay 9 y queda una de holgura. Si T5 se desborda, se parte en T5a (registro, URL y contrato) y T5b («quién soy», salida, guarda del URLconf y contrato).
+Máximo 10 tareas: hay 10, porque la T5 se partió con la tarea de holgura en T5a (registro, URL, guarda del URLconf y contrato) y T5b («quién soy», salida y contrato).
 Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfase de `openapi.json`, vitest, build, eslint de los ficheros tocados y `api:check`. El backend solo se prueba en el contenedor y nunca contra la BD de desarrollo. No hay migraciones.
 
 - [x] **T1. Ajustes de autenticación y base de errores de la API.** RF-2 (validadores), RF-4 y RF-6 (sesión de 14 días), RNF Lista pública sin cambios, Errores
@@ -42,15 +42,27 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: /48 y /128; `X-Forwarded-For`; `AnonRateThrottle`; anotar las del propio límite; no desenvolver la IPv4 mapeada.
   - Evidencia: `validation.md`, sección T4.
 
-- [ ] **T5. Vistas de registro, «quién soy» y salida, URLs y contrato.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6, RF-7, RF-8
-  - `apps/users/serializers.py`, `views.py` y `urls.py`; `config/urls.py`; guarda del URLconf en `apps/core/tests/test_csrf_guard.py`.
+- [ ] **T5a. Vista de registro, URL, guarda del URLconf y contrato.** RF-1, RF-2, RF-3, RF-4, RF-7, RF-8
+  - `apps/users/serializers.py`; `RegisterView` y `public_field_errors` en `apps/users/views.py`; `auth/register/` en `apps/users/urls.py`; `config/urls.py`; guarda del URLconf en `apps/core/tests/test_csrf_guard.py`, desde la primera vista que escribe.
   - Se regeneran `backend/openapi.json` y `frontend/src/api/schema.gen.ts`. Cambio de contrato aprobado por el usuario.
-  - Commit: `feat(users): register, session and logout endpoints`
+  - Commit: `feat(users): register endpoint`
   - Hecho cuando:
-    - los tests de `test_register_api.py`, `test_session_api.py`, `test_logout_api.py` y `test_auth_contract.py` fallan primero y luego pasan: sesión nueva al registrarse, registro rechazado sin tocar la sesión, salida con y sin sesión, cookie retirada siempre, «quién soy» en todos sus casos, sin renovación, `no-store` en todo, `Vary: Cookie`, respuestas mínimas, 405 por método, 429 en el endpoint real, sin `Access-Control-*` y logs sin email ni contraseña, y un objeto anidado en una clave desconocida que sigue a la validación (`email_empty` y `password_required`);
+    - los tests de `test_register_api.py`, `test_csrf_guard.py` y los del registro en `test_auth_contract.py` fallan primero y luego pasan: sesión nueva al registrarse (identificador y token CSRF que cambian), registro rechazado sin tocar la sesión, `no-store`, respuestas mínimas, 405 por método, sin `Access-Control-*`, logs sin email ni contraseña, y un objeto anidado en una clave desconocida que sigue a la validación (`email_empty` y `password_required`);
+    - sobre el endpoint real, con cada tipo de petición rechazada (sin token, token distinto, `Content-Length` > 4096, `Transfer-Encoding`, JSON inválido, `invalid_fields` y PUT), cada una de las 10 previas da su propio código y nunca 429, la 11.ª, válida, da 429 con `Retry-After` igual a `retry_after` y `no-store`, y al terminar cada caso no hay ninguna cuenta;
     - `spectacular --validate --fail-on-warn`, `npm run api:check` y `npm run build` en verde.
-  - Pruebas de mecanismo: quitar `flush()` del registro; `flush()` y `login()` antes de validar; quitar `flush()` y `delete_cookie` de la salida; quitar el mixin de `LogoutView`; `ModelSerializer`; quitar `no-store`; pasar `is_staff`. `Vary: Cookie` se anota como equivalente.
-  - Evidencia: `validation.md`, sección T5.
+  - Pruebas de mecanismo: quitar `flush()` del registro; `flush()` y `login()` antes de validar; `ModelSerializer`; quitar `no-store`; pasar `is_staff`; quitar el mixin de `RegisterView` (falla el registro sin token y la guarda); `throttle_classes = []`; leer el cuerpo antes de `super().initial()`; CSRF en una clase de autenticación.
+  - Evidencia: `validation.md`, sección T5a.
+
+- [ ] **T5b. Vistas de «quién soy» y salida, y contrato.** RF-1 («quién soy» tras el registro), RF-5, RF-6, RF-7
+  - `CurrentSessionView` y `LogoutView` en `apps/users/views.py`; `auth/session/` y `auth/logout/` en `apps/users/urls.py`. La guarda del URLconf de la T5a cubre `LogoutView` sin tocarla.
+  - «Quién soy» rechaza con 405 un método no admitido antes de autenticar: con sesión, `SessionAuthentication` exigiría CSRF y daría 403.
+  - Se regeneran `backend/openapi.json` y `frontend/src/api/schema.gen.ts`.
+  - Commit: `feat(users): session and logout endpoints`
+  - Hecho cuando:
+    - los tests de `test_session_api.py`, `test_logout_api.py` y el resto de `test_auth_contract.py` fallan primero y luego pasan: «quién soy» en todos sus casos y tras el registro, sin renovación y con `Vary: Cookie`; POST, PUT y DELETE a «quién soy» con y sin sesión y sin token dan 405 con `Allow: GET, HEAD`; salida con y sin sesión y cookie retirada siempre, también con una sesión caducada; `no-store` en todo; respuestas mínimas; la guarda de la T5a pasa con `LogoutView` sin cambios en ella;
+    - `spectacular --validate --fail-on-warn`, `npm run api:check` y `npm run build` en verde.
+  - Pruebas de mecanismo: quitar `flush()` y `delete_cookie` de la salida; quitar el mixin de `LogoutView`; quitar el rechazo del método antes de autenticar en «quién soy». `Vary: Cookie` se anota como equivalente.
+  - Evidencia: `validation.md`, sección T5b.
 
 - [ ] **T6. Cliente de sesión, tiempo máximo común y proxy de Vite.** RF-3 (minutos), RF-6, RF-7, RF-9, RF-10, RF-11, RF-12
   - `src/api/timeout.ts` (extraído); `publicAssets.ts` y `loadStyle.ts` lo usan; `src/api/session.ts`, con «quién soy» a 5 s y registro y salida a 10 s, todos con el mismo helper; `waitMinutes` y `throttledMessage` en `i18n/format.ts`; `vite.config.ts` con el proxy como objeto y `changeOrigin: false`.
