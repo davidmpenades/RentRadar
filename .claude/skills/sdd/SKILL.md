@@ -84,7 +84,7 @@ Como máximo 10 tareas de 20-30 min, en orden de dependencia. Cada tarea es un c
 Una tarea cada vez:
 1. Escribe primero los tests y comprueba que fallan por la razón esperada.
 2. Escribe el código mínimo para que pasen.
-3. Verifica. Backend: `pytest -q`, más `manage.py check` y `makemigrations --check --dry-run` si tocas modelos. Frontend: `npx vitest run`, `npm run build` y `npx eslint <ficheros tocados>`.
+3. Verifica. Backend: `pytest -q`, más `manage.py check` y `pytest -q config/tests/test_migrations.py` si tocas modelos (`makemigrations --check` con `manage.py` lee la BD de desarrollo). Frontend: `npx vitest run`, `npm run build` y `npx eslint <ficheros tocados>`.
 4. Si el test protege un mecanismo (permiso, omisión de un campo, foco, limpieza), rompe el código a propósito, comprueba que el test falla y restáuralo.
 5. Muestra el resultado y el mensaje de commit propuesto. Con la aprobación: commit, `git log --oneline -3` y marca la tarea.
 6. Para. No empieces la siguiente.

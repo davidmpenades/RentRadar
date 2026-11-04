@@ -9,7 +9,8 @@ Marketplace de alquiler de bienes (productos y espacios) entre particulares o pr
 ## Comandos
 - Backend: `docker compose up -d` · `docker compose exec backend pytest -q` · `docker compose exec backend sh -c "ruff check . && ruff format --check ."`
 - Lint del backend con el stack parado, sin BD ni cargar la app: `docker compose run --rm --no-deps --entrypoint "" backend sh -c "ruff check . && ruff format --check ."`
-- Órdenes del backend que escriben en el bind mount (`ruff format`, `makemigrations`): `docker compose exec -u "$(id -u)" backend …`, porque el UID 10001 no puede escribir.
+- Órdenes del backend que escriben en el bind mount: `ruff format` con `docker compose exec -u "$(id -u)" backend …`, porque el UID 10001 no puede escribir; `makemigrations` con `docker compose run --rm --no-deps -e DB_HOST=db-inexistente.invalid -u "$(id -u)" --entrypoint "" backend python manage.py makemigrations`, para que no lea la BD de desarrollo.
+- Migraciones pendientes: `docker compose exec backend pytest -q config/tests/test_migrations.py`; nunca `manage.py makemigrations --check` con la BD de desarrollo, que lee `django_migrations`. SQL de una migración, sobre la BD de test: `docker compose exec backend pytest -q --reuse-db config/tests/test_migrations.py` y después `docker compose exec -e DJANGO_ENV=test backend python manage.py sqlmigrate <app> <número>`.
 - Frontend: `cd frontend && npm run dev` · `npx vitest run` · `npm run build` · `npx eslint <ficheros>`
 
 ## Convenciones
