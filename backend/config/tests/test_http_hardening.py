@@ -93,6 +93,9 @@ def test_cookie_policy_in_every_environment(load_settings, env):
     assert module.CSRF_USE_SESSIONS is False
     assert module.SESSION_COOKIE_SAMESITE == "Lax"
     assert module.CSRF_COOKIE_SAMESITE == "Lax"
+    assert module.SESSION_COOKIE_AGE == 14 * 24 * 60 * 60
+    assert module.SESSION_SAVE_EVERY_REQUEST is False
+    assert module.SESSION_EXPIRE_AT_BROWSER_CLOSE is False
 
 
 @pytest.mark.django_db

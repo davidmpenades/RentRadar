@@ -3,7 +3,7 @@ Spec: specs/009-auth/spec.md · Plan: specs/009-auth/plan.md
 Máximo 10 tareas: hay 9 y queda una de holgura. Si T5 se desborda, se parte en T5a (registro, URL y contrato) y T5b («quién soy», salida, guarda del URLconf y contrato).
 Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfase de `openapi.json`, vitest, build, eslint de los ficheros tocados y `api:check`. El backend solo se prueba en el contenedor y nunca contra la BD de desarrollo. No hay migraciones.
 
-- [ ] **T1. Ajustes de autenticación y base de errores de la API.** RF-2 (validadores), RF-4 y RF-6 (sesión de 14 días), RNF Lista pública sin cambios, Errores
+- [x] **T1. Ajustes de autenticación y base de errores de la API.** RF-2 (validadores), RF-4 y RF-6 (sesión de 14 días), RNF Lista pública sin cambios, Errores
   - `AuthenticationMiddleware` tras `CsrfViewMiddleware`; `AUTH_PASSWORD_VALIDATORS`; `SESSION_COOKIE_AGE`, `SESSION_SAVE_EVERY_REQUEST` y `SESSION_EXPIRE_AT_BROWSER_CLOSE`.
   - En `core/api.py`, los códigos `invalid_fields`, `invalid_request`, `payload_too_large` y `csrf_failed`, con estado por código y `params` con listas.
   - `ApiErrorSerializer` pasa a `core/serializers.py`.
