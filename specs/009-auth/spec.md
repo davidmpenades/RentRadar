@@ -42,7 +42,7 @@ La **entrada** (con su error uniforme de credenciales incorrectas, sus límites 
 - **Token CSRF**: valor que el cliente envía en una cabecera en cada petición que cambia el estado (registro y salida) y que demuestra que sale de la propia página. Es de doble envío: la petición debe llevar la misma cadena en la cabecera y en una cookie legible por la página, y no está ligado a la sesión. El cliente lo recibe en esa cookie al preguntar «quién soy», y cambia cada vez que se abre una sesión.
 - **«Quién soy»**: consulta del cliente por la sesión de su navegador.
 - **Barra superior**: franja superior de la página, con la marca (un enlace a la página del mapa) y las acciones de sesión, en todas las páginas. No es la «cabecera» del panel de resultados de la 006.
-- **IP del visitante**: la dirección de la conexión; en IPv6, su prefijo /64, de modo que las direcciones de un mismo /64 comparten el límite. Detrás de un proxy sería la del proxy hasta que la spec 011 fije cuál es de confianza.
+- **IP del visitante**: la dirección de la conexión; en IPv6, su prefijo /64, de modo que las direcciones de un mismo /64 comparten el límite. Una IP vacía o no válida cae en un cubo fijo común, así que nunca queda sin límite. Detrás de un proxy sería la del proxy hasta que la spec 011 fije cuál es de confianza.
 - **Página de registro**: página propia de RentRadar, con la dirección definitiva `/register`. La dirección con barra final (`/register/`) se normaliza a ella.
 - **Demasiado anidado**: un JSON que el analizador de la API no admite por su profundidad. No hay un límite de profundidad propio: un objeto válido anidado dentro de una clave desconocida no es demasiado anidado; se acepta y esa clave se ignora como cualquier campo desconocido.
 
@@ -51,12 +51,12 @@ La **entrada** (con su error uniforme de credenciales incorrectas, sus límites 
 |---|---|
 | Longitud de la contraseña | de 10 a 128 puntos de código |
 | Caducidad de la sesión | 14 días desde que se abre, sin renovación |
-| Límite de registro por IP | 10 peticiones por hora |
+| Límite de registro por IP | 10 peticiones en una hora deslizante |
 | Tamaño máximo del cuerpo de una petición de registro | 4 KiB |
 | Tiempo máximo de espera de «quién soy» | 5 s |
 | Tiempo máximo de espera del registro y de la salida | 10 s |
 
-En el límite cuentan las peticiones aceptadas y las rechazadas por CSRF, por cuerpo inválido, por validación o por método no admitido, no las rechazadas por el propio límite. Los demás números los fija el plan: el almacén de los contadores y la altura de la barra superior.
+En el límite cuenta toda petición que no rechace el propio límite: las aceptadas y las que después se rechazan por CSRF, por cuerpo inválido o demasiado grande (413), por validación o por método no admitido. Los demás números los fija el plan: el almacén de los contadores y la altura de la barra superior.
 
 ## Requisitos funcionales
 
