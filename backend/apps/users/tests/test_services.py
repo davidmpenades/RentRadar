@@ -3,13 +3,21 @@ import traceback
 import pytest
 from django.contrib.auth import authenticate
 from django.contrib.auth.hashers import identify_hasher
-from django.db import DatabaseError, IntegrityError
+from django.db import DatabaseError, IntegrityError, connection
+from django.test.utils import CaptureQueriesContext
 
 from apps.core.errors import DomainValidationError
 from apps.users import services
 from apps.users.models import User
-from apps.users.services import change_user_email, create_superuser, create_user
+from apps.users.services import (
+    change_user_email,
+    create_superuser,
+    create_user,
+    register_user,
+)
+from apps.users.tests.helpers import skip_validation
 
+SURROGATE = chr(0xD800)
 PASSWORD = "correct horse battery staple"
 EMAIL_SUFFIX = "@correo.es"
 PLAN_ERROR_CODES = {
@@ -21,6 +29,10 @@ PLAN_ERROR_CODES = {
     "password_required",
     "password_invalid",
     "password_too_long",
+    "password_too_short",
+    "password_too_common",
+    "password_entirely_numeric",
+    "password_too_similar",
     "constraint_violated",
     "validation_failed",
 }
@@ -35,6 +47,7 @@ INVALID_EMAILS = [
     ("an\na@x.es", {"email_invalid", "email_control_char"}),
     ('"a\x01b"@x.es', {"email_control_char"}),
     (123, {"email_invalid"}),
+    ("ana@" + SURROGATE + ".es", {"email_invalid"}),
 ]
 # Si alguien separa los dos flujos de alta, los rechazos fallan en el que se desvíe
 CREATE_FUNCTIONS = pytest.mark.parametrize(
@@ -48,11 +61,6 @@ def email_of_length(length):
 
 def codes_of(raised):
     return {field: set(codes) for field, codes in raised.value.message_dict.items()}
-
-
-def skip_validation(monkeypatch):
-    # Simula la carrera: otra alta entra entre la validación y el INSERT
-    monkeypatch.setattr(User, "full_clean", lambda self, *args, **kwargs: None)
 
 
 def trap_make_password(monkeypatch):
@@ -255,6 +263,62 @@ def test_hash_guard_fires_on_a_valid_creation(monkeypatch, create):
 
     with pytest.raises(AssertionError, match="make_password"):
         create(email="ana@correo.es", password=PASSWORD)
+
+
+@pytest.mark.django_db
+@CREATE_FUNCTIONS
+def test_password_with_a_lone_surrogate_is_invalid_without_hashing(monkeypatch, create):
+    trap_make_password(monkeypatch)
+
+    with pytest.raises(DomainValidationError) as raised:
+        create(email="ana@correo.es", password=SURROGATE * 12)
+
+    assert codes_of(raised) == {"password": {"password_invalid"}}
+    assert not User.objects.exists()
+
+
+@pytest.mark.django_db
+@CREATE_FUNCTIONS
+def test_password_with_a_nul_is_still_accepted_and_hashed(create):
+    password = "p" * 5 + "\x00" + "p" * 5
+
+    user = create(email="ana@correo.es", password=password)
+    user.refresh_from_db()
+
+    identify_hasher(user.password)
+    assert user.check_password(password)
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    "create",
+    [create_user, create_superuser, register_user],
+    ids=["user", "superuser", "register"],
+)
+def test_email_with_a_lone_surrogate_runs_no_query_on_creation(create):
+    with (
+        CaptureQueriesContext(connection) as queries,
+        pytest.raises(DomainValidationError) as raised,
+    ):
+        create(email="ana@" + SURROGATE + ".es", password=PASSWORD)
+
+    assert codes_of(raised) == {"email": {"email_invalid"}}
+    assert len(queries) == 0
+
+
+@pytest.mark.django_db
+def test_email_with_a_lone_surrogate_runs_no_query_on_change():
+    user = create_user(email="ana@correo.es", password=PASSWORD)
+
+    with (
+        CaptureQueriesContext(connection) as queries,
+        pytest.raises(DomainValidationError) as raised,
+    ):
+        change_user_email(user=user, email="ana@" + SURROGATE + ".es")
+
+    assert codes_of(raised) == {"email": {"email_invalid"}}
+    assert len(queries) == 0
+    assert user.email == "ana@correo.es"
 
 
 @pytest.mark.django_db

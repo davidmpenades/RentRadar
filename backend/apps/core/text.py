@@ -7,6 +7,10 @@ def contains_control_character(text: str) -> bool:
     return any(unicodedata.category(char) == "Cc" for char in text)
 
 
+def contains_lone_surrogate(text: str) -> bool:
+    return any(unicodedata.category(char) == "Cs" for char in text)
+
+
 def reject_control_characters(value: str) -> None:
     # Sin params: el valor recibido no debe viajar en el error
     if contains_control_character(value):

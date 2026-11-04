@@ -14,7 +14,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: `SessionAuthentication` en la vista pública y en los valores por defecto; quitar el middleware; `csrf_failed` con estado 400.
   - Evidencia: `specs/009-auth/validation.md`, sección T1.
 
-- [ ] **T2. Servicio de registro con las reglas de contraseña y el sustituto suelto en el email.** RF-1, RF-2
+- [x] **T2. Servicio de registro con las reglas de contraseña y el sustituto suelto en el email.** RF-1, RF-2
   - `contains_lone_surrogate` en `core/text.py`; `register_user` y `_registration_password_errors`; `_create_account` y `change_user_email` rechazan el email con sustituto suelto con `email_invalid` antes de `full_clean` y de cualquier consulta (regla de la 004, RF-4: vale para `create_user`, `create_superuser`, el registro y el cambio de email); cuatro códigos nuevos.
   - Toca tests existentes: `apps/users/tests/test_services.py` (`PLAN_ERROR_CODES` y los casos del sustituto) y `test_leaks.py` (`register_user`).
   - Commit: `feat(users): registration service with password rules`
