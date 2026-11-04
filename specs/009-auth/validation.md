@@ -165,3 +165,55 @@ sha256 antes y después:
 |---|---|
 | `apps/core/csrf.py` (mutaciones 1 a 6) | `c101904bf51fc56767f140b96ff4e903e6b3b74195e2569fb3f90f12c5942f92` |
 | `apps/core/request_body.py` (mutaciones 7 a 11) | `ef62c3c6bf4c4358ecaa9968423e88cb85c1e9770c024f070cc0cc0b2243b20b` |
+
+## Límite de registro por IP con IPv6 por /64 (T4)
+Fecha: 2026-11-04 · Ficheros: `backend/apps/users/{throttling.py, tests/test_throttling.py, tests/throttle_views.py, tests/throttle_urls.py}`. Sin migraciones; `openapi.json` no cambia.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests nuevos antes del código | `docker compose exec backend pytest -q apps/users/tests/test_throttling.py` | Sin `throttling.py`: `ModuleNotFoundError: No module named 'apps.users.throttling'`. Con un esbozo que usaba la IP recibida como clave, sin agrupar: 44 fallan (agrupación por /64, IPv4 mapeada, zona, cubo fijo, clave de caché y cupos compartidos) y 29 pasan (los que el propio `SimpleRateThrottle` ya cumple) |
+| Tests de la tarea tras el código | la misma orden | 77 passed |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1995 passed |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 134 ficheros formateados |
+| Modelos y migraciones cuadran | `docker compose exec backend python manage.py makemigrations --check --dry-run` | No changes detected |
+| Contrato | `docker compose exec -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` y `git diff --stat backend/openapi.json` | Sin avisos; diff vacío |
+| Tipos del cliente | `cd frontend && npm run api:check` | Sin cambios (código de salida 0) |
+| Caracteres invisibles | Detección por categoría Unicode (Cc, Cf, Cs, Mn, Mc, Me, Zl, Zp y Zs salvo el espacio) sobre los cuatro ficheros | 0 hallazgos; las cifras no ASCII del test van como escapes |
+
+`migrate` no se ha ejecutado en la BD de desarrollo.
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Origen de la IP | Con `NUM_PROXIES = 0`, `get_ident` de DRF devuelve `REMOTE_ADDR` y no lee `X-Forwarded-For`. El valor por defecto de DRF es `None`, que sí se fiaría de la cabecera |
+| 2 | Orden | `check_throttles()` corre en `APIView.initial()`, antes de elegir el manejador (405) y antes de la comprobación CSRF del mixin, que va tras `super().initial()`. La anotación se hace al pasar el límite, antes de leer el cuerpo: cuentan las 405 (PUT, HEAD, OPTIONS, GET), las 403 de CSRF, las 413 (declarada y `Transfer-Encoding`) y las 400 de `invalid_request`. Las 400 de `invalid_fields` se prueban en la T5, con la vista real |
+| 3 | Las 429 no cuentan | `throttle_failure` no anota: seguir llamando tras el 429 no alarga la espera |
+| 4 | Ventana | Deslizante: 5 + 5 peticiones separadas media hora agotan el cupo, y al pasar otra media hora se liberan solo las 5 primeras |
+| 5 | Zona IPv6 | `ip_network((dirección, 64), strict=False)` solo crea una dirección nueva, sin zona, cuando hay bits de host. Con la parte de host a cero conserva la dirección original: `fe80::%eth0` daba `fe80::%eth0/64` y `fe80::%eth1` daba `fe80::%eth1/64`, de modo que cada zona tenía su propio cupo y la zona entraba en la clave. Es un fallo de corrección, no explotable con `NUM_PROXIES = 0`: `REMOTE_ADDR` lo rellena el servidor a partir de la conexión y la zona solo aparece en direcciones de la red local, así que un cliente de internet no puede elegirla. Por eso la dirección se reconstruye desde su entero, sin zona, antes de truncar; una zona de cualquier longitud se acepta y se descarta. Comprobado en el contenedor con los ajustes de test, sin conexión a la BD |
+| 6 | Valores que no son una dirección | `ip_address(5)` se acepta como `0.0.0.5`, por eso se exige texto antes de analizar. Lo vacío, lo no válido y lo que no es texto van al cubo `unknown`; el texto recibido nunca entra en la clave |
+| 7 | Usuario con sesión | La vista de registro no autentica (`authentication_classes = []`), así que ahí el usuario es siempre anónimo. Para que el test distinga un límite que eximiera a los autenticados, usa una vista de prueba con `SessionAuthentication` (mutación m11) |
+| 8 | Reloj | `SimpleRateThrottle.timer` es un atributo de clase; el test lo sustituye con `staticmethod`, porque una función normal recibiría la instancia como primer argumento. La caducidad interna de la caché sigue en tiempo real, pero la ventana la decide la lista de marcas con el reloj inyectado |
+| 9 | Aislamiento | El fixture `clear_default_cache` de `backend/conftest.py`, ya existente y de uso automático, vacía la caché antes de cada test; el cliente de pruebas siempre sale de `127.0.0.1` |
+
+### Pruebas de mecanismo
+Mutaciones sobre una copia hecha junto al fichero (`throttling.py.orig`), escritas sobre el mismo inode, restauradas desde la copia y con la copia borrada; sha256 idéntico antes y después y ninguna copia sin versionar. Ejecución sobre `apps/users/tests/test_throttling.py`, todas sobre la versión final del fichero.
+
+| # | Mutación | Tests que fallan |
+|---|---|---|
+| m1 | Agrupar IPv6 en /48 | 14: `test_ip_bucket_groups_ipv6_by_64_and_keeps_ipv4` (los 10 casos IPv6), `test_an_address_of_another_64_has_another_bucket`, `test_a_very_long_zone_is_dropped_too`, `test_the_cache_key_of_a_valid_address_uses_its_bucket` y `test_an_address_of_another_64_has_its_own_quota` |
+| m2 | Agrupar IPv6 en /128 | 16: `test_ip_bucket_groups_ipv6_by_64_and_keeps_ipv4` (los 10 casos IPv6), `test_two_addresses_of_the_same_64_share_a_bucket`, `test_a_zone_is_dropped_and_the_address_groups_like_any_other`, `test_a_very_long_zone_is_dropped_too`, `test_the_received_text_never_becomes_part_of_the_bucket`, `test_the_cache_key_of_a_valid_address_uses_its_bucket`, `test_two_addresses_of_the_same_64_share_the_limit` y `test_an_address_of_another_64_has_its_own_quota` |
+| m3 | Tomar `X-Forwarded-For` antes que `get_ident` | 1: `test_x_forwarded_for_is_ignored` |
+| m4 | Heredar de `AnonRateThrottle` sin clave propia | 7: `test_a_logged_in_visitor_is_limited_too`, los dos de la clave de caché, los cupos por mismo y otro /64, el de la IPv4 mapeada y el del cubo fijo |
+| m5 | Anotar también las rechazadas por el límite | 4: `test_ten_requests_pass_and_the_eleventh_is_throttled`, `test_the_wait_shrinks_as_the_clock_advances`, `test_throttled_requests_do_not_count_and_do_not_extend_the_wait` y `test_the_window_slides_instead_of_resetting` |
+| m6 | No desenvolver la IPv4 mapeada | 6: los 4 casos de `test_a_mapped_ipv4_has_the_bucket_of_the_direct_ipv4`, `test_a_mapped_ipv4_is_not_grouped_by_its_64` y `test_a_mapped_ipv4_shares_the_quota_of_the_direct_ipv4` |
+| m7 | El texto recibido como cubo si no es una dirección | 20: los 17 casos de texto de `test_anything_that_is_not_an_address_goes_to_the_fixed_bucket`, `test_the_received_text_never_becomes_part_of_the_bucket`, `test_the_cache_key_carries_the_scope_and_the_bucket_only` y `test_unusable_addresses_share_the_fixed_bucket_without_failing` |
+| m8 | No exigir texto antes de analizar | 2: `test_anything_that_is_not_an_address_goes_to_the_fixed_bucket` con `5` y `0` |
+| m9 | Conservar la zona (truncar la dirección analizada, sin reconstruirla desde su entero) | 5: `test_ip_bucket_groups_ipv6_by_64_and_keeps_ipv4` con `fe80::%eth0`, `fe80::%eth1` y `2001:db8:0:1::%x`, `test_a_zone_is_dropped_and_the_address_groups_like_any_other` y `test_the_received_text_never_becomes_part_of_the_bucket`. Los casos con bits de host (`fe80::1%eth0`) no la detectan: ahí `strict=False` ya crea una dirección sin zona |
+| m10 | Tasa `11/hour` | 26: los 25 tests sobre las vistas de prueba (los 11 casos de `test_every_kind_of_request_counts_whatever_the_answer` incluidos) y `test_the_limit_is_declared_on_the_class_and_not_read_from_settings` |
+| m11 | Eximir a los autenticados (`return None` si `request.user.is_authenticated`) | 1: `test_a_logged_in_visitor_is_limited_too` |
+
+sha256 antes y después:
+
+| Fichero | sha256 |
+|---|---|
+| `apps/users/throttling.py` (m1 a m11) | `0389bea04c600d585b0a44bc759781f29521e09dc65fee560f3759234ea482a5` |

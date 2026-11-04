@@ -30,7 +30,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: CSRF solo con usuario autenticado; `PermissionDenied`; `CSRFCheck` que acepta siempre; leer el cuerpo antes; CSRF antes de `super().initial()`; quitar `Transfer-Encoding`, la longitud declarada o el `+ 1`; quitar la captura de `RecursionError`; números como texto.
   - Evidencia: `validation.md`, sección T3.
 
-- [ ] **T4. Límite de registro por IP con IPv6 por /64.** RF-3
+- [x] **T4. Límite de registro por IP con IPv6 por /64.** RF-3
   - `apps/users/throttling.py` (`ip_bucket` y `RegistrationThrottle`).
   - Commit: `feat(users): registration rate limit by ip prefix`
   - Hecho cuando:
