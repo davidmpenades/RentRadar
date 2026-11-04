@@ -6,7 +6,13 @@ import pytest
 from django.conf import settings
 
 # Un módulo por proceso: en la sesión de pytest ya estarían cargados
-MODULES = ["apps.core.api", "apps.core.negotiation", "rest_framework.views"]
+MODULES = [
+    "apps.core.api",
+    "apps.core.csrf",
+    "apps.core.negotiation",
+    "apps.core.request_body",
+    "rest_framework.views",
+]
 
 
 def import_in_a_new_process(module):

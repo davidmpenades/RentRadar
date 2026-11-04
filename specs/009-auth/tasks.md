@@ -22,7 +22,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: hash antes de comprobar la longitud; quitar la comprobación de sustitutos (en el alta y en el cambio de email); reordenar los validadores; `password_invalid` no exclusivo; similitud sin usuario.
   - Evidencia: `validation.md`, sección T2.
 
-- [ ] **T3. CSRF explícito y lectura acotada del cuerpo.** RF-7, RF-8
+- [x] **T3. CSRF explícito y lectura acotada del cuerpo.** RF-7, RF-8
   - `apps/core/csrf.py` (`enforce_csrf` y `CsrfEnforcedMixin`); `apps/core/request_body.py` (`read_json_object` y `read_text_fields`); fixture `csrf_client` en `backend/conftest.py`; vistas de prueba en `apps/core/tests`.
   - Toca tests existentes: `apps/core/tests/test_api_import.py` (`MODULES`).
   - Commit: `feat(core): explicit csrf check and bounded json body`

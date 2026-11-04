@@ -100,3 +100,68 @@ sha256 antes y después:
 |---|---|
 | `apps/users/services.py` (mutaciones 1, 2a, 2b, 2c, 2d, 2e, 3b, 4 y 5) | `304f7a6b6115464971561a3dc5dba226ff2ce7a71685ff38eede3cbc5bae7569` |
 | `config/settings/base.py` (mutación 3a) | `f6bcc6a1b307fc6d9af589e12b3552c1dca88e6150fd700d673fcdb2890f566f` |
+
+## CSRF explícito y lectura acotada del cuerpo (T3)
+Fecha: 2026-11-04 · Ficheros: `backend/{conftest.py, apps/core/csrf.py, apps/core/request_body.py, apps/core/tests/{csrf_views.py, csrf_urls.py, test_csrf.py, test_request_body.py, test_api_import.py}}`. Sin migraciones; `openapi.json` no cambia.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests nuevos antes del código | `docker compose exec backend pytest -q apps/core/tests/test_csrf.py apps/core/tests/test_request_body.py apps/core/tests/test_api_import.py` | 2 errores de recolección y ejecución interrumpida (ver abajo) |
+| Tests de la tarea tras el código | la misma orden | 101 passed |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 1918 passed |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 130 ficheros formateados |
+| Modelos y migraciones cuadran | `docker compose exec backend python manage.py makemigrations --check --dry-run` | No changes detected |
+| Contrato | `docker compose exec -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` y `git diff --stat backend/openapi.json` | Sin avisos; diff vacío |
+| Tipos del cliente | `cd frontend && npm run api:check` | Sin cambios |
+| Caracteres invisibles | Detección por categoría Unicode (Cc, Cf, Cs, Mn, Mc, Me, Zl, Zp y Zs salvo el espacio) sobre los ocho ficheros de código y tests tocados | 0 hallazgos |
+
+`migrate` no se ha ejecutado en la BD de desarrollo.
+
+### Tests que fallaron primero
+| Fichero | Fallo | Razón |
+|---|---|---|
+| `apps/core/tests/test_csrf.py` | `ModuleNotFoundError: No module named 'apps.core.csrf'` | El módulo no existe |
+| `apps/core/tests/test_request_body.py` | `ModuleNotFoundError: No module named 'apps.core.request_body'` | El módulo no existe |
+| `apps/core/tests/test_api_import.py` | No se ejecutó por separado antes del código: los dos errores de recolección anteriores interrumpieron la sesión. Con `MODULES` ampliado y los módulos creados pasa (5 casos) | Mismo motivo; su valor lo da la importación en un proceso nuevo |
+
+Tras crear los módulos, 3 tests fallaron por defectos de los propios tests (no del código) y se corrigieron: `GET` y `HEAD` enviaban el cuerpo como cadena de consulta (`ValueError` en `urlencode`) y el cuerpo vacío con tipo JSON no llevaba `CONTENT_TYPE`, porque `RequestFactory` solo lo pone si hay cuerpo.
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Orden de DRF | `APIView.dispatch` ejecuta `initial()` (negociación, autenticación, permisos, límites) y después busca el manejador; si el método no está en `http_method_names` o no existe, responde 405. Por eso el mixin comprueba CSRF tras `super().initial()` y solo si el manejador existe. Los tests lo fijan: un PUT sin token da 405 con y sin manejador de otro método, y con el límite superado un POST y un PUT sin token dan 429, no 403 |
+| 2 | Clientes de prueba | El `Client` de Django y `APIRequestFactory` marcan la petición con `_dont_enforce_csrf_checks = True` y `CSRFCheck` lo respeta: con ellos nunca se vería un 403. De ahí la fixture `csrf_client` (`Client(enforce_csrf_checks=True)`) y, en el test unitario, `_dont_enforce_csrf_checks = False` a mano |
+| 3 | Cuerpo no leído | Con `LimitedStream.read` parcheado para lanzar, la petición sin token da 403 limpio, también con un cuerpo de formulario: `POST = QueryDict()` evita que `CSRFCheck` lo analice. Sin esa línea, un token solo en `csrfmiddlewaretoken` se aceptaba (mutación 6) |
+| 4 | Otras vistas | Un POST a la lista pública con `csrf_client` da 405 `method_not_allowed`, no 403: las vistas DRF son `csrf_exempt` y la lista no usa el mixin |
+| 5 | Motivo del rechazo | `CSRFCheck._reject` devuelve el motivo en vez de registrarlo; `enforce_csrf` lanza `ApiError("csrf_failed")` sin él y sin `__context__`. Ni el cuerpo ni el log (DEBUG) lo contienen ni llevan los valores recibidos |
+| 6 | Límite de lectura | `LimitedStream` de Django corta la lectura en el `Content-Length` declarado: bajo WSGI nunca se leen más bytes de los declarados. La rama «se leen más de 4096 bytes» solo se alcanza con un flujo inyectado (`request._stream = BytesIO(...)` con un `CONTENT_LENGTH` pequeño; `read(4097)` devuelve 4097 bytes), que es lo que usan sus tests |
+| 7 | `Content-Length` | No numérico, vacío o ausente cuenta como 0; uno negativo (`-5`) hace que `read` devuelva `b""` sin error. Todos dan un cuerpo vacío, es decir `{}` con tipo JSON |
+| 8 | `Content-Type` | Sin cabecera, Django da `application/octet-stream`. `Application/JSON; charset=latin-1` da `content_type == "application/json"`: el charset se ignora y se lee siempre como UTF-8 |
+| 9 | Analizador | Con `JSONParser().parse(BytesIO(raw), "application/json", {})`: BOM, `NaN`, UTF-8 inválido y un cuerpo de solo espacios dan `ParseError` (400; el caso de solo espacios queda documentado por un test); `"[" * 2048 + "]" * 2048` se analiza sin `RecursionError` y da una lista (400 por la raíz); con claves duplicadas gana la última; un objeto anidado unos 600 niveles en una clave desconocida (3602 bytes) se analiza y es un `dict` |
+| 10 | `RecursionError` | Con datos reales no se produce en este Python: la captura es defensiva y su test la simula parcheando `JSONParser` donde se usa (`apps.core.request_body`) |
+| 11 | Objeto anidado | Un objeto válido anidado en una clave desconocida se acepta por definición de la spec («Demasiado anidado»): no hay límite de profundidad propio y esa clave se ignora como cualquier campo desconocido |
+| 12 | Guarda del URLconf | Queda para la T5: aquí el mixin solo se aplica a las vistas de prueba |
+
+### Pruebas de mecanismo
+Mutaciones sobre una copia hecha junto al fichero (`<fichero>.orig`), restaurada con `cp` y borrada; sha256 idéntico antes y después en las once y ninguna copia sin versionar. Ejecución sobre `test_csrf.py` y `test_request_body.py`. Los tokens de `test_csrf.py` salen de `get_token()` (API pública: token enmascarado y secreto en `META["CSRF_COOKIE"]`); las seis mutaciones de `csrf.py` se repitieron con ese origen y los recuentos son los de la tabla.
+
+| # | Fichero | Mutación | Tests que fallan |
+|---|---|---|---|
+| 1 | `apps/core/csrf.py` | Comprobar CSRF solo si `request.user.is_authenticated` | 25: `test_a_request_without_a_valid_token_gets_csrf_failed` (9), `test_the_rejection_never_shows_the_reason_nor_the_values` (9), `test_a_foreign_origin_with_a_valid_token_is_rejected`, `test_the_body_is_never_read_to_decide`, `test_a_form_body_is_never_parsed_to_decide`, `test_the_token_in_a_form_field_does_not_count`, `test_the_handler_of_a_listed_method_is_still_protected`, `test_the_post_of_the_same_view_does_need_it` y `test_the_csrf_check_comes_before_the_body_is_read` |
+| 2 | `apps/core/csrf.py` | `PermissionDenied` en vez de `ApiError("csrf_failed")` | 17: los mismos que la 1, salvo los 9 de `test_the_rejection_never_shows_the_reason_nor_the_values` (el 403 genérico tampoco filtra el motivo), y más `test_enforce_csrf_raises_without_context_or_reason` |
+| 3 | `apps/core/csrf.py` | Ignorar el motivo del `CSRFCheck` (`if reason and False`) | 26: los de la 1 y `test_enforce_csrf_raises_without_context_or_reason` |
+| 4 | `apps/core/csrf.py` | Leer el cuerpo (`http_request.body`) antes de comprobar CSRF | 3: `test_the_body_is_never_read_to_decide`, `test_a_form_body_is_never_parsed_to_decide` y `test_the_csrf_check_comes_before_the_body_is_read` |
+| 5 | `apps/core/csrf.py` | CSRF antes de `super().initial()` | 1: `test_the_throttle_answers_before_csrf[post]`. El PUT sigue en verde porque no tiene manejador y no se comprueba CSRF; es lo esperado |
+| 6 | `apps/core/csrf.py` | Quitar `http_request.POST = QueryDict()` | 2: `test_a_form_body_is_never_parsed_to_decide` y `test_the_token_in_a_form_field_does_not_count` |
+| 7 | `apps/core/request_body.py` | Quitar la comprobación de `Transfer-Encoding` | 9: `test_a_transfer_encoding_header_is_too_large_whatever_it_says` (4), `test_a_transfer_encoding_header_wins_over_a_wrong_content_type` (2), `test_a_transfer_encoding_header_is_rejected_without_reading`, `test_no_rejection_carries_a_context_nor_the_received_text[chunked]` y `test_the_whole_path_over_a_view` |
+| 8 | `apps/core/request_body.py` | Quitar la comprobación de la longitud declarada | 4: `test_a_declared_length_over_the_limit_is_rejected_without_reading`, `test_a_huge_declared_length_wins_over_a_wrong_content_type` (2) y `test_no_rejection_carries_a_context_nor_the_received_text[too-large-declared]` |
+| 9 | `apps/core/request_body.py` | `read(max_bytes + 1)` pasa a `read(max_bytes)` | 2: `test_more_bytes_than_the_limit_are_rejected_even_if_fewer_were_declared` y `test_exactly_one_byte_over_the_limit_is_read_as_too_large` |
+| 10 | `apps/core/request_body.py` | Quitar `RecursionError` de la captura | 2: `test_a_parser_that_runs_out_of_recursion_is_an_invalid_request` y `test_the_recursion_rejection_carries_no_context` |
+| 11 | `apps/core/request_body.py` | `read_text_fields` acepta también `int` y `float` como texto | 5: `test_text_fields_of_another_type_are_an_invalid_request` (int, float, true, false) y `test_the_whole_path_over_a_view` |
+
+sha256 antes y después:
+
+| Fichero | sha256 |
+|---|---|
+| `apps/core/csrf.py` (mutaciones 1 a 6) | `c101904bf51fc56767f140b96ff4e903e6b3b74195e2569fb3f90f12c5942f92` |
+| `apps/core/request_body.py` (mutaciones 7 a 11) | `ef62c3c6bf4c4358ecaa9968423e88cb85c1e9770c024f070cc0cc0b2243b20b` |
