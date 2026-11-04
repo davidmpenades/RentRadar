@@ -217,3 +217,59 @@ sha256 antes y después:
 | Fichero | sha256 |
 |---|---|
 | `apps/users/throttling.py` (m1 a m11) | `0389bea04c600d585b0a44bc759781f29521e09dc65fee560f3759234ea482a5` |
+
+## Vista de registro, URL, guarda del URLconf y contrato (T5a)
+Fecha: 2026-11-04 · Ficheros: `backend/{apps/users/serializers.py, apps/users/views.py, apps/users/urls.py, config/urls.py, apps/users/tests/test_register_api.py, apps/users/tests/test_auth_contract.py, apps/core/tests/test_csrf_guard.py, openapi.json}` y `frontend/src/api/schema.gen.ts`. Sin migraciones.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests nuevos antes del código | `docker compose exec backend pytest -q apps/users/tests/test_register_api.py apps/users/tests/test_auth_contract.py apps/core/tests/test_csrf_guard.py` | Sin `views.py` ni `serializers.py`, los tres ficheros no se importan (`No module named 'apps.users.views'`). Con un esbozo sin ruta: 97 fallan (404 y serializers sin campos). Con la ruta y una vista sin el mixin que responde 501: la guarda falla (`assert [RegisterView] == []`), fallan 76 casos del registro y pasan 10 (los 405 que DRF ya da por `http_method_names` y `public_field_errors`) |
+| Tests de la tarea tras el código | la misma orden | 105 passed: 86 en `test_register_api.py`, 11 en `test_auth_contract.py` y 8 en `test_csrf_guard.py` (recuento con `--collect-only`) |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 2100 passed (1995 tras la T4 más los 105 nuevos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 140 ficheros formateados |
+| Modelos y migraciones cuadran | `docker compose exec backend pytest -q config/tests/test_migrations.py` | 1 passed (en la BD de test) |
+| Contrato | `docker compose exec -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` | Sin avisos; regenerarlo de nuevo no cambia el fichero (sha256 igual). Con `DB_HOST` apuntando a un host inexistente genera el mismo fichero: no usa la BD |
+| Tipos del cliente | `cd frontend && npm run api:gen`, `npm run api:check`, `npm run build` y `npx eslint src/api/schema.gen.ts` | En verde (código de salida 0) |
+| Caracteres invisibles | Detección por categoría Unicode sobre los nueve ficheros | 0 hallazgos |
+
+`migrate` no se ha ejecutado en la BD de desarrollo.
+
+`makemigrations --check --dry-run` lanzado con `manage.py` consulta `django_migrations` en la BD configurada (`check_consistent_history`), que es la de desarrollo: las filas «Modelos y migraciones cuadran» de T1 a T4 la leyeron. Desde la T5a esa comprobación se hace solo con `config/tests/test_migrations.py`, que ejecuta la misma orden dentro de pytest, sobre la BD de test.
+
+### Contrato
+`/api/v1/auth/register/`, solo `post`, `operationId` `registerAccount` y tag `auth`; cabecera `X-CSRFToken` obligatoria; cuerpo `RegistrationRequest`; 201 `Session` con la cabecera `Set-Cookie` documentada, 400 `RegistrationError` y 403, 405, 413 y 429 `ApiError`. Componentes nuevos: `Session` (`user` anulable), `SessionUser`, `RegistrationRequest` y `RegistrationError` (`params` opcional, listas de códigos). En el cliente, `user` es `SessionUser | null` y `params`, `{[key: string]: string[]}`.
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Nombre del componente de la petición | Con `COMPONENT_SPLIT_REQUEST`, drf-spectacular añade «Request» al nombre: el serializer lleva `component_name="Registration"` para que el componente sea `RegistrationRequest` |
+| 2 | Afirmaciones del plan | Verificadas: `Set-Cookie` como cabecera de respuesta de 201 pasa `--fail-on-warn`; `DictField(ListField)` sin `read_only` queda opcional (`required: ["code"]`); `login()` tras `flush()` crea la fila de sesión dentro del `atomic`, junto con la cuenta y `last_login` |
+| 3 | Cuenta huérfana | El usuario de la sesión lo escribe `SessionMiddleware` al responder, fuera de la transacción: es el riesgo aceptado en la spec. Si falla la creación de la fila de sesión dentro del `atomic`, no queda cuenta (`test_a_failure_opening_the_session_leaves_no_account`) |
+| 4 | Sesión de la misma cuenta | Un registro no puede crear una cuenta que ya tenga sesión: el test usa una sesión de esa cuenta y `register_user` parcheado en `apps.users.views`. Ahí solo `flush()` cambia la clave; `login()` la conservaría |
+| 5 | Email de 4 KB | Da `email_invalid` y `email_too_long`: el validador de email de Django rechaza más de 320 caracteres |
+| 6 | Guarda del URLconf | Recorre el URLconf real y exige el mixin a toda vista con un método no seguro listado y con manejador, también a las vistas de Django; respeta `as_view(http_method_names=...)` y marca como no protegida una vista función, cuyos métodos no se pueden inspeccionar. Una ViewSet de DRF tampoco expone `view_class` (DRF la marca con `cls` y `actions`): la guarda también la marca, aunque herede el mixin, y un test lo fija. Si se monta el admin o se añade una ViewSet, fallará y habrá que decidir |
+| 7 | `public_field_errors` | Solo publica `email`, `password` y `__all__` (como `non_field`); el traductor de errores manda a `__all__` todo lo no mapeado |
+| 8 | `Vary: Cookie` en el 201 | Lo pone `SessionMiddleware`, no la vista |
+| 9 | Logs | El test comprueba antes que `django.db.backends` está en INFO o más y que `force_debug_cursor` está apagado, sube el registro a DEBUG, exige que `django.request` haya registrado algo y busca la marca en logs, respuestas y claves del contador |
+
+### Pruebas de mecanismo
+Mutaciones sobre una copia hecha junto al fichero (`<fichero>.orig`), escritas sobre el mismo inode, restauradas desde la copia y con la copia borrada; sha256 idéntico antes y después y ninguna copia sin versionar. Ejecución sobre `test_register_api.py`, `test_auth_contract.py` y `test_csrf_guard.py`.
+
+| # | Fichero | Mutación | Tests que fallan |
+|---|---|---|---|
+| m1 | `apps/users/views.py` | Quitar `flush()` del registro | 2: `test_an_anonymous_session_with_data_is_discarded` y `test_a_session_of_the_same_account_is_discarded_too` |
+| m2 | `apps/users/views.py` | `flush()` al principio de `post`, antes de leer y validar | 3: `test_a_rejected_registration_leaves_the_session_untouched` (sin sesión, anónima y con cuenta) |
+| m3 | `apps/users/serializers.py` | `SessionUserSerializer` como `ModelSerializer` con `fields = "__all__"` | 6: `test_a_valid_registration_answers_201_with_only_the_normalized_email`, `test_privileged_fields_ids_and_unknown_fields_are_ignored`, `test_credentials_at_the_root_next_to_a_nested_unknown_key_are_registered`, `test_the_success_carries_only_the_new_email_even_after_a_staff_session`, `test_the_session_component_has_a_nullable_user_with_only_the_email` y `test_serializers_are_explicit_white_lists[SessionUserSerializer-fields0]` |
+| m4 | `apps/users/views.py` | Quitar `no-store` del éxito | 2: `test_a_valid_registration_answers_201_with_only_the_normalized_email` y `test_no_answer_can_be_stored_by_a_cache[201]` |
+| m5 | `apps/users/views.py` | Dar `is_staff` a la cuenta si la petición lo trae | 1: `test_privileged_fields_ids_and_unknown_fields_are_ignored` |
+| m6 | `apps/users/views.py` | Quitar el mixin de `RegisterView` | 21: los 12 casos de `test_without_a_valid_token_nothing_is_created_and_the_session_is_untouched`, `test_a_foreign_origin_is_rejected_even_with_a_valid_token`, `test_the_body_is_not_read_before_the_csrf_check`, los 2 casos CSRF del cupo, `[403]` de caché y de cabeceras entre orígenes, `test_errors_carry_only_their_planned_keys[csrf-failed]`, `test_neither_the_email_nor_the_password_reach_the_logs_or_the_counter` y la guarda `test_every_project_view_that_changes_state_has_the_explicit_csrf_check` |
+| m7 | `apps/users/views.py` | `throttle_classes = []` | 11: los 7 casos de `test_ten_rejected_requests_use_up_the_quota_of_the_real_endpoint`, `test_ten_registrations_use_up_the_quota_and_the_eleventh_creates_nothing`, `[429]` de caché y de cabeceras entre orígenes y el de logs (no hay clave de contador) |
+| m8 | `apps/users/views.py` | Leer el cuerpo en un `initial()` propio antes de `super().initial()` | 32, entre ellos los casos `declared-too-large`, `chunked` e `invalid-json` del cupo (el rechazo sale antes del límite y no cuenta) y `test_the_body_is_not_read_before_the_csrf_check`; el resto falla porque el cuerpo ya leído llega vacío a `post` |
+| m9 | `apps/users/views.py` | Comprobar CSRF en una clase de autenticación, que corre antes del límite | 4: los casos `no-csrf-header` y `token-differs-from-cookie` del cupo (los 403 no cuentan y la 11.ª da 201) y `[429]` de caché y de cabeceras entre orígenes. Además, 7 errores en `test_auth_contract.py`: la clase de la mutación no tiene extensión de drf-spectacular y el esquema no se genera con `--fail-on-warn`; es un efecto lateral, no la detección |
+
+sha256 antes y después:
+
+| Fichero | sha256 |
+|---|---|
+| `apps/users/views.py` (m1, m2 y m4 a m9) | `0c762a3c0781554c59f8bcc2c3f4da88f49d9a7a52df4890d77c00f5fe65d423` |
+| `apps/users/serializers.py` (m3) | `b920a82411634b97b2af1a61428d0e369abfc1d66dcdd157a02614302108ddd0` |

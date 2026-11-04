@@ -42,7 +42,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: /48 y /128; `X-Forwarded-For`; `AnonRateThrottle`; anotar las del propio límite; no desenvolver la IPv4 mapeada.
   - Evidencia: `validation.md`, sección T4.
 
-- [ ] **T5a. Vista de registro, URL, guarda del URLconf y contrato.** RF-1, RF-2, RF-3, RF-4, RF-7, RF-8
+- [x] **T5a. Vista de registro, URL, guarda del URLconf y contrato.** RF-1, RF-2, RF-3, RF-4, RF-7, RF-8
   - `apps/users/serializers.py`; `RegisterView` y `public_field_errors` en `apps/users/views.py`; `auth/register/` en `apps/users/urls.py`; `config/urls.py`; guarda del URLconf en `apps/core/tests/test_csrf_guard.py`, desde la primera vista que escribe.
   - Se regeneran `backend/openapi.json` y `frontend/src/api/schema.gen.ts`. Cambio de contrato aprobado por el usuario.
   - Commit: `feat(users): register endpoint`
