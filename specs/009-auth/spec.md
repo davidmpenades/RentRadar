@@ -1,5 +1,5 @@
 # Spec 009 — Registro, sesión y salida
-Estado: aprobada
+Estado: en curso
 Depende de: spec 004 (usuarios, alta con contraseña obligatoria, normalización del email y "Reglas para specs posteriores"), spec 005 (el propietario de un recurso sale de la sesión) y spec 006 (interfaz web, página del mapa, formato de errores de la API y límite de peticiones por IP).
 
 ## Contexto y objetivo
