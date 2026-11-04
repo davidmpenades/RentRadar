@@ -229,7 +229,7 @@ Fecha: 2026-11-04 · Ficheros: `backend/{apps/users/serializers.py, apps/users/v
 | Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 140 ficheros formateados |
 | Modelos y migraciones cuadran | `docker compose exec backend pytest -q config/tests/test_migrations.py` | 1 passed (en la BD de test) |
 | Contrato | `docker compose exec -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` | Sin avisos; regenerarlo de nuevo no cambia el fichero (sha256 igual). Con `DB_HOST` apuntando a un host inexistente genera el mismo fichero: no usa la BD |
-| Tipos del cliente | `cd frontend && npm run api:gen`, `npm run api:check`, `npm run build` y `npx eslint src/api/schema.gen.ts` | En verde (código de salida 0) |
+| Tipos del cliente | `cd frontend && npm run api:gen`, `npm run api:check`, `npm run build` y `npx eslint src/api/schema.gen.ts` | `api:gen`, `api:check` y `build` en verde (código de salida 0). `eslint` también sale con 0, pero solo avisa de que la configuración ignora `schema.gen.ts`: no lo analiza |
 | Caracteres invisibles | Detección por categoría Unicode sobre los nueve ficheros | 0 hallazgos |
 
 `migrate` no se ha ejecutado en la BD de desarrollo.
@@ -273,3 +273,55 @@ sha256 antes y después:
 |---|---|
 | `apps/users/views.py` (m1, m2 y m4 a m9) | `0c762a3c0781554c59f8bcc2c3f4da88f49d9a7a52df4890d77c00f5fe65d423` |
 | `apps/users/serializers.py` (m3) | `b920a82411634b97b2af1a61428d0e369abfc1d66dcdd157a02614302108ddd0` |
+
+## Vistas de «quién soy» y salida, y contrato (T5b)
+Fecha: 2026-11-04 · Ficheros: `backend/{apps/users/views.py, apps/users/urls.py, apps/users/tests/test_session_api.py, apps/users/tests/test_logout_api.py, apps/users/tests/test_auth_contract.py, apps/users/tests/test_register_api.py, apps/users/tests/helpers.py, apps/core/tests/test_csrf_guard.py, openapi.json}` y `frontend/src/api/schema.gen.ts`. Sin migraciones.
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Tests nuevos antes del código | `docker compose exec backend pytest -q` sobre los ficheros de la tarea | `test_csrf_guard.py` no se importa (`cannot import name 'LogoutView'`). En el resto fallan 90 por la razón esperada: 404 en las rutas que faltan y `KeyError` en el esquema. Cinco tests de la salida pasaban sin comprobar el estado de la respuesta; con la comprobación del 204 fallan también: 95 fallan y pasan los 11 de contrato de la T5a |
+| Tests de la tarea tras el código | la misma orden | 201 passed: 40 en `test_session_api.py`, 48 en `test_logout_api.py`, 18 en `test_auth_contract.py` (7 nuevos), 9 en `test_csrf_guard.py` (1 nuevo) y los 86 de `test_register_api.py` (recuento con `--collect-only`) |
+| Suite completa con la BD de test recreada | `docker compose exec backend pytest -q --create-db` | 2196 passed (2100 tras la T5a más 96 nuevos) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | Sin incidencias; 142 ficheros formateados |
+| Modelos y migraciones cuadran | `docker compose exec backend pytest -q config/tests/test_migrations.py` | 1 passed (en la BD de test) |
+| Contrato | `docker compose exec -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` | Sin avisos; regenerarlo de nuevo no cambia el fichero (sha256 igual) |
+| Tipos del cliente | `cd frontend && npm run api:gen`, `npm run api:check` y `npm run build` | En verde (código de salida 0). `npx eslint src/api/schema.gen.ts` solo avisa de que la configuración ignora el fichero |
+| Caracteres invisibles | Detección por categoría Unicode sobre los diez ficheros tocados | 0 hallazgos |
+
+`migrate` no se ha ejecutado en la BD de desarrollo. Durante la tarea se reinició el backend con `docker compose restart backend`, sin necesidad: al arrancar, `runserver` comprueba las migraciones pendientes y lee `django_migrations` de la BD de desarrollo, y el arranque espera a la BD con `wait_for_db`, que solo abre la conexión. No hubo escrituras.
+
+### Contrato
+`/api/v1/auth/session/`: solo `get` (drf-spectacular no publica HEAD), `operationId` `getCurrentSession`, tag `auth`, `security: [{"cookieAuth": []}, {}]`; 200 `Session` con `Set-Cookie` documentada y 405 `ApiError`. `/api/v1/auth/logout/`: solo `post`, `operationId` `logout`, tag `auth`, `X-CSRFToken` obligatoria, sin cuerpo; 204 sin cuerpo con `Set-Cookie` documentada, y 403 y 405 `ApiError`. Componente nuevo: `securitySchemes.cookieAuth` (`apiKey` en la cookie `sessionid`). El registro no cambia.
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Fila caducada en la salida | Desaparece: `flush()` llama a `delete()` con la clave de la cookie, sin filtrar por caducidad, porque nada ha cargado antes la sesión |
+| 2 | `auth.logout()` en la salida | No cargaría la sesión en esta vista: con `authentication_classes = []`, DRF pone un `AnonymousUser` en la petición de Django durante `initial()` (el setter de `Request.user` escribe también `_request.user`), y `logout()` ya no evalúa el usuario perezoso. Una sonda lo confirmó: la sesión no se ha cargado antes de `logout()`. Lo que rompe el mecanismo es leer la sesión antes de `flush()` (mutación m3b) |
+| 3 | Borrado de `sessionid` en «quién soy» | Lo hace `SessionMiddleware`: al cargar, una sesión caducada, con clave mal formada (corta o larga) o sin fila deja la clave en `None`, la sesión queda vacía y la cookie se borra con `Max-Age=0`. La fila caducada no se borra en «quién soy», solo se ignora |
+| 4 | Cuenta desactivada | `ModelBackend.get_user` devuelve `None` sin vaciar la sesión: «quién soy» responde `null`, sin `Set-Cookie` de sesión, y la fila sigue (riesgo aceptado en el plan) |
+| 5 | 405 de «quién soy» | `initial()` rechaza el método antes de autenticar: con sesión, con y sin token, y sin sesión, POST, PUT, PATCH, DELETE y OPTIONS dan 405 con `Allow: GET, HEAD` y sin cookie `csrftoken`, porque `get_token` solo se llama en `get` |
+| 6 | Borrado de la cookie en la salida | Con cookie en la petición, `SessionMiddleware` emite su propio borrado y pisa el de la vista. El de la vista se prueba sin cookie, con la configuración del proyecto y con otra (`SESSION_COOKIE_PATH="/api/"`, `SESSION_COOKIE_DOMAIN="rentradar.test"`, `SAMESITE="Strict"`), para que un `delete_cookie` sin argumentos no pase. Va sin `Secure`, como el de `SessionMiddleware`; se revisa en la 011 |
+| 7 | Extracciones | `set_cookie_header()` en `views.py` (tercera cabecera `Set-Cookie` documentada) y `assert_no_store` en `tests/helpers.py` (tercer fichero que la usa); el esquema del registro sale idéntico |
+| 8 | `Vary: Cookie` y 204 | El `Vary: Cookie` explícito de «quién soy» también lo ponen `CsrfViewMiddleware` y `SessionMiddleware`; el 204 sale sin cuerpo y sin `Content-Type` |
+
+### Pruebas de mecanismo
+Mutaciones sobre una copia hecha junto al fichero (`views.py.orig`), escritas sobre el mismo inode, restauradas desde la copia y con la copia borrada; sha256 idéntico antes y después y ninguna copia sin versionar. Ejecución sobre `test_session_api.py`, `test_logout_api.py`, `test_auth_contract.py` y `test_csrf_guard.py`, todas sobre la versión final de `views.py`.
+
+| # | Mutación | Tests que fallan |
+|---|---|---|
+| m1 | Quitar `flush()` de la salida | 3: `test_logging_out_destroys_the_session_row`, `test_the_previous_identifier_no_longer_authenticates` y `test_an_expired_session_row_is_deleted_too` |
+| m2 | Quitar `delete_cookie` de la salida | 3: `test_without_a_valid_session_it_answers_204_and_removes_the_cookie[no-cookie]` y los 2 casos de `test_without_a_session_cookie_the_view_deletes_it_with_its_settings` |
+| m3 | `django.contrib.auth.logout(request._request)` en vez de `flush()` | 0: equivalente en esta vista (observación 2) |
+| m3b | Leer la sesión (`session.get("_auth_user_id")`) antes de `flush()` | 1: `test_an_expired_session_row_is_deleted_too` |
+| m4 | Quitar el mixin de `LogoutView` | 15: los 8 casos de `test_without_a_valid_token_nothing_changes`, los 2 de `test_the_body_is_not_read_before_the_csrf_check`, `test_a_foreign_origin_is_rejected_even_with_a_valid_token`, los 2 de `[403]` en `test_no_answer_can_be_stored_or_grants_cross_origin_access`, `test_errors_carry_only_their_code_even_with_a_staff_session[csrf-failed]` y la guarda `test_every_project_view_that_changes_state_has_the_explicit_csrf_check` |
+| m5 | Quitar el rechazo del método antes de autenticar en «quién soy» | 5: `test_every_other_method_gets_405_before_authenticating` con POST con sesión (con y sin token) y PUT, PATCH y DELETE con sesión sin token |
+| m6 | `authentication_classes = []` en «quién soy» | 10: `test_a_valid_session_gets_its_email_and_keeps_its_cookie`, `test_after_a_real_registration_the_session_answers_with_its_email`, los casos `expired`, `long-malformed` y `key-without-row` de `test_an_expired_malformed_or_unknown_session_is_null_and_its_cookie_deleted`, `test_a_staff_session_gets_only_its_email`, `test_the_previous_identifier_no_longer_authenticates`, `test_only_the_session_of_the_cookie_is_closed`, `test_the_session_reads_the_session_cookie_and_takes_no_input` y `test_only_the_session_declares_the_cookie_authentication` |
+
+El `Vary: Cookie` explícito de «quién soy» es una mutación equivalente (observación 8) y no se ejecuta.
+
+sha256 antes y después:
+
+| Fichero | sha256 |
+|---|---|
+| `apps/users/views.py` (m1 a m6 y m3b) | `6e03be3ddda932922645e42936b13a0d1ae6e2e6d9b23ed3af94b052ff3cc12c` |

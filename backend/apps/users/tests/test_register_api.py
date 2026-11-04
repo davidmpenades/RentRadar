@@ -15,6 +15,7 @@ from django.db import connection
 
 from apps.users import views
 from apps.users.models import User
+from apps.users.tests.helpers import assert_no_store
 from apps.users.throttling import RegistrationThrottle
 from apps.users.views import public_field_errors
 
@@ -107,10 +108,6 @@ def untouchable_session_store():
 def session_of(response):
     key = response.cookies[SESSION_COOKIE].value
     return key, Session.objects.get(session_key=key).get_decoded()
-
-
-def assert_no_store(response):
-    assert response["Cache-Control"] == "no-store"
 
 
 def cross_origin_headers(response):

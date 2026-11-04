@@ -92,7 +92,7 @@ Rutas versionadas, con barra final y JSON. Ninguna acepta un identificador de us
 - **200**
   - Cuerpo: `{"user": {"email": "..."}}` con una sesión válida (existe, no ha caducado y su cuenta está activa) o `{"user": null}` en cualquier otro caso.
   - Cabeceras: `Cache-Control: no-store` y `Vary: Cookie` (explícito).
-  - Cookies: `Set-Cookie: csrftoken` siempre (`get_token`). `sessionid` no cambia, salvo el borrado que hace Django de una cookie mal formada o de un hash obsoleto.
+  - Cookies: `Set-Cookie: csrftoken` siempre (`get_token`). `sessionid` se borra (`Max-Age=0`) cuando viene en la petición y la sesión queda vacía: caducada, mal formada, con una clave sin fila o con un hash obsoleto (lo hace `SessionMiddleware`). Con una sesión válida o de una cuenta desactivada no lleva `Set-Cookie` de sesión.
 - **405** con `Allow: GET, HEAD` para cualquier otro método.
 
 ### `POST /api/v1/auth/logout/` (operationId `logout`)
@@ -197,7 +197,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `get_token(request._request)`; `user` si `is_authenticated`, si no `None`;
   - `no-store` y `patch_vary_headers(("Cookie",))`;
   - `initial` rechaza con 405 un método no admitido antes de `super().initial()`: `SessionAuthentication` exige CSRF a quien tiene sesión, y sin esto un POST sin token daría 403 `forbidden`.
-- `LogoutView(CsrfEnforcedMixin, APIView)`: `authentication_classes = []`, `AllowAny`, `["post"]`; `request._request.session.flush()`; 204; `delete_cookie(SESSION_COOKIE_NAME, path=..., domain=..., samesite=...)`; `no-store`.
+- `LogoutView(CsrfEnforcedMixin, APIView)`: `authentication_classes = []`, `AllowAny`, `["post"]`; `request._request.session.flush()`; 204; `delete_cookie(SESSION_COOKIE_NAME, path=..., domain=..., samesite=...)`; `no-store`. No llama a `django.contrib.auth.logout()`, así que no emite `user_logged_out`: la 015 debe tenerlo en cuenta si algo escucha esa señal.
 - Ninguna de las tres marca su respuesta como sin cookies.
 - Serializers en lista blanca, nunca `ModelSerializer`:
   - `SessionUserSerializer`: solo `email`;
@@ -361,6 +361,7 @@ Los que la spec ya recoge en «Riesgos aceptados» (el usuario los aceptó) no s
 | El aviso de fallo de «Salir» cambia el alto de la zona de contenido y el mapa debe reajustar su tamaño | Se comprueba en T9 a 375 y a 1280 px; si MapLibre no reajusta, la tarea de holgura lo corrige |
 | T5 pasaba de 30 min | Partida con la tarea de holgura: T5a registro y guarda, y T5b «quién soy» y salida, cada una con su regeneración del contrato |
 | Registrar en el navegador crea cuentas en la BD de desarrollo | Solo con autorización expresa en ese momento, con `@example.com`; el límite se prueba el último |
+| Con una cuenta desactivada, «quién soy» responde `null` pero la fila y la cookie de sesión se mantienen: si la cuenta se reactiva, esa sesión vuelve a valer hasta que caduque | Riesgo aceptado por el usuario: la API no permite desactivar cuentas, y un cambio de contraseña sí invalida la sesión (hash de sesión) |
 
 ## Estrategia de tests
 | RF | Cómo se verifica |
@@ -434,9 +435,13 @@ Cada mutación se hace sobre una copia del fichero, con el sha256 antes y despu�
   - leer el cuerpo en un `initial()` propio antes de `super().initial()` (el 413 dejaría de contar);
   - comprobar CSRF en una clase de autenticación, que corre antes del límite (el 403 dejaría de contar y ganaría al 429).
 - **T5b**:
-  - quitar `flush()` y `delete_cookie` de la salida;
+  - quitar `flush()` de la salida (la fila sigue y el identificador anterior aún autentica);
+  - quitar `delete_cookie` de la salida: con cookie, `SessionMiddleware` la borra después de la vista y pisa su cabecera, así que solo lo detecta la salida sin cookie de sesión, cuyo test compara Path, Max-Age=0, SameSite y dominio con los ajustes de la cookie de sesión;
+  - `django.contrib.auth.logout(request._request)` en vez de `flush()`: equivalente en esta vista, porque DRF ya ha puesto un `AnonymousUser` en la petición de Django y `logout()` no carga la sesión; se anota en `validation.md`;
+  - leer la sesión antes de `flush()` (la clave caducada queda en `None` y la fila sobrevive);
   - quitar el mixin de `LogoutView` (falla la salida sin sesión y la guarda);
-  - quitar el rechazo del método antes de autenticar en «quién soy» (con sesión y sin token daría 403).
+  - quitar el rechazo del método antes de autenticar en «quién soy» (con sesión y sin token daría 403);
+  - `authentication_classes = []` en «quién soy» (con sesión respondería `null`).
   - Quitar el `Vary: Cookie` explícito es una mutación equivalente mientras la sesión se lea: se anota en `validation.md`.
 - **T6**:
   - quitar el reintento;

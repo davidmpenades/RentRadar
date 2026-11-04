@@ -53,15 +53,15 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: quitar `flush()` del registro; `flush()` y `login()` antes de validar; `ModelSerializer`; quitar `no-store`; pasar `is_staff`; quitar el mixin de `RegisterView` (falla el registro sin token y la guarda); `throttle_classes = []`; leer el cuerpo antes de `super().initial()`; CSRF en una clase de autenticación.
   - Evidencia: `validation.md`, sección T5a.
 
-- [ ] **T5b. Vistas de «quién soy» y salida, y contrato.** RF-1 («quién soy» tras el registro), RF-5, RF-6, RF-7
+- [x] **T5b. Vistas de «quién soy» y salida, y contrato.** RF-1 («quién soy» tras el registro), RF-5, RF-6, RF-7
   - `CurrentSessionView` y `LogoutView` en `apps/users/views.py`; `auth/session/` y `auth/logout/` en `apps/users/urls.py`. La guarda del URLconf de la T5a cubre `LogoutView` sin tocarla.
   - «Quién soy» rechaza con 405 un método no admitido antes de autenticar: con sesión, `SessionAuthentication` exigiría CSRF y daría 403.
   - Se regeneran `backend/openapi.json` y `frontend/src/api/schema.gen.ts`.
   - Commit: `feat(users): session and logout endpoints`
   - Hecho cuando:
-    - los tests de `test_session_api.py`, `test_logout_api.py` y el resto de `test_auth_contract.py` fallan primero y luego pasan: «quién soy» en todos sus casos y tras el registro, sin renovación y con `Vary: Cookie`; POST, PUT y DELETE a «quién soy» con y sin sesión y sin token dan 405 con `Allow: GET, HEAD`; salida con y sin sesión y cookie retirada siempre, también con una sesión caducada; `no-store` en todo; respuestas mínimas; la guarda de la T5a pasa con `LogoutView` sin cambios en ella;
+    - los tests de `test_session_api.py`, `test_logout_api.py` y el resto de `test_auth_contract.py` fallan primero y luego pasan: «quién soy» en todos sus casos y tras el registro, sin renovación y con `Vary: Cookie`; POST, PUT y DELETE a «quién soy» con y sin sesión y sin token dan 405 con `Allow: GET, HEAD`; salida con y sin sesión y cookie retirada siempre, también con una sesión caducada, cuya fila desaparece; sin cookie de sesión en la petición, el borrado de la vista lleva Path, Max-Age=0, SameSite y dominio de los ajustes; «quién soy» borra la cookie con una sesión caducada, mal formada o sin fila, y no la toca con una sesión válida o de una cuenta desactivada; `no-store` en todo; respuestas mínimas; la guarda de la T5a pasa con `LogoutView` sin cambios en ella;
     - `spectacular --validate --fail-on-warn`, `npm run api:check` y `npm run build` en verde.
-  - Pruebas de mecanismo: quitar `flush()` y `delete_cookie` de la salida; quitar el mixin de `LogoutView`; quitar el rechazo del método antes de autenticar en «quién soy». `Vary: Cookie` se anota como equivalente.
+  - Pruebas de mecanismo: quitar `flush()` de la salida; quitar `delete_cookie` (lo detecta la salida sin cookie); `django.contrib.auth.logout()` en vez de `flush()` (equivalente en esta vista, se anota); leer la sesión antes de `flush()`; quitar el mixin de `LogoutView`; quitar el rechazo del método antes de autenticar en «quién soy»; `authentication_classes = []` en «quién soy». `Vary: Cookie` se anota como equivalente.
   - Evidencia: `validation.md`, sección T5b.
 
 - [ ] **T6. Cliente de sesión, tiempo máximo común y proxy de Vite.** RF-3 (minutos), RF-6, RF-7, RF-9, RF-10, RF-11, RF-12

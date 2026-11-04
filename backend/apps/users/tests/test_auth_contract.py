@@ -12,6 +12,8 @@ from apps.users.serializers import (
 )
 
 REGISTER_PATH = "/api/v1/auth/register/"
+SESSION_PATH = "/api/v1/auth/session/"
+LOGOUT_PATH = "/api/v1/auth/logout/"
 
 
 @pytest.fixture
@@ -122,6 +124,83 @@ def test_the_registration_error_has_optional_params_of_code_lists(spec):
         "type": "array",
         "items": {"type": "string"},
     }
+
+
+def test_the_session_is_a_get_with_its_operation_and_tag(spec):
+    path = spec["paths"][SESSION_PATH]
+
+    assert set(path) == {"get"}
+    assert path["get"]["operationId"] == "getCurrentSession"
+    assert path["get"]["tags"] == ["auth"]
+
+
+def test_the_session_reads_the_session_cookie_and_takes_no_input(spec):
+    operation = spec["paths"][SESSION_PATH]["get"]
+
+    assert {"cookieAuth": []} in operation["security"]
+    assert "parameters" not in operation
+    assert "requestBody" not in operation
+    assert spec["components"]["securitySchemes"]["cookieAuth"] == {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "sessionid",
+    }
+
+
+def test_the_session_documents_each_answer_and_the_cookies_it_sets(spec):
+    responses = spec["paths"][SESSION_PATH]["get"]["responses"]
+
+    assert set(responses) == {"200", "405"}
+    assert component_name(json_schema(responses["200"])) == "Session"
+    assert component_name(json_schema(responses["405"])) == "ApiError"
+    assert set(responses["200"]["headers"]) == {"Set-Cookie"}
+    assert "headers" not in responses["405"]
+
+
+def test_the_logout_is_a_post_with_its_operation_and_tag(spec):
+    path = spec["paths"][LOGOUT_PATH]
+
+    assert set(path) == {"post"}
+    assert path["post"]["operationId"] == "logout"
+    assert path["post"]["tags"] == ["auth"]
+
+
+def test_the_logout_requires_the_csrf_header_and_has_no_body(spec):
+    operation = spec["paths"][LOGOUT_PATH]["post"]
+    parameters = operation["parameters"]
+
+    assert parameters == [
+        {
+            "in": "header",
+            "name": "X-CSRFToken",
+            "schema": {"type": "string"},
+            "required": True,
+            "description": parameters[0]["description"],
+        }
+    ]
+    assert "requestBody" not in operation
+
+
+def test_the_logout_answers_204_without_a_body_and_documents_its_cookie(spec):
+    responses = spec["paths"][LOGOUT_PATH]["post"]["responses"]
+
+    assert set(responses) == {"204", "403", "405"}
+    assert "content" not in responses["204"]
+    assert set(responses["204"]["headers"]) == {"Set-Cookie"}
+    for status in ("403", "405"):
+        assert component_name(json_schema(responses[status])) == "ApiError"
+        assert "headers" not in responses[status]
+
+
+def test_only_the_session_declares_the_cookie_authentication(spec):
+    declaring = [
+        path
+        for path in (REGISTER_PATH, SESSION_PATH, LOGOUT_PATH)
+        for operation in spec["paths"][path].values()
+        if {"cookieAuth": []} in operation.get("security", [])
+    ]
+
+    assert declaring == [SESSION_PATH]
 
 
 @pytest.mark.parametrize(

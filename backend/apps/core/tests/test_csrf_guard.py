@@ -6,7 +6,7 @@ from rest_framework.routers import SimpleRouter
 from rest_framework.views import APIView
 
 from apps.core.csrf import CsrfEnforcedMixin
-from apps.users.views import RegisterView
+from apps.users.views import LogoutView, RegisterView
 
 UNSAFE_METHODS = ("post", "put", "patch", "delete")
 
@@ -56,6 +56,12 @@ def test_the_walk_reaches_the_registration_view():
     checked, _ = check_views(project_patterns())
 
     assert RegisterView in checked
+
+
+def test_the_walk_reaches_the_logout_view():
+    checked, _ = check_views(project_patterns())
+
+    assert LogoutView in checked
 
 
 # Vistas sintéticas: prueban la guarda sin tocar el URLconf real

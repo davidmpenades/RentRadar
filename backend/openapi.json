@@ -5,6 +5,61 @@
         "version": "1.0.0"
     },
     "paths": {
+        "/api/v1/auth/logout/": {
+            "post": {
+                "operationId": "logout",
+                "parameters": [
+                    {
+                        "in": "header",
+                        "name": "X-CSRFToken",
+                        "schema": {
+                            "type": "string"
+                        },
+                        "description": "Igual al valor de la cookie csrftoken.",
+                        "required": true
+                    }
+                ],
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {}
+                ],
+                "responses": {
+                    "204": {
+                        "headers": {
+                            "Set-Cookie": {
+                                "schema": {
+                                    "type": "string"
+                                },
+                                "description": "Borra la cookie sessionid."
+                            }
+                        },
+                        "description": "No response body"
+                    },
+                    "403": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "405": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
         "/api/v1/auth/register/": {
             "post": {
                 "operationId": "registerAccount",
@@ -95,6 +150,50 @@
                         "description": ""
                     },
                     "429": {
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/ApiError"
+                                }
+                            }
+                        },
+                        "description": ""
+                    }
+                }
+            }
+        },
+        "/api/v1/auth/session/": {
+            "get": {
+                "operationId": "getCurrentSession",
+                "tags": [
+                    "auth"
+                ],
+                "security": [
+                    {
+                        "cookieAuth": []
+                    },
+                    {}
+                ],
+                "responses": {
+                    "200": {
+                        "headers": {
+                            "Set-Cookie": {
+                                "schema": {
+                                    "type": "string"
+                                },
+                                "description": "Cookie csrftoken; borra sessionid si la sesión no es válida."
+                            }
+                        },
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "$ref": "#/components/schemas/Session"
+                                }
+                            }
+                        },
+                        "description": ""
+                    },
+                    "405": {
                         "content": {
                             "application/json": {
                                 "schema": {
@@ -372,6 +471,13 @@
                 "required": [
                     "email"
                 ]
+            }
+        },
+        "securitySchemes": {
+            "cookieAuth": {
+                "type": "apiKey",
+                "in": "cookie",
+                "name": "sessionid"
             }
         }
     }
