@@ -526,3 +526,46 @@ sha256 antes y después:
 | Fichero | sha256 |
 |---|---|
 | `src/session/sessionState.ts` (m1, m2, m2a y m2b) | `9fc3a770677d852efe37f2b21351fe6927e580d3a71971243558d4a52cfd545b` |
+
+## Página de registro (T8)
+Fecha: 2026-11-05 · Ficheros: `frontend/src/{register/registerForm.ts, register/registerForm.test.ts, register/RegistrationForm.tsx, register/RegistrationForm.test.ts, pages/RegisterPage.tsx, app/route.ts, app/route.test.ts, app/AppShell.tsx, main.tsx, i18n/es.ts, styles/index.css}`. Sin cambios en el backend, en `package*.json` ni en el contrato. Dos commits: la lógica (`registerForm.ts`, su test y `es.ts`) y la página con la ruta. La comprobación en el navegador queda para la T9.
+
+| Comprobación | Orden (desde `frontend/`) | Resultado |
+|---|---|---|
+| Tests de la lógica antes del código | `npx vitest run src/register/registerForm.test.ts` | No se carga: `Cannot find module './registerForm'` |
+| Tests de la lógica tras el código | la misma orden | 81 passed |
+| Tests de ruta y marcado antes del código | `npx vitest run src/app/route.test.ts src/register/RegisterForm.test.ts` (el componente se llamaba aún `RegisterForm`) | `route.test.ts`: 2 fallan (`/register` y `/register/` daban `notFound`); el test del marcado no se carga: `Cannot find module './RegisterForm'` |
+| Tests de ruta y marcado tras el código | `npx vitest run src/app/route.test.ts src/register/RegistrationForm.test.ts src/register/registerForm.test.ts` | 130 passed: 19 de `route.test.ts` (2 tests nuevos y 6 direcciones nuevas en la lista de `notFound`; los 11 anteriores no cambian), 30 del marcado y 81 de la lógica |
+| Suite completa | `npx vitest run` | 26 ficheros, 1019 passed (900 antes de la tarea más 119 nuevos: 81 de la lógica, 30 del marcado y 8 de la ruta). El único test existente que cambia es `route.test.ts` |
+| Análisis estático | `npx eslint src/pages/RegisterPage.tsx src/register src/app/AppShell.tsx src/main.tsx src/app/route.ts src/app/route.test.ts src/i18n/es.ts` | Sin incidencias (código de salida 0) |
+| Tipos y empaquetado | `npm run build` (`tsc -b && vite build`) | Código de salida 0; solo el aviso del chunk de maplibre-gl, que ya existía |
+| Caracteres invisibles | Detección por categoría Unicode (Cc, Cf, Cs, Mn, Mc, Me, Zl, Zp y Zs salvo el espacio) sobre los once ficheros de código y tests de la tarea, `plan.md` y `tasks.md` | 0 hallazgos. En `validation.md` salen 11 líneas con tabuladores, todas del bloque de código de Vite de la T6 (líneas 440 a 455), ya presentes en `HEAD`; ninguna de esta sección |
+
+No se ha levantado, parado ni reiniciado Vite ni Docker, y no se ha tocado la BD de desarrollo.
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Tipos que vitest y eslint no ven | `tsc` rechazó en la lógica `catalog.unknown` (`string \| undefined` con `noUncheckedIndexedAccess`) cuando vitest y eslint ya estaban en verde; se corrigió con un texto de reserva explícito y se repitieron las cuatro comprobaciones |
+| 2 | Nombre del componente (desviación) | El plan y la propuesta llamaban `RegisterForm.tsx` al componente y `registerForm.ts` a la lógica: solo se diferencian en las mayúsculas y `tsc -b` falla con TS1149 (y en macOS y Windows serían el mismo fichero). El componente pasó a `RegistrationForm.tsx`; plan y tasks actualizados |
+| 3 | Atributos en el renderizado de servidor | `renderToStaticMarkup` conserva el nombre de la propiedad (`noValidate`, `autoComplete`, `inputMode`, `readOnly`, `tabIndex`) y no el atributo en minúsculas. Los siete primeros fallos del test del marcado eran del propio test (buscaba minúsculas, y `aria-invalid` casaba también con la clase `aria-invalid:border-danger`); ahora busca atributos reales (`\saria-invalid=`) sin distinguir mayúsculas |
+| 4 | Contraseña fuera del HTML | La contraseña no tiene propiedad en `RegistrationForm` ni `value` en el campo, en ningún estado (vacío, con errores, enviando, visible, visible y enviando). La página la lee del `ref` al enviar y la borra con `input.value = ""` tras un éxito o un error de la contraseña. El email sí es un campo controlado |
+| 5 | `formStateForEmpty` (añadido) | No estaba en la lista del plan. Los campos vacíos se avisan con los mismos textos, resumen y foco que un rechazo del servidor, sin enviar nada. Tiene 3 tests propios |
+| 6 | Qué no cubre vitest | El cableado de `RegisterPage` (guarda en `ref`, `readOnly` durante el envío, foco, `replace("/map")` desde el efecto) corre en React y vitest usa entorno `node`: los tests cubren la lógica pura y el marcado. Por ejemplo, quitar `if (!guard.tryStart()) return;` de la página no lo detecta ningún test automático; el doble clic y el doble Intro se comprueban en la T9, en el navegador |
+| 7 | Contraste de `--color-danger: #b3261e` | Calculado con la fórmula de WCAG: 6,54:1 sobre blanco y 5,64:1 sobre `sky` (AA en ambos); sobre `lemon` daría 4,51:1, por eso el error de campo no se pinta dentro del aviso amarillo. Se mira en la T9 |
+| 8 | Tres desviaciones más del plan | `aria-disabled` en vez de `disabled` en el envío, etiqueta fija en «Mostrar contraseña» y el `replace("/map")` solo en el efecto: ver «Desviaciones de la T8» en `plan.md` |
+
+### Pruebas de mecanismo
+La tarea es de interfaz, pero toca la privacidad de la contraseña y el doble envío, y se hacen dos. Cada una sobre una copia hecha junto al fichero (`<fichero>.orig`), restaurada con `cp` y borrada; sha256 idéntico antes y después y ninguna copia sin versionar. Ejecución: `npx vitest run src/register/registerForm.test.ts src/register/RegistrationForm.test.ts src/app/route.test.ts` (130 tests).
+
+| # | Fichero | Mutación | Tests que fallan |
+|---|---|---|---|
+| 1 | `src/register/registerForm.ts` | Quitar `if (busy) return false;` de `tryStart` (permite un segundo envío con el primero en curso) | 2: «createSubmitGuard: un envío a la vez > el primer envío pasa y el segundo, con el primero en curso, no» y «terminar dos veces no deja pasar dos envíos». Los demás casos de la guarda pasan: no dependen de esa comprobación |
+| 2 | `src/register/RegistrationForm.tsx` | Volver a hacer controlado el campo de contraseña (`value=""` y `onChange` en el `<input id="register-password">`) | 5: «la contraseña nunca llega al HTML > con el formulario vacío / con errores / enviando / visible / visible y enviando el campo no lleva value ni defaultValue». `tsc -b` no la detecta (código de salida 0): solo la ve el test del marcado |
+
+sha256 antes, durante y después:
+
+| Fichero | Antes | Durante | Después |
+|---|---|---|---|
+| `src/register/registerForm.ts` (mutación 1) | `f520b33a5dbeb214ce7f4caea878a32235ae4d499a65e18e31b5323305271589` | `5a7b83d255e408a1ef1e2ad4ce2050c45cd325612888e969999207d654432998` | `f520b33a5dbeb214ce7f4caea878a32235ae4d499a65e18e31b5323305271589` |
+| `src/register/RegistrationForm.tsx` (mutación 2) | `b83f1470378258d2434070dc66aae06c850bc1c0feb70cb48f285240fed97940` | `a18d5c1e2097e098a8fdd72f9982ff45a531f4e3c6ebcfcb6877badf089bbb5c` | `b83f1470378258d2434070dc66aae06c850bc1c0feb70cb48f285240fed97940` |

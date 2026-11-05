@@ -81,15 +81,15 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: no aplica (interfaz).
   - Evidencia: comprobación en T9.
 
-- [ ] **T8. Página de registro.** RF-10, RF-11, RF-13
+- [x] **T8. Página de registro.** RF-10, RF-11, RF-13
   - `route.ts` (`register` y `redirectToRegister`); `src/register/registerForm.ts`; `src/pages/RegisterPage.tsx`; mensajes de los códigos y del tiempo vencido en `es.ts`.
   - Con un fallo o un tiempo vencido, el error es general, el envío vuelve a habilitarse para reintentar y el email y la contraseña se conservan; la contraseña solo se borra si el resultado trae un error de la contraseña.
-  - También `main.tsx`, `app/AppShell.tsx`, `styles/index.css` (token `--color-danger`) y `register/RegisterForm.tsx` (solo marcado).
+  - También `main.tsx`, `app/AppShell.tsx`, `styles/index.css` (token `--color-danger`) y `register/RegistrationForm.tsx` (solo marcado).
   - Toca tests existentes: `frontend/src/app/route.test.ts`, al que se añaden casos.
-  - Commits: `feat(frontend): registration form logic` (`registerForm.ts`, su test y `es.ts`) y `feat(frontend): registration page and route` (ruta, `main.tsx`, `AppShell.tsx`, `RegisterForm.tsx`, `RegisterPage.tsx` y `index.css`).
+  - Commits: `feat(frontend): registration form logic` (`registerForm.ts`, su test y `es.ts`) y `feat(frontend): registration page and route` (ruta, `main.tsx`, `AppShell.tsx`, `RegistrationForm.tsx`, `RegisterPage.tsx`, `index.css` y el registro de la tarea en `validation.md`).
   - Hecho cuando: vitest de `resolveRoute` (`/register`, `/register/`, `/register//`, `/REGISTER`), `emptyFieldErrors`, `fieldMessages` (un texto por código), `firstFocusTarget`, `formStateAfter` (un test por caso: contraseña borrada solo con un error de `password` y conservada en el resto, también con `failed("timeout")`; mensaje general y envío habilitado), `createSubmitGuard` y `shouldLeaveRegister`; marcado del formulario con etiquetas, `autoComplete`, «Mostrar contraseña» y la contraseña sin `value=`; build y eslint en verde.
   - Pruebas de mecanismo (privacidad de la contraseña y doble envío): quitar la comprobación de `tryStart` (falla el test de la guarda) y volver a hacer controlado el campo de contraseña (falla el test de marcado sin `value=`).
-  - Evidencia: comprobación en T9.
+  - Evidencia: `validation.md`, sección T8 (tests y mutaciones); la comprobación en el navegador, en T9.
 
 - [ ] **T9. Validación en el navegador, arquitectura y cierre.** RF-1…RF-13
   - Chrome DevTools a 1280 y 375 px, con la consola sin errores propios (los 4xx esperados se anotan) y un recorrido solo con teclado:

@@ -56,8 +56,8 @@ Spec: specs/009-auth/spec.md (aprobada, alineada con el comportamiento verificad
 | frontend/src/i18n/es.ts | M | (T7, T8) Textos de la barra, de la salida, del formulario, del tiempo vencido y de los códigos | RF-9…RF-13 |
 | frontend/src/app/route.ts, route.test.ts | M | (T8) `register` y `redirectToRegister` | RF-13 |
 | frontend/src/main.tsx; frontend/src/app/AppShell.tsx | M | (T8) `main.tsx` normaliza `/register/` a `/register` con `replaceState`; `AppShell` pinta `RegisterPage` en `register` y `redirectToRegister` | RF-13 |
-| frontend/src/register/registerForm.ts, registerForm.test.ts | C | (T8) Lógica del formulario: constantes de longitud, mensajes, foco, estado tras el resultado, guarda de envío y `settleRegistration` | RF-10, RF-11, RF-13 |
-| frontend/src/register/RegisterForm.tsx, RegisterForm.test.ts; pages/RegisterPage.tsx | C | (T8) `RegisterForm`, solo marcado (probado con `react-dom/server`); `RegisterPage`, con el estado, la sesión, la guarda y el foco | RF-10, RF-11, RF-13 |
+| frontend/src/register/registerForm.ts, registerForm.test.ts | C | (T8) Lógica del formulario: constantes de longitud, mensajes, foco, estado tras el resultado, `formStateForEmpty`, guarda de envío y `settleRegistration` | RF-10, RF-11, RF-13 |
+| frontend/src/register/RegistrationForm.tsx, RegistrationForm.test.ts; pages/RegisterPage.tsx | C | (T8) `RegistrationForm`, solo marcado (probado con `react-dom/server`); `RegisterPage`, con el estado, la sesión, la guarda y el foco | RF-10, RF-11, RF-13 |
 | frontend/src/styles/index.css | M | (T8) Token `--color-danger` para los errores del formulario | RF-11 |
 | specs/009-auth/validation.md | C (T1), M | Evidencia de las mutaciones de cada tarea y validación final; incluye la nota de la desviación del proxy de Vite (T6, T9) | Todos |
 | docs/architecture.md | M | (T9) Capa de autenticación, CSRF explícito, cuerpo acotado, límite /64, estructura del frontend | — |
@@ -254,6 +254,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `fieldMessages(codes)`, desde el catálogo;
   - `firstFocusTarget(errors, hasGeneral)`: email → contraseña → región de estado;
   - `formStateAfter(outcome)`: conserva siempre el email; borra la contraseña solo si el resultado es `fieldErrors` con al menos un error de `password`, y la conserva en cualquier otro caso (`fieldErrors` solo del email o de `other`, `throttled` y cada `failed`); elige el mensaje general (también para `failed("timeout")`) y vuelve a habilitar el envío;
+  - `formStateForEmpty(emptyFieldErrors(...))`: el mismo estado que `formStateAfter` para los campos vacíos, con los mismos textos, resumen y foco que un rechazo del servidor, pero sin enviar nada y sin borrar la contraseña (ya está vacía);
   - `PASSWORD_MIN_LENGTH = 10` y `PASSWORD_MAX_LENGTH = 128`: copia de `MinimumLengthValidator` en `backend/config/settings/base.py` y de `PASSWORD_MAX_LENGTH` en `backend/apps/users/services.py`, con su origen anotado en un comentario. Solo alimentan la pista y los mensajes de longitud, nunca una validación del cliente; el 10 lo fija en el backend `config/tests/test_auth_settings.py`, y la T9 comprueba en el navegador que una contraseña de 9 caracteres da el mensaje con «10»;
   - `settleRegistration({register, credentials, logError})`: como `settleLogout`, convierte un rechazo inesperado en `failed("unexpected")`, lo registra sin las credenciales y nunca lanza;
   - `shouldLeaveRegister(status)`: `authenticated` → sí;
@@ -335,7 +336,8 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
 - «Mostrar contraseña» mantiene su etiqueta y cambia solo `aria-pressed`, en vez de alternar con «Ocultar contraseña».
 - El `replace("/map")` lo hace solo el efecto de `shouldLeaveRegister`, no el manejador del envío.
 - «Creando la cuenta…» y los errores los anuncia la región de estado del formulario, no la global.
-- Añadidos que el plan no tenía: resumen «Revisa los campos marcados.», pista «Al menos 10 caracteres.» con las constantes de longitud, token `--color-danger`, `RegisterForm.tsx` como componente de solo marcado y `settleRegistration`.
+- Añadidos que el plan no tenía: resumen «Revisa los campos marcados.», pista «Al menos 10 caracteres.» con las constantes de longitud, token `--color-danger`, `RegistrationForm.tsx` como componente de solo marcado, `formStateForEmpty` (avisa de los campos vacíos sin enviar nada, con los códigos del servidor) y `settleRegistration`.
+- El componente de solo marcado se llama `RegistrationForm` y no `RegisterForm`: `registerForm.ts` y `RegisterForm.tsx` solo se diferencian en las mayúsculas, TypeScript lo rechaza (TS1149) y en macOS y Windows serían el mismo fichero.
 - Pruebas de mecanismo en una tarea de interfaz, por tocar la privacidad de la contraseña y el doble envío: ver `tasks.md`.
 
 ### Notas para el plan de la spec: resolución

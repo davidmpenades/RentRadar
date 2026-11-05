@@ -19,6 +19,12 @@ export const es = {
     throttledMany: "Demasiados intentos. Inténtalo de nuevo en {minutes} minutos.",
   },
   register: {
+    title: "Crear una cuenta",
+    emailLabel: "Email",
+    passwordLabel: "Contraseña",
+    showPassword: "Mostrar contraseña",
+    submit: "Crear cuenta",
+    submitting: "Creando la cuenta…",
     // {min} y {max} salen de PASSWORD_MIN_LENGTH y PASSWORD_MAX_LENGTH
     passwordHint: "Al menos {min} caracteres.",
     summary: "Revisa los campos marcados.",
