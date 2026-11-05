@@ -73,7 +73,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: quitar el reintento; reintentar dos veces; guardar el token; `credentials: "omit"`; quitar el tiempo máximo de «quién soy»; quitar el del registro; quitar el de la salida; no preguntar «quién soy» tras un registro vencido.
   - Evidencia: `validation.md`, sección T6, con la nota de la desviación del proxy.
 
-- [ ] **T7. Navegación interna, barra superior, estado de sesión y zona de contenido.** RF-9, RF-12
+- [x] **T7. Navegación interna, barra superior, estado de sesión y zona de contenido.** RF-9, RF-12
   - `src/app/navigation.ts`, `src/session/sessionState.ts` y `SessionProvider.tsx`, `src/app/AppShell.tsx`, `TopBar.tsx` y `LogoutNotice.tsx`; `main.tsx`; `MapPage` (`h-full`) y `NotFoundPage` (`min-h-full`); textos en `es.ts`.
   - La marca de la barra es un enlace a `/map`. El fallo de «Salir», o su tiempo vencido, muestra un aviso visible bajo la barra con «Reintentar».
   - Commit: `feat(frontend): top bar with session state and page navigation`

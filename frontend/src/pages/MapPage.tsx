@@ -75,7 +75,7 @@ export function MapPage() {
   const handleReset = useCallback(() => setResetSignal((current) => current + 1), []);
 
   return (
-    <main className="relative h-dvh overflow-hidden">
+    <main className="relative h-full overflow-hidden">
       <MapView
         circles={circles}
         styleFailed={styleFailed}

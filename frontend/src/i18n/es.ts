@@ -3,6 +3,17 @@ export const es = {
     title: "Página no encontrada",
     goToMap: "Ir al mapa",
   },
+  topBar: {
+    brand: "RentRadar",
+    register: "Registrarse",
+    logout: "Salir",
+  },
+  session: {
+    loggedOut: "Has salido",
+    registered: "Cuenta creada.",
+    logoutFailed: "No se ha podido salir. Inténtalo de nuevo.",
+    retry: "Reintentar",
+  },
   auth: {
     throttledOne: "Demasiados intentos. Inténtalo de nuevo en 1 minuto.",
     throttledMany: "Demasiados intentos. Inténtalo de nuevo en {minutes} minutos.",

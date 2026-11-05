@@ -1,0 +1,96 @@
+import { createElement } from "react";
+import { renderToStaticMarkup } from "react-dom/server";
+import { describe, expect, it } from "vitest";
+
+import { es } from "../i18n/es";
+import type { TopBarAction } from "../session/sessionState";
+import { LogoutNotice } from "./LogoutNotice";
+import { TopBar } from "./TopBar";
+
+const noop = () => {};
+const ACTIONS: TopBarAction[] = ["none", "register", "logout"];
+
+const bar = (action: TopBarAction, logoutPending = false) =>
+  renderToStaticMarkup(createElement(TopBar, { action, logoutPending, onNavigate: noop, onLogout: noop }));
+const notice = (value: "logout_failed" | null) =>
+  renderToStaticMarkup(createElement(LogoutNotice, { notice: value, onRetry: noop }));
+
+const links = (html: string) => html.match(/<a\b[^>]*>.*?<\/a>/g) ?? [];
+const buttons = (html: string) => html.match(/<button\b[^>]*>.*?<\/button>/g) ?? [];
+const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
+
+describe("TopBar", () => {
+  it.each(ACTIONS)("con %s la marca es un enlace a /map de al menos 44 px", (action) => {
+    const brand = links(bar(action)).find((tag) => tag.includes(es.topBar.brand));
+    expect(brand).toBeDefined();
+    expect(brand).toMatch(/href="\/map"/);
+    expect(classesOf(brand ?? "")).toContain("min-h-11");
+  });
+
+  it.each(ACTIONS)("con %s la barra mide siempre 56 px y no se encoge: aparecer una acción no la mueve", (action) => {
+    const header = bar(action).match(/<header\b[^>]*>/)?.[0] ?? "";
+    expect(classesOf(header)).toEqual(expect.arrayContaining(["h-14", "shrink-0"]));
+  });
+
+  it("mientras no se sabe si hay sesión no hay acciones de sesión", () => {
+    const html = bar("none");
+    expect(links(html)).toHaveLength(1);
+    expect(buttons(html)).toHaveLength(0);
+    expect(html).not.toContain(es.topBar.register);
+    expect(html).not.toContain(es.topBar.logout);
+  });
+
+  it("sin sesión muestra el enlace «Registrarse» a /register, de 44 px, y no «Salir»", () => {
+    const html = bar("register");
+    const register = links(html).find((tag) => tag.includes(es.topBar.register));
+    expect(register).toMatch(/href="\/register"/);
+    expect(classesOf(register ?? "")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    expect(buttons(html)).toHaveLength(0);
+    expect(es.topBar.register).toBe("Registrarse");
+  });
+
+  it("con sesión muestra el botón «Salir», de 44 px, y no «Registrarse»", () => {
+    const html = bar("logout");
+    const [logout] = buttons(html);
+    expect(buttons(html)).toHaveLength(1);
+    expect(logout).toContain(es.topBar.logout);
+    expect(logout).toMatch(/type="button"/);
+    expect(classesOf(logout ?? "")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    expect(logout).not.toMatch(/\saria-disabled=/);
+    expect(html).not.toContain("/register");
+    expect(es.topBar.logout).toBe("Salir");
+  });
+
+  it("«Salir» en curso usa aria-disabled y no disabled, para conservar el foco", () => {
+    const [logout] = buttons(bar("logout", true));
+    expect(logout).toMatch(/aria-disabled="true"/);
+    expect(logout).not.toMatch(/\sdisabled(=|\s|>)/);
+  });
+
+  it.each(ACTIONS)("con %s nunca hay un email en la barra", (action) => {
+    expect(bar(action)).not.toContain("@");
+  });
+});
+
+describe("LogoutNotice", () => {
+  it("sin aviso deja montada la región de estado, vacía", () => {
+    const html = notice(null);
+    expect(html).toMatch(/^<div\b[^>]*role="status"[^>]*><\/div>$/);
+  });
+
+  it("la región va superpuesta bajo la barra: no cambia el alto de la zona de contenido", () => {
+    const region = notice(null).match(/<div\b[^>]*>/)?.[0] ?? "";
+    expect(classesOf(region)).toEqual(expect.arrayContaining(["absolute", "inset-x-0", "top-0"]));
+  });
+
+  it("con el fallo de salida muestra el texto y el botón «Reintentar» de 44 px dentro de la región", () => {
+    const html = notice("logout_failed");
+    expect(html).toMatch(/^<div\b[^>]*role="status"/);
+    expect(html).toContain(es.session.logoutFailed);
+    const [retry] = buttons(html);
+    expect(buttons(html)).toHaveLength(1);
+    expect(retry).toContain(es.session.retry);
+    expect(retry).toMatch(/type="button"/);
+    expect(classesOf(retry ?? "")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+  });
+});

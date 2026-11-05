@@ -478,3 +478,51 @@ Las mutaciones 1 a 4 de arriba se hicieron sobre la versión anterior al cuerpo 
 | r6 | Exigir `error.code === "throttled"` en la rama del 429 | 2: los dos casos de «un 429 con el code %s también es throttled: no se exige el code» (`algo_nuevo` y `rate_limited`). Ningún test anterior la mata | `6de83e6858512df6fc717869d2496fed649b514fb7674e38c1238ba1f5428c07` |
 
 r6 repite m12. m13 también se repitió, sobre `timeout.ts` (sha256 de antes y después `540d138665201900595cff373353ab791ba7c5c590656d6bc2cebdc57f743edb`), con el mismo sha256 durante que el registrado arriba (`6966056b304af34c518dd6d578a8d54cee60359b903a15195ac8e854fb864878`) y el mismo único test que la mata, el caso «sin sesión» del 201 cortado con el temporizador vencido.
+
+## Navegación interna, barra superior, estado de sesión y zona de contenido (T7)
+Fecha: 2026-11-05 · Ficheros: `frontend/src/{app/navigation.ts, app/navigation.test.ts, app/AppShell.tsx, app/TopBar.tsx, app/TopBar.test.ts, app/LogoutNotice.tsx, app/NotFoundPage.tsx, session/sessionState.ts, session/sessionState.test.ts, session/SessionProvider.tsx, main.tsx, pages/MapPage.tsx, i18n/es.ts}`. Sin cambios en el backend, en `package*.json` ni en el contrato. La comprobación en el navegador queda para la T9.
+
+| Comprobación | Orden (desde `frontend/`) | Resultado |
+|---|---|---|
+| Tests nuevos antes del código | `npx vitest run src/app/navigation.test.ts`, y después `npx vitest run src/session/sessionState.test.ts src/app/TopBar.test.ts` | No se cargan: `Cannot find module './navigation'`, `'./sessionState'` y `'./LogoutNotice'` |
+| Tests de la tarea tras el código | `npx vitest run src/app/navigation.test.ts src/session/sessionState.test.ts src/app/TopBar.test.ts` | 68 passed: 15 en `navigation.test.ts`, 37 en `sessionState.test.ts` y 16 en `TopBar.test.ts` |
+| Suite completa | `npx vitest run` | 900 passed (832 antes de la tarea más 68); ningún test existente cambia |
+| Análisis estático de los trece ficheros | `npx eslint <los trece ficheros>` | Sin incidencias (código de salida 0) |
+| Tipos y empaquetado | `npm run build` (`tsc -b && vite build`) | Código de salida 0; solo el aviso del chunk de maplibre-gl, que ya existía |
+| Tipos del cliente | `npm run api:check` | Código de salida 0, sin cambios |
+
+No se ha levantado, parado ni reiniciado Vite ni Docker, y no se ha tocado la BD de desarrollo.
+
+Con los módulos creados, un test de `TopBar.test.ts` falló por el propio test: buscaba `aria-disabled` en todo el botón y encontraba la clase `aria-disabled:opacity-60`. Ahora busca el atributo.
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | React StrictMode | `main.tsx` monta la aplicación dentro de `<StrictMode>`. En desarrollo, React monta, desmonta y vuelve a montar cada efecto, así que al cargar la página salen **dos GET a `/api/v1/auth/session/`**: el primero lo cancela la limpieza del efecto (en la pestaña Red aparece como cancelado) y el segundo decide el estado. No es un fallo: `loadSessionStatus` devuelve `null` con la señal abortada y no escribe estado ni consola. En el build de producción sale uno solo. Lo mismo pasa ya con el mapa (`MapView` lo crea y lo libera dos veces en desarrollo) |
+| 2 | Aviso de fallo de «Salir» (desviación del plan) | El plan lo ponía como franja bajo la barra que hacía ceder alto a la zona de contenido (`flex-1 min-h-0`). Va **superpuesto** en la parte superior de la zona (`absolute inset-x-0 top-0 z-20`), sin cambiar su alto. Motivo: la región del aviso se vacía al empezar cada intento y se rellena al fallar, para que un segundo fallo igual vuelva a anunciarse; si ocupara alto, el mapa se redimensionaría dos veces en cada reintento. La región `role="status"` está siempre montada y, vacía, no mide nada ni capta clics (`pointer-events-none`; la tarjeta, `pointer-events-auto`). Mientras se ve tapa la parte superior del mapa, incluidos los botones de zoom: se mira en la T9 |
+| 3 | Alto de la zona | Columna `flex h-dvh flex-col`; barra `h-14 shrink-0`; zona `relative min-h-0 flex-1`. La columna tiene un alto definido (`h-dvh`) y la zona recibe el alto sobrante por `flex-1` (`flex: 1 1 0%`): el tamaño de un elemento flexible en un contenedor de alto definido cuenta como definido, así que `h-full` de `MapPage` (`relative h-full overflow-hidden`) se resuelve contra él. `min-h-0` quita el `min-height: auto` del elemento flexible, que si no impediría encogerlo por debajo del contenido y provocaría scroll de página. `shrink-0` mantiene los 56 px de la barra |
+| 4 | «Página no encontrada» | El plan decía `min-h-full`, pero con eso el contenido que no cupiera crecería fuera de la zona y daría scroll de página. Va `flex h-full flex-col items-center justify-center-safe gap-6 overflow-y-auto p-4 text-center`: se desplaza dentro de la zona, y `justify-center-safe` (`justify-content: safe center`, presente en el CSS generado) evita que el centrado corte el principio del contenido |
+| 5 | Rechazo de «quién soy» | `whoAmI` resuelve por su cuenta la red y el tiempo vencido sin escribir en la consola, así que lo que rechaza es un fallo del código: `loadSessionStatus` lo registra con `logError` (`console.error` en `main.tsx`) y deja el estado sin sesión, de modo que la barra nunca se queda sin acciones. Con la señal abortada devuelve `null`, tanto si `whoAmI` rechaza como si resuelve tarde: el resultado de una petición cancelada nunca se aplica |
+| 6 | Carrera entre el arranque y el registro | `statusAfterWhoAmI` solo aplica la respuesta en `unknown`. El formulario de registro se pinta sin esperar a «quién soy», y una respuesta sin sesión que salió antes del registro y llega después no deshace `markRegistered`; tampoco una con sesión que llega después de salir |
+| 7 | `markRegistered` | Pasa a `authenticated`, retira el aviso de salida y anuncia «Cuenta creada.» en la región global (`sr-only`), que vive en `AppShell` y sobrevive al `replace("/map")` de la página de registro. La lógica es `registrationResult`, con su test; el cableado en el contexto se comprueba al usarlo en la T8 y en el navegador en la T9 (vitest corre en `node`, sin efectos de React) |
+| 8 | Rechazo de la salida (decisión sin cobertura en el plan) | `logout()` del cliente propaga un error que no es de red ni de tiempo. `settleLogout` lo registra y lo trata como un fallo más (`failed("unexpected")`): sin eso, «Salir» quedaría en `aria-disabled` para siempre. Cualquier fallo da el mismo resultado: la sesión sigue, foco en «Salir» y el aviso con «Reintentar». No se pregunta «quién soy»: reintentar sin sesión también responde 204 |
+| 9 | Anuncios | «Has salido» y «Cuenta creada.» van a la región global; el fallo de salida lo anuncia solo la región del aviso, para no anunciarlo dos veces. La región global se vacía al empezar cada salida |
+| 10 | Foco | El foco a «Registrarse» tras salir se aplica en un efecto de `AppShell`, después de pintar el nuevo estado (el enlace no existe antes y el botón «Salir» desaparece enfocado). Al cambiar de página, el foco va a la zona (`tabIndex=-1`), pero no en la carga inicial. La regla global `:focus-visible` de `index.css` no está en una capa de Tailwind, así que también dibujará el contorno de la zona si se llega a ella con el teclado: se mira en la T9 |
+| 11 | Ruta del registro | Hasta la T8, `resolveRoute` no conoce `/register` y el enlace «Registrarse» lleva a «Página no encontrada» |
+| 12 | Panel | `ResultsPanel` sigue con `h-[40dvh]`, una unidad del viewport y no de la zona: a 375×667 ocupa unos 267 px de los 611 de la zona (≈44 %). No cambia en esta tarea; se mira en la T9 |
+
+### Pruebas de mecanismo
+La tarea es de interfaz y no las exige. Se hacen dos, más dos variantes de la segunda que separan sus dos comprobaciones. Cada una sobre una copia hecha junto al fichero (`sessionState.ts.orig`), restaurada con `cp` y borrada; sha256 idéntico antes y después y ninguna copia sin versionar. Ejecución: `npx vitest run src/session/sessionState.test.ts src/app/TopBar.test.ts src/app/navigation.test.ts` (68 tests).
+
+| # | Mutación | Tests que fallan | sha256 durante |
+|---|---|---|---|
+| m1 | Quitar `current === "unknown"` de `statusAfterWhoAmI` (`return result`) | 3: «una respuesta sin sesión que llega tras registrarse no deshace el registro», «una respuesta con sesión que llega tras salir no vuelve a mostrar Salir» y «la respuesta de quién soy del arranque que llega después no la deshace» | `0b2aeaf90a3d6f34e2eb7a2175ca3ec63746478f495890f7bb368003a61a9e7b` |
+| m2 | Quitar las dos comprobaciones de la señal abortada de `loadSessionStatus` | 4: «cancelada y rechazada con su AbortError», «cancelada y rechazada con otro error» y «cancelada y resuelta después» con `anonymous` y con `authenticated` | `76591094c2461b8cc91ddda57ab986c653347e60e69a2e305e5fba3018cfe885` |
+| m2a | Quitar solo la del resultado (`signal.aborted ? null : result`) | 2: «cancelada y resuelta después» con `anonymous` y con `authenticated` | `4b48f7f2d4b1c47b610b5a1a5bd159c24e8c4b642be597fe5a22896ba18e9e8c` |
+| m2b | Quitar solo la del rechazo (`if (signal.aborted) return null`) | 2: «cancelada y rechazada con su AbortError» y «cancelada y rechazada con otro error» | `979d179553939e7f53ba67a6dd980a9a23763c05dc99829090e8949f8d01765e` |
+
+sha256 antes y después:
+
+| Fichero | sha256 |
+|---|---|
+| `src/session/sessionState.ts` (m1, m2, m2a y m2b) | `9fc3a770677d852efe37f2b21351fe6927e580d3a71971243558d4a52cfd545b` |
