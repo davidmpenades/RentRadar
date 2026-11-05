@@ -55,7 +55,10 @@ Spec: specs/009-auth/spec.md (aprobada, alineada con el comportamiento verificad
 | frontend/src/main.tsx; pages/MapPage.tsx; app/NotFoundPage.tsx | M | (T7) Montan `AppShell`; las páginas ocupan la zona (`h-full` / `min-h-full`) en vez de `h-dvh` | RF-9, 006 RF-8/13/14 |
 | frontend/src/i18n/es.ts | M | (T7, T8) Textos de la barra, de la salida, del formulario, del tiempo vencido y de los códigos | RF-9…RF-13 |
 | frontend/src/app/route.ts, route.test.ts | M | (T8) `register` y `redirectToRegister` | RF-13 |
-| frontend/src/register/registerForm.ts, registerForm.test.ts; pages/RegisterPage.tsx | C | (T8) Lógica del formulario y página | RF-10, RF-11, RF-13 |
+| frontend/src/main.tsx; frontend/src/app/AppShell.tsx | M | (T8) `main.tsx` normaliza `/register/` a `/register` con `replaceState`; `AppShell` pinta `RegisterPage` en `register` y `redirectToRegister` | RF-13 |
+| frontend/src/register/registerForm.ts, registerForm.test.ts | C | (T8) Lógica del formulario: constantes de longitud, mensajes, foco, estado tras el resultado, guarda de envío y `settleRegistration` | RF-10, RF-11, RF-13 |
+| frontend/src/register/RegisterForm.tsx, RegisterForm.test.ts; pages/RegisterPage.tsx | C | (T8) `RegisterForm`, solo marcado (probado con `react-dom/server`); `RegisterPage`, con el estado, la sesión, la guarda y el foco | RF-10, RF-11, RF-13 |
+| frontend/src/styles/index.css | M | (T8) Token `--color-danger` para los errores del formulario | RF-11 |
 | specs/009-auth/validation.md | C (T1), M | Evidencia de las mutaciones de cada tarea y validación final; incluye la nota de la desviación del proxy de Vite (T6, T9) | Todos |
 | docs/architecture.md | M | (T9) Capa de autenticación, CSRF explícito, cuerpo acotado, límite /64, estructura del frontend | — |
 
@@ -250,14 +253,16 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `emptyFieldErrors({email, password})`, con los mismos códigos que el servidor;
   - `fieldMessages(codes)`, desde el catálogo;
   - `firstFocusTarget(errors, hasGeneral)`: email → contraseña → región de estado;
-  - `formStateAfter(outcome)`: conserva el email, borra la contraseña, elige el mensaje general (también para `failed("timeout")`) y vuelve a habilitar el envío;
+  - `formStateAfter(outcome)`: conserva siempre el email; borra la contraseña solo si el resultado es `fieldErrors` con al menos un error de `password`, y la conserva en cualquier otro caso (`fieldErrors` solo del email o de `other`, `throttled` y cada `failed`); elige el mensaje general (también para `failed("timeout")`) y vuelve a habilitar el envío;
+  - `PASSWORD_MIN_LENGTH = 10` y `PASSWORD_MAX_LENGTH = 128`: copia de `MinimumLengthValidator` en `backend/config/settings/base.py` y de `PASSWORD_MAX_LENGTH` en `backend/apps/users/services.py`, con su origen anotado en un comentario. Solo alimentan la pista y los mensajes de longitud, nunca una validación del cliente; el 10 lo fija en el backend `config/tests/test_auth_settings.py`, y la T9 comprueba en el navegador que una contraseña de 9 caracteres da el mensaje con «10»;
+  - `settleRegistration({register, credentials, logError})`: como `settleLogout`, convierte un rechazo inesperado en `failed("unexpected")`, lo registra sin las credenciales y nunca lanza;
   - `shouldLeaveRegister(status)`: `authenticated` → sí;
-  - `createSubmitGuard()`: un envío a la vez.
+  - `createSubmitGuard()`: `tryStart()` solo da paso si no hay un envío en curso y `finish()` lo libera; un envío a la vez.
 
 ## Interfaz
 - **AppShell**: `div.flex.h-dvh.flex-col` con la barra (`header`), el aviso de salida cuando existe y la zona de contenido (`div.relative.min-h-0.flex-1`). Cada página pone su `<main>`.
   - Al cambiar de página, el foco va a la zona (`tabIndex=-1`), para no perderlo en un elemento que desaparece.
-  - Una región `role="status"` (polite), solo para lectores de pantalla, anuncia «Has salido», «Cuenta creada.» y «Creando la cuenta…».
+  - Una región `role="status"` (polite), solo para lectores de pantalla, anuncia «Has salido» y «Cuenta creada.». «Creando la cuenta…» y los errores los anuncia la región de estado del formulario.
 - **Barra superior**: 56 px (`h-14`), móvil primero.
   - A la izquierda, la marca «RentRadar» como **enlace a `/map`** (`<a href="/map">` con `navigate` si es un clic simple), de al menos 44 px de alto.
   - A la derecha, la acción:
@@ -273,26 +278,31 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `NotFoundPage` pasa de `min-h-dvh` a `min-h-full`, con desplazamiento propio si no cabe;
   - el panel, la atribución y el error del estilo no cambian, solo su contenedor. Sin scroll de página.
 - **`/register`**:
-  - `<main>` con `h1` «Crear una cuenta» y un formulario de ancho máximo `max-w-sm` con `noValidate`.
-  - Email: `type="email"`, `autoComplete="email"`, `inputMode="email"`.
-  - Contraseña: `autoComplete="new-password"`, con el botón «Mostrar contraseña» / «Ocultar contraseña» (`type="button"`, `aria-pressed`, `aria-controls`) de 44 px.
+  - `<main>` con `h1` «Crear una cuenta» y un formulario de ancho máximo `max-w-sm` con `noValidate` y `method="post"`; el manejador de envío empieza con `preventDefault()`, para que un fallo previo no mande la contraseña por la URL en un envío nativo.
+  - Email: `type="email"`, `autoComplete="email"`, `inputMode="email"`, `autoCapitalize="none"`, `spellCheck={false}`; campo controlado.
+  - Contraseña: `autoComplete="new-password"` y campo **no controlado**: se lee de un `ref` al enviar y se borra con `input.value = ""`, porque React copia el valor de un campo controlado al atributo `value` del DOM, también en `type="password"`. Pista «Al menos 10 caracteres.» (con `PASSWORD_MIN_LENGTH`) enlazada con `aria-describedby`.
+  - Botón «Mostrar contraseña» (`type="button"`) de 44 px: etiqueta fija, con `aria-pressed` y `aria-controls`; no cambia a «Ocultar contraseña», porque un lector leería «Ocultar contraseña, pulsado».
   - Envío «Crear cuenta» de 44 px; Intro en el último campo envía.
   - Se pinta sin esperar a «quién soy». Si el estado pasa a `authenticated`, `replace("/map")`.
   - Errores:
     - por campo, con `aria-invalid` y `aria-describedby`, uno o varios mensajes;
-    - el general, en la región de estado del formulario (`role="status"`, `tabIndex=-1`).
+    - el general, en la región de estado del formulario (`role="status"`, `tabIndex=-1`); con errores en campos, la región lleva el resumen «Revisa los campos marcados.».
   - Al enviar:
-    - se anuncia «Creando la cuenta…» y el envío queda `disabled`;
-    - un doble clic o un doble Intro no envían dos veces (guarda);
-    - si se rechaza, falla o vence a los 10 s: el email se conserva, la contraseña se borra, el envío vuelve a habilitarse para reintentar y el foco va al primer campo con error o a la región.
-  - Al registrarse: el estado pasa a `authenticated`, se anuncia «Cuenta creada.» y se hace `replace("/map")`, sin entrada nueva en el historial.
+    - se anuncia «Creando la cuenta…» en la región de estado del formulario;
+    - el envío queda con `aria-disabled` (no `disabled`, que quitaría el foco y no frenaría el Intro) y los dos campos en `readOnly`, para que el email no cambie mientras dura la operación (unos 30 s en el peor caso: dos intentos y dos «quién soy»);
+    - un doble clic o un doble Intro no envían dos veces: la guarda (`createSubmitGuard`) vive en un `useRef` y se libera en un `finally`;
+    - si se rechaza, falla o vence a los 10 s: el email se conserva; la contraseña se borra solo si el resultado trae un error de la contraseña; el envío vuelve a habilitarse para reintentar y el foco va al primer campo con error o a la región.
+  - Si el estado es `authenticated`, la página no pinta el formulario (devuelve `null`) mientras el efecto hace el `replace`.
+  - Al registrarse: el manejador solo llama a `markRegistered` (estado `authenticated` y anuncio «Cuenta creada.»). El único `replace("/map")` lo hace el efecto de `shouldLeaveRegister`, sin entrada nueva en el historial.
 - **Mensajes del catálogo (`es.ts`)**:
   - `email_taken`: «Ya existe una cuenta con este email.» (fijado por la spec);
   - `throttled`: el texto fijado por la spec;
   - `email_empty` «Escribe tu email.», `email_invalid` «Escribe un email válido.», `email_control_char` «El email tiene caracteres no permitidos.», `email_too_long` «El email es demasiado largo.»;
   - `password_required` «Escribe una contraseña.», `password_invalid` «La contraseña tiene caracteres no permitidos.», `password_too_long` «La contraseña no puede tener más de 128 caracteres.», `password_too_short` «La contraseña debe tener al menos 10 caracteres.», `password_too_common` «Esa contraseña es demasiado común.», `password_entirely_numeric` «La contraseña no puede tener solo números.», `password_too_similar` «La contraseña se parece demasiado al email.»;
-  - generales: tiempo vencido, «La petición ha tardado demasiado. Inténtalo de nuevo.»; CSRF tras el reintento, «No se ha podido enviar el formulario. Recarga la página e inténtalo de nuevo.»; red, servidor e inesperado, como la 006.
-- **Movimiento reducido**: sin transiciones. Contraste AA con los tokens de la 006.
+  - generales: tiempo vencido, «La petición ha tardado demasiado. Inténtalo de nuevo.»; CSRF tras el reintento, «No se ha podido enviar el formulario. Recarga la página e inténtalo de nuevo.»; red, servidor e inesperado, como la 006 (con claves propias en `es.register`);
+  - resumen con errores en campos, «Revisa los campos marcados.»; `fieldErrors` solo de `other` (`constraint_violated`, `validation_failed` o desconocido), «No se ha podido crear la cuenta. Inténtalo de nuevo.»; un código desconocido en un campo, «Revisa el email.» o «Revisa la contraseña.»;
+  - `fieldMessages` no repite un mismo texto en un campo, porque el cliente no agrupa los códigos desconocidos repetidos.
+- **Movimiento reducido**: sin transiciones. Contraste AA con los tokens de la 006 y `--color-danger: #b3261e` para los errores (6,54:1 sobre blanco y 5,64:1 sobre `sky`, calculados con la fórmula de contraste de WCAG; sobre `lemon` daría 4,51:1, así que no se usa dentro del aviso amarillo; se mira también en la T9).
 
 ## Decisiones
 | Decisión | Opciones | Elegida | Qué evita | Coste |
@@ -316,6 +326,17 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
 | D17 Estado de sesión en el cliente | A) sin email; B) con el email sin mostrarlo | A | Que un cambio futuro lo pinte | Si se necesita, otra consulta |
 | D18 Tiempo máximo de registro y salida | A) mismo `runWithTimeout`, 10 s, error general y reintento; B) sin tiempo máximo; C) un helper distinto | A | B deja el envío colgado hasta que el navegador corte; C duplica | Un reintento tras un registro vencido puede topar con `email_taken` si el servidor lo completó: antes de dar el error, el cliente pregunta «quién soy» |
 | D19 Marca de la barra | A) enlace a `/map`; B) solo texto | A | B: sin camino de vuelta al mapa desde `/register` salvo «Atrás» | Un enlace más en la barra, con navegación interna |
+| D20 Campo de contraseña | A) no controlado, leído de un `ref` y borrado con `input.value = ""`; B) controlado con estado de React | A | B: React copia el valor al atributo `value` del DOM (`react-dom-client.development.js`, `updateInput` y `setDefaultValue`), también en `type="password"`, y cada tecla queda en el HTML | Hay que borrar el campo a mano y no se puede pintar su valor |
+| D21 Contraseña tras un rechazo | A) se borra solo con un error de la contraseña; B) se borra siempre | A | B: obliga a reescribirla ante un `email_taken`, un límite superado o un fallo de red, donde no tiene la culpa | Spec RF-11 y su caso límite; `formStateAfter` decide por resultado |
+
+### Desviaciones de la T8 respecto a la primera redacción del plan
+- `AppShell.tsx` y `main.tsx` entran en la T8: sin ellos `/register` se pintaría como el mapa y `/register/` no se normalizaría.
+- El envío usa `aria-disabled` en vez de `disabled`, con guarda por `ref` y campos en `readOnly` durante la operación; la spec (RF-10) dice «deshabilita» sin fijar el mecanismo.
+- «Mostrar contraseña» mantiene su etiqueta y cambia solo `aria-pressed`, en vez de alternar con «Ocultar contraseña».
+- El `replace("/map")` lo hace solo el efecto de `shouldLeaveRegister`, no el manejador del envío.
+- «Creando la cuenta…» y los errores los anuncia la región de estado del formulario, no la global.
+- Añadidos que el plan no tenía: resumen «Revisa los campos marcados.», pista «Al menos 10 caracteres.» con las constantes de longitud, token `--color-danger`, `RegisterForm.tsx` como componente de solo marcado y `settleRegistration`.
+- Pruebas de mecanismo en una tarea de interfaz, por tocar la privacidad de la contraseña y el doble envío: ver `tasks.md`.
 
 ### Notas para el plan de la spec: resolución
 | Nota | Resolución |
@@ -339,7 +360,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `frontend/src/api/publicAssets.ts` y `src/map/loadStyle.ts` (T6);
   - `vite.config.ts` (T6);
   - `main.tsx`, `MapPage.tsx` l.78, `NotFoundPage.tsx` l.5 y `i18n/es.ts` (T7);
-  - `route.ts` y `route.test.ts` (T8).
+  - `route.ts`, `route.test.ts`, `main.tsx`, `AppShell.tsx` y `styles/index.css` (T8).
 - **No cambian:**
   - `config/tests/test_api_settings.py`, `apps/core/tests/test_middleware.py`;
   - `apps/assets/tests/test_public_list_api.py`, también l.460-468, 513-520, 565-569, 661-699 y 900-918;
@@ -375,8 +396,8 @@ Los que la spec ya recoge en «Riesgos aceptados» (el usuario los aceptó) no s
 | RF-7 | pytest (T3): mixin con vistas de prueba (sin cabecera, vacía, sin cookie, distinta, cookie mal formada, Origin ajeno; 403 `csrf_failed`, `no-store`, sin motivo en el cuerpo ni en el log; `LimitedStream.read` parcheado para que lance; método no admitido → 405). pytest (T5a): registro con y sin sesión: sin cuenta ni fila nuevas y sesión intacta; guarda del URLconf. pytest (T5b): salida con y sin sesión, igual; la guarda cubre la salida sin tocarla. vitest (T6): un solo reintento tras «quién soy» |
 | RF-8 | pytest (T3): 4096 bytes pasan y 4097 dan 413 (declarado y leído); `Transfer-Encoding` → 413; `text/plain` y multipart → 400; JSON inválido, BOM, `NaN`, lista, `"[" * 2048 + "]" * 2048` (400 porque la raíz no es un objeto); `RecursionError` simulado → 400; email numérico, contraseña lista u objeto, booleano → 400; cuerpo vacío → `{}`; objeto anidado en una clave desconocida (unos 600 niveles dentro de 4096 bytes) → se acepta. pytest (T5a): sobre el endpoint, también un email de 4 KB → `email_invalid` y `email_too_long` (el validador de email de Django rechaza más de 320 caracteres) sin 500 y ese objeto anidado → `invalid_fields` con `email_empty` y `password_required` |
 | RF-9 | vitest (T6): `whoAmI` con 5 s (temporizador inyectado), 500, red, forma inválida y `Content-Type` ajeno → `anonymous`. vitest (T7): `topBarAction`, `isPlainLeftClick` y el marcado de `TopBar` (`react-dom/server`): sin acciones en `unknown`, la marca es un enlace a `/map`, el email nunca aparece. DevTools (T9): 375 y 1280 px sin desbordar; «quién soy» bloqueado → «Registrarse» y el mapa funciona; la marca lleva a `/map` |
-| RF-10 | vitest (T8): `emptyFieldErrors`, `createSubmitGuard` (doble envío), `shouldLeaveRegister`. vitest (T6): 201 con forma inválida → «quién soy». DevTools (T9): envío deshabilitado, `/map` sin entrada nueva en el historial (`history.length`), «Atrás» no vuelve al formulario, barra en «Salir», Intro envía |
-| RF-11 | vitest (T8): `fieldMessages`, `firstFocusTarget`, `formStateAfter` (email conservado, contraseña vacía, envío habilitado, también con `failed("timeout")`). vitest (T6): reintento único y error general tras el segundo `csrf_failed`; registro vencido a los 10 s con temporizador inyectado → pregunta «quién soy»: con sesión `registered`, sin ella `failed("timeout")`. DevTools (T9): foco y anuncios con el teclado; registro que no responde (`fetch` simulado que no resuelve) → error general y reintento |
+| RF-10 | vitest (T8): `emptyFieldErrors`, `createSubmitGuard` (doble envío), `shouldLeaveRegister`, marcado del formulario (`aria-disabled` y `readOnly` en envío; contraseña sin `value=`). vitest (T6): 201 con forma inválida → «quién soy». DevTools (T9): envío con `aria-disabled`, `/map` sin entrada nueva en el historial (`history.length`), «Atrás» no vuelve al formulario, barra en «Salir», Intro envía |
+| RF-11 | vitest (T8): `fieldMessages`, `firstFocusTarget`, `formStateAfter` (un test por caso: email conservado siempre; contraseña borrada solo con `fieldErrors` que traiga un error de `password`, también junto a errores del email; conservada con `fieldErrors` solo del email o de `other`, `throttled` y cada `failed`: `csrf`, `request`, `network`, `server`, `invalid`, `timeout` y `unexpected`; envío habilitado en todos, también con `failed("timeout")`). vitest (T6): reintento único y error general tras el segundo `csrf_failed`; registro vencido a los 10 s con temporizador inyectado → pregunta «quién soy»: con sesión `registered`, sin ella `failed("timeout")`. DevTools (T9): foco y anuncios con el teclado; registro que no responde (`fetch` simulado que no resuelve) → error general y reintento |
 | RF-12 | vitest (T7): `logoutResult` (anuncio, foco y aviso en éxito, fallo y tiempo vencido). vitest (T6): reintento de la salida; salida vencida a los 10 s → `failed`. DevTools (T9): «Has salido», foco en «Registrarse»; fallo y tiempo vencido simulados: aviso visible con «Reintentar», foco en «Salir»; segunda pestaña |
 | RF-13 | vitest (T8): `resolveRoute` (`/register`, `/register/`, `/register//`, `/REGISTER`) y `shouldLeaveRegister`. vitest (T7): `createNavigator` (`replace` sin entrada nueva, `navigate` a la misma ruta no hace nada, `popstate`). DevTools (T9): `/register` con sesión → `/map` con `replace`; `/register/` normalizada |
 
