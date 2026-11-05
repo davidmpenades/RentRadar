@@ -3,6 +3,10 @@ export const es = {
     title: "Página no encontrada",
     goToMap: "Ir al mapa",
   },
+  auth: {
+    throttledOne: "Demasiados intentos. Inténtalo de nuevo en 1 minuto.",
+    throttledMany: "Demasiados intentos. Inténtalo de nuevo en {minutes} minutos.",
+  },
   panel: {
     label: "Bienes en esta zona",
     searching: "Buscando bienes…",

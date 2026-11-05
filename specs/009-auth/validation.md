@@ -325,3 +325,156 @@ sha256 antes y después:
 | Fichero | sha256 |
 |---|---|
 | `apps/users/views.py` (m1 a m6 y m3b) | `6e03be3ddda932922645e42936b13a0d1ae6e2e6d9b23ed3af94b052ff3cc12c` |
+
+## Cliente de sesión, tiempo máximo común y proxy de Vite (T6)
+Fecha: 2026-11-05 · Ficheros: `frontend/{src/api/timeout.ts, src/api/timeout.test.ts, src/api/session.ts, src/api/session.test.ts, src/api/publicAssets.ts, src/map/loadStyle.ts, src/i18n/format.ts, src/i18n/format.test.ts, src/i18n/es.ts, vite.config.ts}`. Sin cambios en el backend, en `package*.json` ni en el contrato.
+
+| Comprobación | Orden (desde `frontend/`) | Resultado |
+|---|---|---|
+| Tests nuevos antes del código | `npx vitest run src/i18n/format.test.ts`, `npx vitest run src/api/timeout.test.ts` y `npx vitest run src/api/session.test.ts` | `format.test.ts`: 14 fallan y 37 pasan; `timeout.test.ts` y `session.test.ts` no se cargan (ver abajo) |
+| Tests de la tarea tras el código | `npx vitest run --reporter=verbose src/api/timeout.test.ts src/api/session.test.ts src/i18n/format.test.ts` | 15 en `timeout.test.ts`, 239 en `session.test.ts` y 51 en `format.test.ts` (14 nuevos), todos en verde |
+| Módulos de la 006 sin cambiar su comportamiento | `npx vitest run src/api/timeout.test.ts src/api/publicAssets.test.ts src/map/loadStyle.test.ts` | 102 passed; `publicAssets.test.ts` y `loadStyle.test.ts` pasan sin editarse |
+| Suite completa | `npx vitest run` | 21 ficheros, 832 passed (564 antes de la tarea, más 239, 15 y 14) |
+| Análisis estático de los diez ficheros | `npx eslint src/api/session.ts src/api/session.test.ts src/api/timeout.ts src/api/timeout.test.ts src/api/publicAssets.ts src/map/loadStyle.ts src/i18n/format.ts src/i18n/format.test.ts src/i18n/es.ts vite.config.ts` | Sin incidencias (código de salida 0) |
+| Tipos y empaquetado | `npm run build` (`tsc -b && vite build`) | Código de salida 0 |
+| Tipos del cliente | `npm run api:check` | Código de salida 0, sin cambios |
+
+No se ha levantado, parado ni reiniciado Vite ni Docker, y no se ha tocado la BD de desarrollo.
+
+Tests que no se editan, con el mismo sha256 antes y después de la tarea:
+
+| Fichero | sha256 |
+|---|---|
+| `src/api/publicAssets.test.ts` | `801327dc525cedd73b117fa5701941f5941021345569aa518f9c9e44db8f8546` |
+| `src/map/loadStyle.test.ts` | `1a76aac5c98e808364bb5f770236e04548fe25a3f3a01eb4c659ebaf7c439c04` |
+| `src/api/http.test.ts` | `7ef1b4f921a23430eeb7d1af66814ab2b2244e5f177b7029c220ce5cfef75849` |
+| `src/api/validate.test.ts` | `1f4c6dceed962e8f0ab6376f43c656546454061e0eba329160868c159ddc342e` |
+
+### Tests que fallaron primero
+| Fichero | Fallo | Razón |
+|---|---|---|
+| `src/i18n/format.test.ts` (14) | `TypeError: waitMinutes is not a function` (9) y `throttledMessage is not a function` (5) | Las funciones no existen |
+| `src/api/timeout.test.ts` | `Cannot find module './timeout'` | El módulo no existe |
+| `src/api/session.test.ts` | `Cannot find module './session'` | El módulo no existe |
+
+Con los módulos creados, dos tests de `session.test.ts` fallaron por el propio test y se corrigieron: el fetch simulado de «un fallo de red que llega con el temporizador ya disparado» solo escuchaba el aborto y no miraba si la señal ya estaba abortada (el temporizador vence antes de que el simulado reciba la petición), y el de nombres heredados esperaba dos «unknown» cuando Zod descarta la clave `__proto__` (ver «Lo observado», 6).
+
+Cuerpo cortado: se sustituyó el test que fijaba que un `TypeError` al leer el cuerpo se propaga por 21 nuevos (14 del cuerpo cortado en las tres operaciones y 7 de «un error que no es un `TypeError` se propaga») y se ejecutaron antes de tocar `session.ts`: 14 fallaron con `TypeError: terminated` propagado (`whoAmI` cortado, `register` con 400, 404, 413, 429, 403, 201 con sesión y 201 sin sesión, con 500 o con la red caída, y `logout` con 400, 403, 404 y 429) y los 7 de propagación de otro error pasaron ya en la versión anterior (son el candado de que el cambio no se pasa de largo).
+
+### Lo observado
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | `runWithTimeout` | Es la tercera repetición del enlace de la señal externa con el temporizador (`publicAssets.ts`, `loadStyle.ts` y el cliente de sesión). La señal externa es opcional: con ella se llama a `throwIfAborted()` antes de armar nada, y sin ella actúa solo el temporizador. Un fallo de la tarea tras vencer sigue siendo un tiempo vencido; un aborto externo sale tal cual. El envoltorio `TypeError` a `NetworkError` se queda en `publicAssets.ts`: sería la segunda copia |
+| 2 | Credenciales | `session.test.ts` comprueba `same-origin` en `whoAmI`, registro, salida y sus reintentos (9 llamadas en un solo recorrido), y con `expectTypeOf`, que `tsc -b` verifica en el build, que `SessionFetchInit["credentials"]` es `"same-origin"` y `FetchInit["credentials"]` sigue siendo `"omit"`. El público sigue en `omit` con los tests que ya existen en `publicAssets.test.ts` («pide la ruta con los cuatro límites, sin credenciales» y «la instancia real usa fetch sin credenciales y un tiempo máximo de 10 s»), que no se tocan |
+| 3 | Instancia real `sessionClient` | Solo se prueba `whoAmI` (fetch global, `setTimeout` de 5 s armado y cancelado): `readCookies` evalúa `document.cookie`, que no existe en vitest con entorno `node`, y los tests no lo tocan. El tiempo de 10 s del registro y de la salida de la instancia real no tiene test; se ve en la T9, en el navegador |
+| 4 | Token CSRF | Se lee con `readCookies()` en cada envío (también en el reintento), nunca se guarda, y solo viaja en `X-CSRFToken` si cumple `^[A-Za-z0-9]{32}([A-Za-z0-9]{32})?$`; si no, no hay cabecera y el servidor responderá `csrf_failed` (un token corto, uno de 33 caracteres, uno con símbolos, sin cookie). `readCsrfToken` salta los `csrftoken=` mal formados y devuelve el primero válido |
+| 5 | Reintento | Un solo reintento tras `csrf_failed`, con `whoAmI()` entre medias y el token releído. En el registro se reintenta aunque «quién soy» diga que hay sesión, falle por red o dé un 500; en la salida, aunque diga que no hay sesión. Un `csrf_failed` con estado 400 o un 403 `forbidden` no se reintentan. Cada intento arma su propio temporizador: `[10000, 5000, 10000]` |
+| 6 | Errores por campo | La lista de códigos conocidos es cerrada por campo; un código desconocido en un campo conocido pasa a `"unknown"` en ese campo, una clave desconocida con al menos un código pasa a `"unknown"` en `other`, y ninguno de los dos da `failed("invalid")`. Solo es inválida la forma de `params`. Zod descarta la clave `__proto__` del registro (sondeado: `Object.entries` del resultado solo trae `constructor` y `email`), así que no llega a `other`; `constructor` sí es un campo desconocido |
+| 7 | Esquemas | `z.strictObject` en la sesión, en el 201 del registro (con `user` obligatorio) y en `apiErrorSchema`. La aserción en compilación frente a `components["schemas"]["Session"]` es el tipo de retorno de `parseSession`; sondeado con `email: z.number()` en una copia: `tsc -b` da `TS2322` en `session.ts(103,27)`; restaurado con `cp` (sha256 igual, `22a68333…`). En `schema.gen.ts`, `ApiError.params` está tipado como `{[key: string]: string}` y la realidad (`invalid_fields`) son listas (`RegistrationError`): no se fuerza esa aserción y `apiErrorSchema` admite `string | string[]` |
+| 8 | 429 | `retryAfterSeconds` sale del cuerpo (entero de 1 a 86400); la cabecera `Retry-After` se ignora. Sin `retry_after`, con 0, con 86401, decimal, como texto o con cuerpo que no es JSON: `failed("invalid")` |
+| 9 | 5xx y estados inesperados | Un 5xx no lee el cuerpo (`bodyUsed` sigue en falso). Un 2xx distinto de 201 (en la salida, distinto de 204), un 3xx o un 1xx son `failed("invalid")` sin preguntar «quién soy» |
+| 10 | Errores y cuerpo cortado | Dos orígenes dan fallo de red: el `TypeError` de `fetch` y el `TypeError` que sale de leer el cuerpo (`readJson` lo convierte en `SessionNetworkError`; un `SyntaxError` sigue siendo un cuerpo no JSON y cualquier otro error, un `RangeError` por ejemplo, se propaga también en `whoAmI`). `whoAmI` con el cuerpo cortado da `"anonymous"`. `register` con un 4xx cortado (también un 403, del que no se puede saber si era `csrf_failed`) da `failed("network")` sin preguntar «quién soy» y sin reintento. `register` con un 201 cortado pregunta «quién soy»: con sesión es `registered` y sin ella `failed("network")`. `logout` con un 4xx cortado da `failed("network")` sin reintento; su 204 y los 5xx no leen el cuerpo. En todos el temporizador se cancela una vez por intento y no se escribe en la consola. Un `AbortError` de quien lo pide sale tal cual |
+| 11 | Consola | `whoAmI` no escribe en la consola en ninguno de sus fallos (los cinco métodos de `console` espiados) ni el registro ante un fallo de red |
+| 12 | `invalid_fields` vacío | Sin ninguna entrada en ningún campo (`params` vacío, campos conocidos con listas vacías, un campo desconocido con lista vacía) da `failed("invalid")`: decisión conservadora |
+| 13 | 429 con otro `code` | Un 429 con un `code` distinto de `throttled` (`algo_nuevo`, `rate_limited`) y un `retry_after` válido sigue siendo `throttled`: no se exige el `code`, solo el estado 429 y el `retry_after` del cuerpo. Lo fija «un 429 con el code %s también es throttled: no se exige el code» (`session.test.ts:710`); pasó desde el primer momento porque el código ya se comportaba así |
+
+### Pruebas de mecanismo
+Mutaciones sobre una copia hecha junto al fichero (`<fichero>.orig`), restaurada con `cp` y borrada; sha256 de antes y de después idéntico en todas y ninguna copia sin versionar (`git status -sb` limpio de copias tras cada una). Ejecución: `npx vitest run src/api/session.test.ts src/api/timeout.test.ts src/api/publicAssets.test.ts src/map/loadStyle.test.ts src/i18n/format.test.ts` (368 tests). Sobre `session.ts`, las mutaciones 1 a 4 se hicieron en cada copia del código por separado (registro y salida) y en conjunto cuando procede, para que una cobertura que solo viera una de las dos no pase.
+
+| # | Mutación | Tests que fallan | sha256 durante |
+|---|---|---|---|
+| 1a | Quitar el reintento del registro | 8: los 7 de «register: el reintento ante csrf_failed» (reintenta una sola vez releyendo el token, error general tras el segundo `csrf_failed`, reintenta aunque «quién soy» responda con sesión, con un 500 o con la red caída, el resultado del reintento, reintento que vence) y «las credenciales de todas las llamadas» | `401af2d1c7a03b6bd7004ffabcad1bbe9bb5d408d5a5ecfa046d6eb737706e29` |
+| 1b | Quitar el reintento de la salida | 7: «logout» ante `csrf_failed` reintenta y relee el token, reintenta aunque «quién soy» responda sin sesión, con un 500 o con la red caída, error general tras el segundo `csrf_failed`, reintento que vence, y «las credenciales de todas las llamadas» | `f94e35bd6497105f9f70b2dbf7aae298be944efcd6790205565503f612ee24de` |
+| 1 | Quitar ambos reintentos | 14: la unión de 1a y 1b | `5e8f69572ba2ca2885eee44701a5b57fbd23fad0d74a5274b17de6fa9518410f` |
+| 2a | Reintentar dos veces el registro | 1: «register: si el segundo intento vuelve a dar csrf_failed, es el error general y no hay un tercer envío» | `12385ac31a632b3354aad83e5f27ea5950a00c240229ca5ac016168065a8a103` |
+| 2b | Reintentar dos veces la salida | 1: el mismo caso en «logout» | `544cb385c5fe2050cab8ba5f53e30922a9f478d569ee7b6eb0b19c71254c676d` |
+| 2 | Reintentar dos veces ambos | 2: los dos anteriores | `0a46f341104fd8a2e2d343f8b6ee37b229f738ecdf7704d4f43500aa2d2f474d` |
+| 3 | Guardar el token en una variable en vez de leerlo en cada envío | 4: «lee la cookie en cada envío, sin guardar el token» en el registro y en la salida, y el reintento que relee el token en ambos | `6116ee0f6b09da6aa5c6f4f59817c050acf052464e080461ab8196c864794aeb` |
+| 4a | `credentials: "omit"` en «quién soy» | 3: «whoAmI: hace un GET…», «las credenciales de todas las llamadas» y «sessionClient: la instancia real» | `a4f00e685bfc1060cd98b0944f788413d1d821d43f59f5b10d63b7504571dc96` |
+| 4b | `credentials: "omit"` en el registro | 2: «register: hace un POST JSON…» y «las credenciales de todas las llamadas» | `8245dcab10faa20a459051d583a4082f2363a361beda53795431bf51425b74f0` |
+| 4c | `credentials: "omit"` en la salida | 2: «logout: hace un POST…» y «las credenciales de todas las llamadas» | `69e96f2b080f2c0ce48aad69e9213321f12a7ebd8d2b9c12c47ace228b0302e1` |
+| 5 | Quitar el tiempo máximo de «quién soy» | 13: 6 de `whoAmI` (el temporizador de 5 s, fallo de red, vencimiento, cuerpo que no llega, cancelado, señal ya abortada), 2 del reintento del registro, 2 del tiempo máximo del registro (vence y la pregunta tiene su propio temporizador de 5 s), 2 de la salida y la instancia real | `cf2274f23419c7550a797bfbe8c8af22cf39b58311ec30cec6cc42e2c50c30e0` |
+| 6 | Quitar el tiempo máximo del registro | 12: la petición (10 s), 2 del reintento, 8 de «register: el tiempo máximo» (vence con y sin sesión, con «quién soy» en 500, red o forma inválida, cuerpo a medias, error de red con el temporizador disparado, temporizador propio de «quién soy») y el `TypeError` de red (temporizador cancelado) | `998a8d69de3bbfe9f6fcc71e2891d961052049d2107193cee9cf605e0b84150a` |
+| 7 | Quitar el tiempo máximo de la salida | 4: la petición (10 s), el reintento (tres temporizadores), «vencido a los 10 s es failed timeout…» y «si el reintento vence…» | `47f0c33fab40bf6479f12aec1b59cb9aafd28654769c9ef6502c950c6278a952` |
+| 8 | No preguntar «quién soy» tras un registro vencido | 4: «espera 10 s, aborta la petición y, con sesión, es un éxito», «un cuerpo que llegó a medias también vence a los 10 s», «la pregunta de quién soy tras vencer tiene su propio temporizador de 5 s» y «si el reintento vence, pregunta quién soy…» | `b1a396d537129ecefc64a22077f01f32927a744912f74dec8cd59fa1b369a321` |
+
+Ninguna sobrevivió. En un primer intento las mutaciones 6 y 7 dejaban un error de sintaxis (una coma sobrante) y la suite entera no se cargaba: se descartaron, se corrigió la edición y se repitieron; la tabla es de la repetición. Las mutaciones 1 a 8 y las de `timeout.ts` se hicieron sobre la versión de `session.ts` anterior al cuerpo cortado (sha256 `22a68333431ecb2f8223d5a163b5c545146fbc7f7b9723ab536399dcdbdbe96c`, con 368 tests en la ejecución) y no se han repetido sobre la versión final; `timeout.ts` no ha cambiado desde entonces. Las nuevas (m9 a m11, más abajo) se hicieron sobre la versión final de `session.ts`. La mutación de quitar `.trim()` de `hasJsonContentType` no se usa: es equivalente (`Headers` ya normaliza los espacios de los extremos).
+
+Mutaciones adicionales sobre `timeout.ts` (el módulo es nuevo y tiene sus propios tests; cada una la detecta además algún test de `publicAssets` o `loadStyle`):
+
+| # | Mutación | Tests que fallan | sha256 durante |
+|---|---|---|---|
+| t1 | Sin `signal?.throwIfAborted()` | 4: señal ya abortada en `timeout`, `session`, `publicAssets` y `loadStyle` | `59d27e771261664931ca9eb58c64433191426afd213552a0d18a1991d9c220d7` |
+| t2 | Sin `clearTimer(timer)` | 47: 6 de `timeout.test.ts` (los 5 de «limpieza del temporizador» y «abortada durante la tarea»), 12 de `session.test.ts`, 24 de `publicAssets.test.ts` y 5 de `loadStyle.test.ts` | `89c7556ca940dc4e119eeef9d8db717c92046bfb668936ae8abc154f6f40d6f5` |
+| t3 | Sin retirar el listener de la señal externa | 5: 2 de `timeout.test.ts` (tras un éxito y tras un fallo) y 3 de `publicAssets.test.ts` | `515dd80f55314ab6fdd54667bbbf6bd15edb0bb6851183da163d1f79dd995b64` |
+| t4 | Sin lanzar `onTimeout()` al vencer | 21: 3 de `timeout.test.ts`, 13 de `session.test.ts`, 3 de `publicAssets.test.ts` y 2 de `loadStyle.test.ts` | `4271f62d448d69810331ac81c5ba29980f8043848693af8e59022d43a2636645` |
+| t5 | Sin enlazar la señal externa al controlador | 10: 3 de `timeout.test.ts`, 1 de `session.test.ts`, 5 de `publicAssets.test.ts` y 1 de `loadStyle.test.ts` | `1adc88d81cd6bba39125bf884e29dc717f5d97bca7eb802f0187ab22eb907351` |
+| t6 | Un aborto externo marca el tiempo como vencido | 7: 2 de `timeout.test.ts`, 1 de `session.test.ts`, 3 de `publicAssets.test.ts` y 1 de `loadStyle.test.ts` | `c2b55132cd52745734e5b836ab913beafa2f2f9786b410d982e3cd90c5245c71` |
+| t7 | El aborto externo pierde su motivo (`controller.abort()`) | 3: 2 de `timeout.test.ts` y «cancelado por quien lo pide…» de `session.test.ts` | `c91f2d9b1b65b30be7038510c8cc51dd99be705f0280d1780923271488e847bc` |
+| t8 | El temporizador no aborta el controlador interno | 22: 4 de `timeout.test.ts`, 13 de `session.test.ts`, 3 de `publicAssets.test.ts` y 2 de `loadStyle.test.ts` | `5bd851d26efca1371b6b5870bcf688f8482c34dd00c05714a083f5379cbcc52f` |
+
+Mutaciones del cuerpo cortado y de los dos tests posteriores, sobre la versión final de `session.ts` y, la m13, sobre `timeout.ts` (388 tests en la ejecución de los cinco ficheros en m9 a m11 y 392 en m12 y m13):
+
+| # | Mutación | Tests que fallan | sha256 durante |
+|---|---|---|---|
+| m9 | Quitar la conversión `TypeError` a `SessionNetworkError` de `readJson` | 14: `whoAmI` con el cuerpo cortado, `register` con 400, 404, 413, 429 y 403, `register` con un 201 cortado (con sesión, sin sesión, con «quién soy» en 500 y con la red caída) y `logout` con 400, 403, 404 y 429 | `5826e54e47188fe5995252d9b46c08929bd021964fce11f86fffae09fd399ef3` |
+| m10 | Un 201 con el cuerpo cortado da `failed("network")` sin preguntar «quién soy» | 4: los cuatro de «un 201 con el cuerpo cortado» (con sesión es `registered`, y sin sesión, con 500 y con la red caída esperan la pregunta) | `5d52a326ee2d84395421bef4a45639923823bbb980eaef00f237d467e10032d7` |
+| m11 | Convertir cualquier error del cuerpo, no solo el `TypeError`, en `SessionNetworkError` | 7: «un error que no es un `TypeError` al leer el cuerpo se propaga» en `whoAmI`, en `register` (201, 400, 403 y 429) y en `logout` (400 y 403) | `1aee08495210ab40a100be4809798df004da95a93c9970933348ce30bdb11826` |
+| m12 | Exigir `error.code === "throttled"` para entrar en la rama del 429 (`session.ts`) | 2: «un 429 con el code algo_nuevo también es throttled: no se exige el code» y el de `rate_limited`; ningún test anterior la mata | `6de83e6858512df6fc717869d2496fed649b514fb7674e38c1238ba1f5428c07` |
+| m13 | `runWithTimeout` lanza `onTimeout()` también cuando la tarea termina bien con el temporizador vencido (`timeout.ts`) | 1: «un 201 cuyo cuerpo se corta con un TypeError al vencer el temporizador pregunta quién soy y, sin sesión, gana la etiqueta del valor devuelto». El caso «con sesión» no la detecta por sí solo: con sesión el resultado es `registered` con o sin la mutación; la distingue la etiqueta del caso sin sesión (`failed("network")` frente a `failed("timeout")`) | `6966056b304af34c518dd6d578a8d54cee60359b903a15195ac8e854fb864878` |
+
+sha256 antes y después (idénticos en todas las mutaciones de cada fila):
+
+| Fichero | sha256 |
+|---|---|
+| `src/api/session.ts`, versión anterior al cuerpo cortado (mutaciones 1 a 8) | `22a68333431ecb2f8223d5a163b5c545146fbc7f7b9723ab536399dcdbdbe96c` |
+| `src/api/session.ts`, versión final (mutaciones m9 a m12) | `3fa041cef932d6b7b0d58e195bf58a7c0dc4d4feb696308e824ac0fae35f1eeb` |
+| `src/api/timeout.ts` (mutaciones t1 a t8 y m13) | `540d138665201900595cff373353ab791ba7c5c590656d6bc2cebdc57f743edb` |
+
+### Proxy de Vite (desviación de la T7 de la 006)
+**a) La decisión de la 006 no se cumplía.** La T7 de la 006 decidió el proxy «sin `changeOrigin`», pero la configuración era la forma abreviada `"/api": "http://localhost:8000"`, que Vite convierte en `changeOrigin: true`: Django recibía `Host: localhost:8000` con `Origin: http://localhost:5173`. Pasó desapercibido porque Django no comprueba el `Origin` en los GET y la 006 solo hacía GET. Ahora el proxy es un objeto con `changeOrigin: false`, de modo que Django recibe `Host: localhost:5173` y el origen coincide con el host. Ningún test de vitest cubre `changeOrigin: false`: se valida en la T9 con un POST real a través del proxy (el registro funciona sin `CSRF_TRUSTED_ORIGINS` y Django recibe `Host: localhost:5173`). `CSRF_TRUSTED_ORIGINS` no está definido en ningún `settings` (comprobado con `grep -rn CSRF_TRUSTED_ORIGINS backend --include=*.py`: solo aparece en el código de Django del entorno virtual); `backend/config/settings/development.py:22` solo fija `ALLOWED_HOSTS = ["localhost", "127.0.0.1"]`, que Django compara sin el puerto.
+
+**b) Código de Vite 8.3.5 que lo causa**, copiado de `frontend/node_modules/vite/dist/node/chunks/node.js` (indentado con tabuladores en el original). Líneas 19895 a 19898, que convierten la forma abreviada:
+
+```js
+		if (typeof opts === "string") opts = {
+			target: opts,
+			changeOrigin: true
+		};
+```
+
+Líneas 19901 a 19907, que responden al error del proxy:
+
+```js
+		proxy.on("error", (err, _req, res) => {
+			if ("req" in res) {
+				config.logger.error(`${import_picocolors.default.red(`http proxy error: ${res.req.url}`)}\n${err.stack}`, {
+					timestamp: true,
+					error: err
+				});
+				if (!res.headersSent && !res.writableEnded) res.writeHead(502, { "Content-Type": "text/plain" }).end();
+```
+
+**c) Consecuencia para la T9.** Con el backend parado el proxy responde 502 `text/plain` sin cuerpo, así que el registro y la salida dan `failed("server")` y «quién soy» dice `"anonymous"`; `failed("network")` solo aparece si el propio Vite está caído.
+
+**d) La cookie `csrftoken`** solo la fija `get_token` en `CurrentSessionView.get` (`backend/apps/users/views.py:144`): el primer POST sin un «quién soy» previo recibe 403 `csrf_failed` y el cliente depende del reintento tras `whoAmI`.
+
+### Decisiones sin cobertura en el plan
+- `invalid_fields` sin ninguna entrada, y un campo desconocido cuya lista de códigos está vacía, dan `failed("invalid")` o no aportan `"unknown"` (la entrada es un código, no una clave).
+- Cada código desconocido, y cada clave desconocida con al menos un código, aporta un `"unknown"`; no se agrupan los repetidos.
+- Un `TypeError` al leer el cuerpo es un fallo de red (`readJson` lo convierte en `SessionNetworkError`); cualquier otro error al leerlo se propaga. Con un 4xx cortado, `register` y `logout` dan `failed("network")` sin «quién soy» y sin reintento, también con un 403 que podría ser `csrf_failed`. Con un 201 cortado, `register` pregunta «quién soy» y, sin sesión, da `failed("network")`. Si el `TypeError` del cuerpo de un 201 llega con el temporizador ya vencido, la etiqueta es `failed("network")` y no `failed("timeout")`; ambas preguntan antes «quién soy». Está fijado por «un 201 cuyo cuerpo se corta con un TypeError al vencer el temporizador pregunta quién soy y, con sesión / sin sesión, gana la etiqueta del valor devuelto» (`session.test.ts:556`): con sesión da `registered` y sin sesión `failed("network")`.
+- Se exportan las listas `EMAIL_ERROR_CODES`, `PASSWORD_ERROR_CODES` y `OTHER_ERROR_CODES`, de las que salen los tipos, para que el catálogo de mensajes pueda comprobar «un texto por código».
+
+### Repetición de mutaciones sobre la versión final de `session.ts`
+Las mutaciones 1 a 4 de arriba se hicieron sobre la versión anterior al cuerpo cortado. Aquí se repiten sobre la versión final (sha256 `3fa041cef932d6b7b0d58e195bf58a7c0dc4d4feb696308e824ac0fae35f1eeb`), junto con la del 429. Cada una con copia junto al fichero (`session.ts.orig`), restaurada con `cp` y borrada; el sha256 de antes y después es el mismo en todas y no queda ninguna copia (`git status -sb` limpio de copias). Las cinco primeras con `npx vitest run --reporter=verbose src/api/session.test.ts` (235 tests entonces); r6, con los cinco ficheros de la tarea (392 tests).
+
+| # | Mutación | Tests que fallan | sha256 durante |
+|---|---|---|---|
+| r1 | Quitar el reintento del registro | 8: 7 de «register: el reintento ante csrf_failed» (reintento y token releído, tras un segundo `csrf_failed`, aunque «quién soy» responda con sesión, con la red caída o con un error del servidor, resultado del reintento, reintento que vence) y «las credenciales de todas las llamadas». Los dos de ese bloque que no fallan son los que comprueban que no se reintenta (403 con otro código, `csrf_failed` con otro estado) | `37e338fd95b698a581ce710384fd4ef16ec4df243101bdbe1356f81f942a71d2` |
+| r2 | Quitar el reintento de la salida | 7: 6 de «logout» (reintenta y relee el token, aunque «quién soy» responda sin sesión, con la red caída o con un error del servidor, reintento que vence, segundo `csrf_failed`) y «las credenciales de todas las llamadas» | `6288cdf468b8349ad0e46dc85ecf6570c93e9f7a45f852fbdbca3b5076d0b106` |
+| r3 | Reintentar dos veces el registro | 1: «si el segundo intento vuelve a dar csrf_failed, es el error general y no hay un tercer envío» (registro) | `8654baae91e3115f700da73d2f2c83c3379f1b522738c9f7c03954477fba934e` |
+| r4 | Reintentar dos veces la salida | 1: el mismo caso en «logout» | `093eb62e491aa6cf3172a0d21b1f958bd0050efbb408a2be5ea3b021cb404bae` |
+| r5 | Guardar el token en una variable en vez de leerlo en cada envío | 4: «lee la cookie en cada envío, sin guardar el token» en el registro y en la salida, y el reintento que relee el token en ambos | `d4bcd83aaa0d6ab44c27b513a8d77ed8306d566af4d407506bacd71064c6143f` |
+| r6 | Exigir `error.code === "throttled"` en la rama del 429 | 2: los dos casos de «un 429 con el code %s también es throttled: no se exige el code» (`algo_nuevo` y `rate_limited`). Ningún test anterior la mata | `6de83e6858512df6fc717869d2496fed649b514fb7674e38c1238ba1f5428c07` |
+
+r6 repite m12. m13 también se repitió, sobre `timeout.ts` (sha256 de antes y después `540d138665201900595cff373353ab791ba7c5c590656d6bc2cebdc57f743edb`), con el mismo sha256 durante que el registrado arriba (`6966056b304af34c518dd6d578a8d54cee60359b903a15195ac8e854fb864878`) y el mismo único test que la mata, el caso «sin sesión» del 201 cortado con el temporizador vencido.

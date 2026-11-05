@@ -9,7 +9,8 @@ export default defineConfig({
     port: 5173,
     strictPort: true,
     // El navegador solo habla con este origen: la API llega por el proxy
-    proxy: { "/api": "http://localhost:8000" },
+    // Como objeto: la forma abreviada activa changeOrigin y Django recibiría otro Host
+    proxy: { "/api": { target: "http://localhost:8000", changeOrigin: false } },
   },
   test: {
     environment: "node",

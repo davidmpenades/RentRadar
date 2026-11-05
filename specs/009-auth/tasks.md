@@ -64,7 +64,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo: quitar `flush()` de la salida; quitar `delete_cookie` (lo detecta la salida sin cookie); `django.contrib.auth.logout()` en vez de `flush()` (equivalente en esta vista, se anota); leer la sesión antes de `flush()`; quitar el mixin de `LogoutView`; quitar el rechazo del método antes de autenticar en «quién soy»; `authentication_classes = []` en «quién soy». `Vary: Cookie` se anota como equivalente.
   - Evidencia: `validation.md`, sección T5b.
 
-- [ ] **T6. Cliente de sesión, tiempo máximo común y proxy de Vite.** RF-3 (minutos), RF-6, RF-7, RF-9, RF-10, RF-11, RF-12
+- [x] **T6. Cliente de sesión, tiempo máximo común y proxy de Vite.** RF-3 (minutos), RF-6, RF-7, RF-9, RF-10, RF-11, RF-12
   - `src/api/timeout.ts` (extraído); `publicAssets.ts` y `loadStyle.ts` lo usan; `src/api/session.ts`, con «quién soy» a 5 s y registro y salida a 10 s, todos con el mismo helper; `waitMinutes` y `throttledMessage` en `i18n/format.ts`; `vite.config.ts` con el proxy como objeto y `changeOrigin: false`.
   - El proxy corrige la decisión de la T7 de la 006 («sin `changeOrigin`»), que la forma abreviada activaba. Se anota en `validation.md` como desviación de la T7 de la 006 corregida.
   - Toca tests existentes: ninguno; `publicAssets.test.ts` y `loadStyle.test.ts` siguen sin cambios y en verde.
