@@ -1,3 +1,4 @@
+import { hasJsonContentType } from "../api/http";
 import { validateStyleJson, withFixedAttribution, type StyleJson } from "./style";
 
 type StyleLoaderOptions<Handle> = {
@@ -9,7 +10,6 @@ type StyleLoaderOptions<Handle> = {
 
 const STYLE_TIMEOUT_MS = 10_000;
 const MAX_STYLE_CHARS = 1_048_576;
-const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
 
 // Mensaje fijo: no lleva la dirección ni nada del cuerpo
 export class StyleLoadError extends Error {
@@ -37,9 +37,7 @@ export function createStyleLoader<Handle>(options: StyleLoaderOptions<Handle>) {
     try {
       const response = await fetch(url, { credentials: "omit", signal: controller.signal });
       if (response.status !== 200) throw new StyleLoadError();
-      if (!JSON_CONTENT_TYPE.test(response.headers.get("Content-Type")?.trim() ?? "")) {
-        throw new StyleLoadError();
-      }
+      if (!hasJsonContentType(response)) throw new StyleLoadError();
       const text = await response.text();
       if (text.length > MAX_STYLE_CHARS) throw new StyleLoadError();
 

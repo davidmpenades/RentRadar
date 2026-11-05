@@ -1,4 +1,5 @@
 import { boxToQuery, type RequestBox } from "../map/requestBox";
+import { hasJsonContentType } from "./http";
 import { InvalidResponseError, validateResponse } from "./validate";
 
 type PublicAssetList = ReturnType<typeof validateResponse>;
@@ -16,7 +17,6 @@ type FetcherOptions<Handle> = {
 
 const PUBLIC_ASSETS_URL = "/api/v1/public/assets/";
 const REQUEST_TIMEOUT_MS = 10_000;
-const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
 
 // Los errores solo llevan la causa: ni el cuerpo ni la dirección pedida
 export class HttpStatusError extends Error {
@@ -42,7 +42,7 @@ export class RequestTimeoutError extends Error {
 
 async function readJson(response: Response): Promise<unknown> {
   // Vite devuelve index.html con un 200 para las rutas que no conoce
-  if (!JSON_CONTENT_TYPE.test(response.headers.get("Content-Type")?.trim() ?? "")) {
+  if (!hasJsonContentType(response)) {
     throw new InvalidResponseError();
   }
   try {
