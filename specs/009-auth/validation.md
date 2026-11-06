@@ -569,3 +569,210 @@ sha256 antes, durante y después:
 |---|---|---|---|
 | `src/register/registerForm.ts` (mutación 1) | `f520b33a5dbeb214ce7f4caea878a32235ae4d499a65e18e31b5323305271589` | `5a7b83d255e408a1ef1e2ad4ce2050c45cd325612888e969999207d654432998` | `f520b33a5dbeb214ce7f4caea878a32235ae4d499a65e18e31b5323305271589` |
 | `src/register/RegistrationForm.tsx` (mutación 2) | `b83f1470378258d2434070dc66aae06c850bc1c0feb70cb48f285240fed97940` | `a18d5c1e2097e098a8fdd72f9982ff45a531f4e3c6ebcfcb6877badf089bbb5c` | `b83f1470378258d2434070dc66aae06c850bc1c0feb70cb48f285240fed97940` |
+
+## Validación en el navegador, arquitectura y cierre (T9)
+Fecha: 2026-11-06 · Entorno: Docker Compose (`db` y `backend`) y Vite en el host, Django 5.2.18, `config.settings.development`.
+
+### Preparación del entorno
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Estado de partida | `docker compose ps` | Sin contenedores en marcha; puertos 5173 y 8000 libres |
+| Arranque | `docker compose up -d` | `rentradar-db-1` sano y `rentradar-backend-1` arrancado |
+| Migraciones en el arranque | Lectura de `docker-compose.yml` y `backend/docker-entrypoint.sh`, y `grep migrate` en compose, Dockerfile, entrypoint y `wait_for_db` | El arranque no aplica migraciones: el comando es `runserver` y el entrypoint solo ejecuta `wait_for_db` y `exec "$@"`. El `grep` no encuentra nada |
+| Aviso de migraciones pendientes | `docker compose logs --since 60s backend` | Ningún aviso en el arranque de hoy. Los arranques anteriores del contenedor avisaban con `You have 3 unapplied migration(s). Your project may not work properly until you apply the migrations for app(s): assets.`, sin nombrar nunca `sessions` |
+| Migración de sesiones | `docker compose exec backend python manage.py showmigrations sessions` (con orden expresa; solo lee `django_migrations`) | Aplicada, salida literal: `sessions` / ` [X] 0001_initial` |
+| «Quién soy» directo, sin cookies | `curl -si http://localhost:8000/api/v1/auth/session/` | 200, `{"user":null}`, `Cache-Control: no-store`, `Vary: Cookie` y `Set-Cookie: csrftoken=…; Max-Age=31449600; Path=/; SameSite=Lax` (sin `HttpOnly`) |
+| Vite | `cd frontend && npm run dev` (en segundo plano) | `VITE v8.3.5 ready`, escuchando en `127.0.0.1:5173` (`ss -ltnp`) |
+| «Quién soy» por el proxy | `curl -si http://localhost:5173/api/v1/auth/session/` | Igual que el directo: 200, `{"user":null}`, `no-store`, `Vary: Cookie`, `Allow: GET, HEAD`, las mismas cabeceras de seguridad y `csrftoken` con los mismos atributos. Solo cambia la capitalización de los nombres de las cabeceras, que reescribe el proxy, y que `Set-Cookie` pierde el espacio extra tras los dos puntos |
+
+`migrate` no se ha ejecutado en la BD de desarrollo.
+
+### Cuenta A, 1280 × 800, solo con teclado (`t9-a@example.com`)
+Contexto de navegador aislado (cookies limpias). Contraseña de 18 caracteres no común (no se anota). Se crea una cuenta en la BD de desarrollo, con autorización expresa. Peticiones de registro contadas hasta aquí: 2 de 10 (el 403 y el 201).
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Carga de `/map` sin sesión (RF-9, StrictMode) | Dos GET a `/api/v1/auth/session/`: el primero `net::ERR_ABORTED` y el segundo 200. Barra de 56 px, zona de 744 px (800 − 56), `scrollHeight` 800 = `clientHeight` 800 (sin scroll de página); la barra muestra «Registrarse» |
+| 2 | Teclado hasta el formulario | Tab → la marca (enlace a `/map`); Tab → «Registrarse» (121 × 44 px, contorno de 3 px con 2 px de separación); Intro → `/register`, `history.length` de 2 a 3 (una entrada por la navegación). Tab → email; Tab → contraseña |
+| 3 | Contraseña sin `value`, después de escribirla (18 caracteres en el campo) | `hasAttribute('value')` falso; atributos del campo: `id`, `autocomplete`, `aria-describedby`, `class`, `type`, `name`. El email sí lleva `value`, porque es un campo controlado |
+| 4 | Contraseña sin `value` tras «Mostrar contraseña», antes de enviar | Espacio sobre el botón: `aria-pressed` de `false` a `true`, el campo pasa a `type="text"`, mismos atributos y ningún `value`; ningún atributo de todo el DOM contiene la contraseña |
+| 5 | Primer envío sin cookie `csrftoken` (borrada con `document.cookie`) | Pestaña Red: POST 403 (sin `x-csrftoken` ni `cookie` en la petición; cuerpo `{"code":"csrf_failed"}`, `no-store`) → GET a la sesión 200 con `Set-Cookie: csrftoken` nueva → POST 201 con `x-csrftoken` igual a la cookie nueva. Acaba bien tras el único reintento |
+| 6 | Cabeceras de la respuesta 201 | `Set-Cookie` completo: `csrftoken` renovada (valor distinto de la del GET anterior; `Max-Age=31449600; Path=/; SameSite=Lax`, sin `HttpOnly`) y `sessionid` nueva (`HttpOnly; Max-Age=1209600; Path=/; SameSite=Lax`, sin `Secure` en desarrollo); `Cache-Control: no-store`, `Vary: Cookie`; cuerpo `{"user":{"email":"t9-a@example.com"}}`. Con esto se descarta la cuenta C por curl |
+| 7 | Resultado en la página | `/map` con «Salir» y la región de estado anuncia «Cuenta creada.»; `history.length` sigue en 3 (el `replace` no añade entrada); el email no aparece en ninguna parte de la página |
+| 8 | Proxy sin `CSRF_TRUSTED_ORIGINS` | El POST 201 con `Origin: http://localhost:5173` pasa a través del proxy de Vite con `changeOrigin: false`, sin ningún origen de confianza añadido en Django |
+| 9 | Recarga con sesión | Dos GET a la sesión (uno `ERR_ABORTED`, otro 200); la barra vuelve a «Salir» con 56 px; sin scroll de página |
+| 10 | Consola (carga, registro y recarga) | Un solo error: `Failed to load resource: the server responded with a status of 403 (Forbidden)`, el `csrf_failed` provocado a propósito. Dos avisos del estilo del mapa de OpenFreeMap (`layers[highway-shield-…].filter[1]`) en cada carga: ajenos a la aplicación |
+
+Observaciones:
+- **`Access-Control-Allow-Origin` en las respuestas del POST.** La pestaña Red muestra `access-control-allow-origin: http://localhost:5173` y `vary: Origin` en el 403 y en el 201. No sale de Django: `curl -H 'Origin: http://localhost:5173' http://localhost:8000/api/v1/auth/session/` (directo) no lo lleva; por el proxy de Vite (`:5173`) sí, y con `Origin: http://evil.example` no. Lo añade el servidor de desarrollo de Vite (`server.cors`, que por defecto admite orígenes `localhost`), ni `vite.config.ts` ni los `settings` mencionan CORS. En producción no existe ese servidor, y la ausencia de `Access-Control-*` en la API sigue cubierta por los tests de T5a y T5b
+- **La zona recibe el foco al cambiar de página y se dibuja su contorno.** Tras Intro en «Registrarse», `document.activeElement` es la zona (`tabIndex=-1`) con `:focus-visible` verdadero y `outline: solid 3px`. Medido y resuelto en la fila 31 y en la desviación posterior
+
+### Cuenta A, continuación sin crear cuentas (1280 × 800)
+Peticiones de registro contadas hasta aquí: 8 de 10 (2 de la cuenta A, 3 del primer envío con `email_taken`, 2 de un doble Intro que no lo era y 1 del doble Intro válido). Quedan 2: los dos curl pasan a después del reinicio del backend.
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 11 | «Atrás» tras registrarse (RF-10) | Con sesión, `history.back()` cae en `/map` (la entrada inicial), sin formulario, con «Salir» y el mapa; `/register` no está en el historial porque se sustituyó por `/map` |
+| 12 | Doble clic con `email_taken`, Fast 3G, en una pestaña sin sesión (con la sesión de A abierta `/register` redirige) | Un solo POST (400). El segundo clic del doble clic no llegó al botón como evento (un único envío registrado), así que este gesto no ejercita por sí solo la guarda |
+| 13 | Dos Intro con `email_taken`, Fast 3G | Primer intento: las dos pulsaciones llegaron con 1,7 s de diferencia (la herramienta serializa las llamadas) y el primer POST terminó en 0,6 s: dos envíos seguidos, no un doble envío; no vale. Segundo intento, con el `fetch` del registro retrasado 4 s dentro de la página para que la segunda pulsación caiga con el primer envío en vuelo: dos Intro (825 ms entre ambas), dos eventos de envío y **un** POST. La guarda funciona |
+| 14 | Campos en `readonly` durante el envío (RF-10) | Un observador de atributos instalado con `evaluate_script` registró en cada envío: al empezar, `readOnly` verdadero en email y contraseña y `aria-disabled="true"` en «Crear cuenta» (a 4 ms del POST); al terminar la respuesta, de nuevo `readOnly` falso y sin `aria-disabled` (a 5 ms). El botón nunca se deshabilita con `disabled` |
+| 15 | Tras `email_taken` (RF-11) | El foco va al email (aria-invalid verdadero), el mensaje «Ya existe una cuenta con este email.» está junto al campo, el resumen «Revisa los campos marcados.» en la región de estado, el email y la contraseña (18 caracteres, sin atributo `value`) se conservan y el envío queda habilitado |
+| 16 | Fallo de «Salir» con la red en Offline (RF-12) | POST `net::ERR_INTERNET_DISCONNECTED`, sin reintento ni «quién soy». La barra sigue en «Salir», el foco queda en «Salir» (70,9 × 44 px), el aviso «No se ha podido salir. Inténtalo de nuevo.» con «Reintentar» (129,5 × 44 px) está visible y la región del aviso lo anuncia |
+| 17 | «Salir» que no responde (`fetch` simulado que respeta `AbortSignal`) desde «Reintentar» | La señal se aborta a los 10,001 s de la llamada. La barra sigue en «Salir», el aviso vuelve a mostrarse con «Reintentar» y el foco acaba en «Salir». Mientras dura el intento, `document.activeElement` es `body`, porque «Reintentar» se desmonta al empezar (el aviso se vacía); con el intento lanzado desde «Salir» el foco no se pierde |
+| 18 | «Salir» correcto desde la primera pestaña (RF-12) | POST 204 con `x-csrftoken` y `sessionid` en la petición; respuesta con `Set-Cookie: sessionid=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/; SameSite=Lax`, `no-store` y sin tocar `csrftoken`. La barra pasa a «Registrarse», la región (`sr-only`) anuncia «Has salido», el foco va a «Registrarse» (121 × 44 px), el aviso de fallo desaparece y se queda en `/map` sin añadir entrada al historial |
+| 19 | Segunda pestaña con «Salir» obsoleto (RF-5, RF-12) | Misma sesión (contexto compartido) mostraba «Salir» tras cerrar en la primera. Tab, Tab, Intro: POST 204 sin cookie de sesión, la barra pasa a «Registrarse», «Has salido», foco en «Registrarse», sin aviso y consola sin errores |
+
+Observaciones para la comprobación de diseño (sin cambios hechos):
+- **Aviso de fallo de «Salir» sobre los controles del mapa.** A 1280 px el aviso (y 64 a 124) ocupa todo el ancho (x 8 a 1272) y tapa casi todo «Acercar» (y 86 a 130; quedan 38 de sus 44 px cubiertos) y parte de la atribución del mapa; «Alejar» (y 130 a 174) queda libre. Solo mientras el aviso existe. Con el aviso visible quedan tapados «Acercar» y la atribución del mapa: «Acercar» ocupa y 86 a 130 (x 1226 a 1270) y el aviso cubre y 86 a 124 de él; la atribución ocupa y 56 a 76 (x 955 a 1280, con los enlaces en y 59 a 73) y el aviso cubre y 64 a 76 de ella. Decisión: sin cambios en esta spec (ni en `LogoutNotice.tsx` ni en `TopBar.test.ts`, que fija las clases `absolute`, `inset-x-0` y `top-0` del contenedor); el aviso se rediseñará como un toast persistente, sin cierre automático porque lleva «Reintentar», en una spec visual posterior
+- **Foco al lanzar la salida desde «Reintentar».** Observación, sin cambios en esta spec: ver la fila 17
+- **Atribución del mapa.** Medida con el aviso cerrado, a 1280 px: ocupa y 56 a 76 y x 955 a 1280 (enlaces «OpenFreeMap» x 960 a 1038, «© OpenMapTiles» x 1041 a 1131 y «OpenStreetMap» x 1190 a 1275, todos en y 59 a 73); el aviso (y 64 a 124) la cubre en parte mientras existe
+
+### Comprobación 2: backend parado (1280 × 800)
+Con orden expresa para cada orden del stack. La cuenta de la prueba no se crea: la petición no llega a Django.
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 20 | `docker compose stop backend` | `db` sigue sano; `curl` a `:8000` no obtiene respuesta (código 000) |
+| 21 | Carga de `/register` con el backend parado (RF-9) | «Quién soy»: el primer GET `net::ERR_ABORTED` (StrictMode) y el segundo 502, que responde el proxy de Vite. Se trata como sin sesión: la barra muestra «Registrarse» y el formulario se pinta |
+| 22 | Registro con el backend parado (RF-11) | POST 502 `text/plain` sin cuerpo JSON, respondido por el proxy. El mensaje es «Ha habido un problema en el servidor.» (error de servidor), no «No hay conexión. Comprueba tu red y vuelve a intentarlo.» (red). Un solo POST, sin reintento; el foco va a la región de estado del formulario (`role="status"`, `tabIndex=-1`); ningún campo marcado como inválido; email y contraseña (19 caracteres, sin atributo `value`) conservados; el envío vuelve a habilitarse |
+| 23 | Consola | Un solo error, anotado como esperado: `Failed to load resource: the server responded with a status of 502 (Bad Gateway)`, contado dos veces (el GET y el POST) |
+| 24 | `docker compose start backend` | Arranque a las 08:31:23, sin aviso de migraciones; responde 200 por `:8000` y por el proxy. El contador de registro, en memoria, vuelve a cero |
+
+### Cuenta B, 1280 × 800, solo con teclado (`t9-b@example.com`)
+Se crea una cuenta en la BD de desarrollo, con autorización expresa. Peticiones de registro contadas desde el reinicio: 2 de 10 (el 400 y el 201); el POST con Offline no llegó al servidor.
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 25 | Contraseña de 9 caracteres (RF-2, RF-11) | POST 400 con `{"code":"invalid_fields","params":{"password":["password_too_short"]}}` (sin el valor recibido) y `no-store`. Junto al campo, «La contraseña debe tener al menos 10 caracteres.» (más la pista «Al menos 10 caracteres.»); resumen «Revisa los campos marcados.» en la región de estado; foco en la contraseña; contraseña borrada (longitud 0, sin atributo `value`); email conservado; envío habilitado |
+| 26 | Registro con la red en Offline (RF-11) | POST `net::ERR_INTERNET_DISCONNECTED`, sin reintento. «No hay conexión. Comprueba tu red y vuelve a intentarlo.» en la región de estado (no el mensaje de servidor); foco en esa región; ningún campo inválido; email y contraseña (10 caracteres, sin atributo `value`) conservados; envío habilitado |
+| 27 | Registro correcto con 10 caracteres no comunes, ya sin Offline (Tab hasta «Crear cuenta» e Intro) | POST 201 con la contraseña conservada tras el Offline; cuerpo `{"user":{"email":"t9-b@example.com"}}`, `no-store`, `Vary: Cookie` y `Set-Cookie` con `csrftoken` nueva y `sessionid` nueva (`HttpOnly; Max-Age=1209600; Path=/; SameSite=Lax`). `/map` con «Salir» (barra de 56 px), «Cuenta creada.» anunciada, `history.length` sin cambiar (6 antes y después), sin scroll de página y el email no aparece en la página |
+| 28 | Consola de la pestaña (desde la carga de `/register` con el backend parado) | Errores, todos esperados: 502 dos veces (backend parado), 400 (contraseña corta) y dos `net::ERR_INTERNET_DISCONNECTED` (la salida y el registro con Offline) |
+
+### Comprobación 8: diseño, a 1280 y a 375 px
+A 375 px con emulación móvil (375 × 667, densidad 2, táctil). Cuando hace falta ver errores sin servidor, se pulsa Intro con los campos vacíos: el cliente los avisa sin enviar nada (ningún POST).
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 29 | Barra de 56 px sin salto al resolver la sesión (RF-9), con Fast 3G y un registrador de altura de la barra y de entradas `layout-shift` instalado con `initScript` | A 1280 con sesión: «RentRadar» y luego «RentRadar \| Salir» (a +593 ms), con la barra en 56 px en ambos estados y la zona fija (y 56, 744 px). A 1280 sin sesión y a 375 sin sesión: igual, con «Registrarse» (a +592 y +595 ms) y la zona en 744 y 611 px. A 375 con sesión (cuenta D): 56 px con «Salir» (71 × 44 px), sin desbordar. Una sola entrada `layout-shift` por carga (0,0079 a 1280 y 0,0623 a 375), con origen en `maplibregl-ctrl-top-right` (los controles del mapa), ninguna de la barra ni de la zona |
+| 30 | Mapa igual a la zona, sin scroll de página | 1280 × 800: zona y 56 a 800 (744 px = 800 − 56), `scrollHeight` 800 = `clientHeight` 800, sin barra de desplazamiento. 375 × 667: zona y 56 a 667 (611 px = 667 − 56), el mapa ocupa x 0 a 375 e y 56 a 667, `scrollHeight` 667 = 667 y sin desbordamiento horizontal (375 = 375) |
+| 31 | Contorno de foco en la zona tras navegar con el teclado (Tab, Tab, Intro en «Registrarse») | A 1280 y a 375: el foco queda en la zona (`div`, `tabIndex=-1`), `:focus-visible` verdadero y `outline: solid 3px rgb(20, 24, 31)` con `outline-offset: 2px`. La zona ocupa x 0 a 1280 (0 a 375) e y 56 a 800 (56 a 667): el contorno se pinta de y 51 a 54, es decir, 3 px sobre los últimos 5 px de la barra (que tiene su propio borde de 1 px), y por los otros tres lados cae fuera del viewport (x −5 a 1285, y hasta 805). Efecto visible: una banda oscura de 3 px bajo la barra, de lado a lado, mientras el foco siga en la zona, sin ningún control interactivo enfocado. Decisión: quitar el contorno de la zona, que solo recibe foco por programa (otras opciones descartadas: dibujarlo por dentro con un desplazamiento negativo, o dejarlo); ver la desviación y la fila 49 |
+| 32 | Panel `h-[40dvh]` a 375 × 667 | Panel en y 400 a 667: 267 px (`height: 266.797px`, `min-height: 240px`; 40dvh = 266,8), el 43,7 % de la zona (611 px); sobre él quedan 344 px de mapa, con los botones de zoom (x 321 a 365, y 86 a 174) y la atribución (y 56 a 76) libres. A 1280 el panel se ve como una columna lateral en las capturas, sin medirlo en esta pasada |
+| 33 | «Página no encontrada» con desplazamiento propio en una ventana baja | 1280 × 300: el contenido (104 px) cabe en la zona de 244 px y no hay desplazamiento. 1280 × 150: zona de 94 px y contenido de 136 px; `main` con `overflow-y: auto` y `justify-content: safe center`, desplazable (`scrollHeight` 136 > `clientHeight` 94) sin scroll de página (150 = 150): el título está visible al empezar (y 72) y «Ir al mapa» se alcanza tras desplazar 42 px (y 90 a 134). 375 × 150: la misma lectura (zona 94, contenido 136, desplazamiento de 42 px, página 150 = 150 y 375 = 375) |
+| 34 | Contraste de `--color-danger` (`#b3261e`) con los errores en pantalla, y `lighthouse_audit` | «Escribe tu email.» y «Escribe una contraseña.» (14 px, peso 600) sobre el blanco de la tarjeta: 6,54:1 a 1280 y a 375 (fórmula de WCAG sobre los colores calculados); borde de los campos inválidos, 6,54:1. Lighthouse en modo `snapshot` con ese estado, en desktop y en mobile: Accesibilidad 100 y Best Practices 100; `color-contrast`, `target-size` y `label` aprobados, sin elementos marcados. SEO 60 y Agentic Browsing 33 por `meta-description`, `robots.txt`, `llms.txt` y `ai-catalog.json`: ajenos a esta spec |
+| 35 | Tamaño de los controles y reflow a 375 px (constitución, punto 7) | «RentRadar» 104 × 44, «Registrarse» 121 × 44, «Salir» 71 × 44, email y contraseña 293 × 44, «Mostrar contraseña» 190 × 44 y «Crear cuenta» 293 × 44: ninguno bajo 44 px. Sin desbordamiento horizontal (375 = 375), tampoco con los errores en pantalla |
+
+### Cuenta D y errores a 375 px (`t9-d@example.com`)
+Se crea una cuenta en la BD de desarrollo, con autorización expresa; contraseña de 10 caracteres no común (no se anota).
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 36 | Registro correcto solo con el teclado (RF-1, RF-10) | POST 201 con `{"user":{"email":"t9-d@example.com"}}`, `no-store`, `Vary: Cookie`, `csrftoken` nueva y `sessionid` nueva (`HttpOnly; Max-Age=1209600; Path=/; SameSite=Lax`). `/map` con «Salir», «Cuenta creada.» anunciada, `history.length` sin cambiar (12 antes y después) y el email no aparece en la página |
+| 37 | Salida con el teclado (Shift+Tab desde la zona hasta «Salir», Intro) | 204; la barra pasa a «Registrarse» sin desbordar (375 = 375), «Has salido» anunciado y foco en «Registrarse» |
+| 38 | Email repetido (`email_taken`) a 375 px | POST 400; foco en el email (`aria-invalid`), «Ya existe una cuenta con este email.» junto al campo, resumen «Revisa los campos marcados.», email y contraseña (12 caracteres, sin atributo `value`) conservados, envío habilitado y sin desbordamiento |
+| 39 | Contraseña de 9 caracteres a 375 px, con `t9-corta@example.com` | POST 400; «La contraseña debe tener al menos 10 caracteres.» (con la pista «Al menos 10 caracteres.»), foco en la contraseña, contraseña borrada (longitud 0, sin `value`) y email conservado |
+| 40 | Consola a 375 px | Solo el 400 esperado, contado dos veces (filas 38 y 39), y los avisos del estilo del mapa de OpenFreeMap |
+
+### Tres curl contra `runserver` y el proxy
+El token CSRF sale de un GET a `:8000` y se usa igual en la cookie y en la cabecera `X-CSRFToken` (aquí tapado como `<token>`). Peticiones de registro contadas desde el reinicio: 8 de 10 (cuenta B: 400 y 201; cuenta D: 201; `email_taken`; contraseña corta; y estos tres curl). Quedan 2.
+
+| # | Orden | Resultado |
+|---|---|---|
+| 41 | Control, directo a `:8000` (Django recibe `Host: localhost:8000`): `curl -si -X POST http://localhost:8000/api/v1/auth/register/ -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' -H 'Cookie: csrftoken=<token>' -H 'X-CSRFToken: <token>' -d '{}'` | 403 `{"code":"csrf_failed"}`, `no-store` |
+| 42 | Por el proxy de Vite (Django recibe `Host: localhost:5173`), con la misma cookie, la misma cabecera y el mismo `Origin`: `curl -si -X POST http://localhost:5173/api/v1/auth/register/ -H 'Content-Type: application/json' -H 'Origin: http://localhost:5173' -H 'Cookie: csrftoken=<token>' -H 'X-CSRFToken: <token>' -d '{}'` | 400 `{"code":"invalid_fields","params":{"email":["email_empty"],"password":["password_required"]}}`, `no-store`: pasa la comprobación de CSRF. Como solo cambia el destino, el 403 de la fila anterior solo puede venir de la comprobación de `Origin`, y esta respuesta prueba que Django recibe `Host: localhost:5173`, sin `CSRF_TRUSTED_ORIGINS` |
+| 43 | Cuerpo troceado a `:8000`, con token válido y sin `Origin`: `curl -si -X POST http://localhost:8000/api/v1/auth/register/ -H 'Content-Type: application/json' -H 'Transfer-Encoding: chunked' -H 'Cookie: csrftoken=<token>' -H 'X-CSRFToken: <token>' -d '{}'` | 413 `{"code":"payload_too_large"}`, `no-store` |
+
+### Límite de registro, el último (375 × 667)
+Sin reiniciar el backend: el contador (en memoria) queda lleno en desarrollo. Hora del servidor según la cabecera `Date`. La primera petición contada desde el reinicio fue el 400 de la cuenta B a las 08:35:46, así que la ventana de una hora acaba a las 09:35:46.
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 44 | Bucle de `{}` desde la pestaña (`fetch` del mismo origen con `X-CSRFToken` de la cookie), parando en el primer 429 (RF-3) | Tres peticiones: 400 `invalid_fields` (`email_empty` y `password_required`), 400 y 429. Con las 8 anteriores, el contador llega a 10 y la 11.ª es la rechazada |
+| 45 | 429 del bucle (09:22:00) | Cuerpo `{"code":"throttled","retry_after":827}`, cabecera `Retry-After: 827` (igual que el cuerpo) y `Cache-Control: no-store`. Coincide con la ventana: 09:35:46 − 09:22:00 = 826 s, redondeado hacia arriba a 827 |
+| 46 | Envío del formulario a 375 px con el límite superado (RF-3, RF-11) | 429 a las 09:22:13 con `retry_after` 814 en el cuerpo y `Retry-After: 814`. Mensaje «Demasiados intentos. Inténtalo de nuevo en 14 minutos.»: ceil(814 / 60) = ceil(13,57) = 14. El cliente cuenta el cuerpo y no la cabecera (`session.ts`, comentario «la cabecera Retry-After se ignora»), y ambas coinciden. Sin cuenta creada |
+| 47 | Estado del formulario tras el 429 (RF-11) | Foco en la región de estado del formulario (`role="status"`, `tabIndex=-1`); email (`t9-corta@example.com`) y contraseña (11 caracteres, sin atributo `value`) conservados; ningún campo marcado como inválido; envío habilitado; sin desbordamiento (375 = 375). Consola: el 429 esperado |
+| 48 | El límite no cuenta lo que él mismo rechaza (RF-3) | Entre el 429 del bucle y el del formulario pasaron 13 s (09:22:00 a 09:22:13) y el `retry_after` bajó de 827 a 814: 13 s, de modo que la ventana, anclada en la petición más antigua, no se movió. Además, ambos 429 traen `retry_after`: en `SimpleRateThrottle.wait()` de DRF (leído en el contenedor) devuelve `None` si el historial supera las 10 peticiones, y `throttle_failure()` devuelve `False` sin anotar nada. Si los rechazos se anotaran, el segundo 429 no habría llevado `retry_after`. Lo fija además el test de T4 («cuentan las inválidas, las 405 y las rechazadas por CSRF, y no las 429») y su mutación |
+
+### Desviación: sin contorno en el foco programático de la zona
+Decidida tras la fila 31 (opción de quitar el contorno de la zona). Cambio de una clase en `frontend/src/app/AppShell.tsx`, en un commit propio (`fix(frontend): no outline on programmatic zone focus`): el contenedor de la zona pasa de `relative min-h-0 flex-1` a `relative min-h-0 flex-1 outline-none!`, con un comentario de una línea. El `!` es necesario: la regla global `:focus-visible` de `index.css` no va en una capa de Tailwind y le gana a las utilidades normales; con `!` el CSS generado lleva `outline-none\!{--tw-outline-style:none!important;outline-style:none!important}`. No cambia el foco de ningún control ni el destino del foco al navegar.
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 49 | A 375 × 667 y a 1280 × 800, solo con el teclado: Tab, Tab, Intro en «Registrarse» | Antes del Intro, «Registrarse» sigue con `outline: solid 3px` y `outline-offset: 2px` (`:focus-visible` verdadero). Tras el Intro, `document.activeElement` es la zona (`div`, `tabIndex=-1`, y 56 a 667 o a 800) y su contorno es `outline-style: none`; la banda de 3 px sobre la barra (y 51 a 54 en la fila 31) ya no se pinta, y la barra queda con su borde de 1 px |
+| 50 | Controles reales | `npx vitest run`: 26 ficheros y 1019 tests en verde (ningún test menciona `AppShell`); `npx eslint src/app/AppShell.tsx`: código de salida 0; `npm run build`: código de salida 0, solo el aviso del chunk de maplibre-gl que ya existía |
+
+### Comprobaciones que completan el recorrido (1280 × 800)
+| # | Comprobación | Observado |
+|---|---|---|
+| 51 | `/register/` normalizada (RF-13) | Al abrir `/register/` la dirección queda en `/register` y `history.length` pasa de 17 a 18: solo la entrada de la navegación, sin una segunda por la normalización (`replaceState`) |
+| 52 | La marca de la barra lleva a `/map` (RF-9) | Tab desde `/register` enfoca «RentRadar» (enlace `/map`); Intro lleva a `/map` dentro del mismo documento (una marca puesta en `window` sigue ahí: no hay recarga), con una entrada de historial más (18 a 19), el mapa pintado y el foco en la zona. Desde `/map`, volver a pulsarla no cambia nada (el historial sigue en 19) |
+| 53 | El mapa vuelve a su vista inicial | Tras acercar dos veces, la petición de bienes pasa a la caja `south=39.40&west=-0.50&north=39.55&east=-0.25`; al ir a `/register` y volver con la marca, la petición vuelve a la de la carga (`south=39.35&west=-0.65&north=39.60&east=-0.10`) y el panel muestra «24 bienes en esta zona». Las dos navegaciones suman dos entradas de historial |
+| 54 | Movimiento reducido (constitución, punto 7) | Con `prefers-reduced-motion: reduce` emulado, 0 elementos con transición o animación y 0 animaciones activas en `/map` y en `/register`. La única transición del código, `motion-safe:transition-colors` en el botón de `ResultsPanel`, queda desactivada con esa preferencia. No se han medido las animaciones internas de MapLibre |
+| 55 | Registro que no responde (RF-11): `fetch` simulado que respeta `AbortSignal` | Durante el envío, «Creando la cuenta…», `aria-disabled` y los campos en `readonly`. A los 10,000 s se aborta, el cliente pregunta «quién soy» en el mismo instante (GET real; sin sesión) y muestra «La petición ha tardado demasiado. Inténtalo de nuevo.» como error general: foco en la región de estado, email y contraseña (14 caracteres, sin atributo `value`) conservados, ningún campo inválido y el envío habilitado. Reintento: se envía de nuevo (dos llamadas) y vuelve a vencer a los 10 s con el mismo resultado. Ningún POST llegó al servidor |
+| 56 | «Quién soy» sin respuesta (RF-9): `fetch` simulado desde antes de cargar la aplicación | La barra queda sin acciones 5,0 s (de 364 a 5397 ms; el abort llega a los 5,00 s de la llamada) y después muestra «Registrarse», siempre con 56 px. El mapa funciona desde el primer momento («24 bienes en esta zona»), sin scroll de página y sin errores en consola |
+| 57 | `/register` con sesión lleva a `/map` sin añadir entrada al historial (RF-13) | Con la cuenta E (`t9-e@example.com`, registrada solo con el teclado, con autorización expresa: POST 201, barra en «Salir», «Cuenta creada.» y `history.length` en 24 antes y después). Al abrir `/register` con esa sesión, con un registrador de fotogramas instalado antes de cargar la aplicación: a los 389 ms el formulario ya está pintado y la barra no tiene acciones (no espera a «quién soy»); a los 449 ms la dirección pasa a `/map`, con «Salir» y sin formulario. `history.length` es 25 desde el inicio hasta el final: la única entrada es la de la propia navegación, y la redirección usa `replaceState`. «Atrás» vuelve a `/map`, sin formulario, con el historial en 25. Sin errores en consola |
+
+### Puerta final
+Con la rama en `55084fe`, el stack levantado y la BD de test (nunca la de desarrollo). Salida real de cada orden:
+
+| Comprobación | Orden | Resultado |
+|---|---|---|
+| Backend | `docker compose exec backend pytest -q` | `2196 passed in 38.65s` (código de salida 0) |
+| Estilo y formato | `docker compose exec backend sh -c "ruff check . && ruff format --check ."` | `All checks passed!` y `142 files already formatted` |
+| Migraciones pendientes | `docker compose exec backend pytest -q config/tests/test_migrations.py` | `1 passed` |
+| Desfase del contrato | `docker compose exec -u "$(id -u)" backend python manage.py spectacular --format openapi-json --file openapi.json --validate --fail-on-warn --lang en` y `git diff --stat backend/openapi.json` | Sin avisos (código de salida 0); el diff está vacío |
+| Frontend: tests | `cd frontend && npx vitest run` | `Test Files 26 passed (26)`, `Tests 1019 passed (1019)` |
+| Frontend: empaquetado | `npm run build` | `✓ built in 796ms` (código de salida 0); solo el aviso del chunk de maplibre-gl que ya existía |
+| Frontend: análisis | `npx eslint .` | Sin incidencias (código de salida 0) |
+| Frontend: tipos del contrato | `npm run api:check` | `openapi-typescript 7.13.0`, código de salida 0 |
+
+### Dependencias (constitución, punto 1)
+`git diff b55afd2 -- requirements* package*.json` (cualquier ruta; `b55afd2` es el inicio de la rama, el merge de la PR #7 en `dev`; seis ficheros: `backend/requirements.in`, `requirements.txt`, `requirements-dev.in`, `requirements-dev.txt`, `frontend/package.json` y `package-lock.json`): vacío. Ninguna dependencia nueva.
+
+### Cobertura de los requisitos
+Test automático y comprobación en el navegador de cada RF (las filas remiten a las de arriba y a las secciones de T1 a T8):
+
+| RF | Test automático | Navegador |
+|---|---|---|
+| RF-1 registro que abre sesión | pytest T2, T5a y T5b | Filas 6, 7, 27 y 36 (cuentas A, B y D) |
+| RF-2 rechazo con todos los códigos | pytest T2 y T5a | Filas 15 y 38 (`email_taken`), 25 y 39 (9 caracteres) |
+| RF-3 límite de registro | pytest T4 y T5a; vitest T6 (minutos) | Filas 44 a 48 y curl 41 a 43 |
+| RF-4 sesión nueva al registrarse | pytest T5a (identificador y token cambian) | Fila 6: `sessionid` y `csrftoken` nuevas en cada 201 |
+| RF-5 salida | pytest T5b | Filas 18 y 19 (204, cookie retirada, segunda pestaña) |
+| RF-6 «quién soy» | pytest T5b | Filas 1, 9, 21 y 56; curl de la preparación |
+| RF-7 CSRF | pytest T3, T5a y T5b; vitest T6 | Fila 5 (403 sin cookie y reintento) y curl 41 |
+| RF-8 cuerpo | pytest T3 y T5a | Curl 43 (413 con cuerpo troceado) |
+| RF-9 barra | vitest T6 y T7 | Filas 1, 21, 29, 35, 52 y 56 |
+| RF-10 envío | vitest T8 | Filas 7, 11 a 14, 27 y 36 |
+| RF-11 errores del formulario | vitest T6 y T8 | Filas 15, 22, 25, 26, 38, 39, 46, 47 y 55 |
+| RF-12 salida en la interfaz | vitest T6 y T7 | Filas 16 a 19 y 37 |
+| RF-13 página de registro | vitest T7 y T8 | Filas 2, 51, 53 y 57 |
+
+Los requisitos no funcionales: permisos y métodos, orden de comprobaciones, caché, respuestas mínimas, errores, privacidad y contrato, con su test en T1 a T5b (pytest) y T6 a T8 (vitest); mismo origen y proxy, filas 8, 41 y 42; accesibilidad y móvil, filas 29 a 35 y 54; consola sin errores propios, filas 10, 28, 40 y 47 (solo 4xx y 5xx provocados y avisos del estilo del mapa).
+
+### Pruebas de mecanismo (T1 a T8)
+Cada una con copia del fichero, sha256 antes y después y restauración; el detalle, mutación por mutación y con los tests que fallan, está en la sección de cada tarea.
+
+| Tarea | Qué se mutó |
+|---|---|
+| T1 | Autenticación en la lista pública y en los valores por defecto, quitar el middleware, `csrf_failed` con otro estado (4 mutaciones) |
+| T2 | Hash antes de comprobar la longitud, comprobaciones de nulos y sustitutos (alta, cambio de email y contraseña), orden de validadores, `password_invalid` no exclusivo, similitud sin usuario (10 mutaciones) |
+| T3 | CSRF solo con usuario, `CSRFCheck` que acepta todo, orden respecto al cuerpo y a `initial()`, `Transfer-Encoding`, longitud declarada, `+ 1` de la lectura, `RecursionError`, números como texto |
+| T4 | Agrupar en /48 y /128, `X-Forwarded-For`, `AnonRateThrottle`, anotar los rechazos, no desenvolver la IPv4 mapeada |
+| T5a | `flush()` y orden en el registro, `ModelSerializer`, `no-store`, `is_staff`, mixin, `throttle_classes`, lectura del cuerpo y CSRF en autenticación |
+| T5b | `flush()`, `delete_cookie`, `logout()` de Django, orden de lectura de la sesión, mixin, método antes de autenticar, `authentication_classes` en «quién soy» |
+| T6 | Reintento, doble reintento, token guardado, `credentials`, tiempos máximos de «quién soy», registro y salida, «quién soy» tras un registro vencido, y su repetición sobre la versión final (`r1` a `r6`) |
+| T7 | Respuesta de «quién soy» que llega tarde y señal cancelada (4 mutaciones: `m1`, `m2`, `m2a` y `m2b`) |
+| T8 | Guarda del doble envío y contraseña controlada (2 mutaciones) |
+
+### Desviaciones respecto al plan y observaciones
+- **Proxy de Vite** (corrección de la T7 de la 006): `changeOrigin: false`, comprobado con el registro real y con curl (filas 8, 41 y 42).
+- **Aviso de fallo de «Salir» superpuesto** (T7) y **observación pendiente de otra spec**: con el aviso visible quedan tapados «Acercar» y la atribución del mapa; se rediseñará como un toast persistente en una spec visual posterior (fila 16 y observaciones).
+- **Contorno de foco de la zona**: `outline-none!`, en un commit propio (`55084fe`).
+- **Foco al lanzar la salida desde «Reintentar»**: durante el intento está en `body`; observación sin cambios en esta spec (fila 17).
+- **`Access-Control-Allow-Origin` de Vite**: lo añade el servidor de desarrollo, no la API.
+- **Tests de la página que no cubre vitest** (entorno `node`): la guarda del doble envío y el cableado de `RegisterPage`, comprobados en el navegador (filas 13 y 14).
+- **Fuera de esta spec**: SEO y «agentic browsing» de Lighthouse (`meta-description`, `robots.txt`, `llms.txt`, `ai-catalog.json`).
+- **Cuentas de prueba** en la BD de desarrollo: `t9-a@example.com`, `t9-b@example.com`, `t9-d@example.com` y `t9-e@example.com`; no se ha ejecutado `migrate` ni se ha tocado esa BD salvo `showmigrations sessions` y los registros autorizados.
+
+### Veredicto
+Todos los requisitos tienen test automático y comprobación en el navegador (el recorrido completo, solo con teclado, a 1280 px; el registro, los errores, el límite y el diseño también a 375 px), con la puerta final en verde y sin dependencias nuevas. La fila 57 (`/register` con sesión) era la última comprobación pendiente y salió como se esperaba. **Veredicto: la spec 009 está implementada y validada.**

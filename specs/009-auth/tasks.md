@@ -91,7 +91,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Pruebas de mecanismo (privacidad de la contraseña y doble envío): quitar la comprobación de `tryStart` (falla el test de la guarda) y volver a hacer controlado el campo de contraseña (falla el test de marcado sin `value=`).
   - Evidencia: `validation.md`, sección T8 (tests y mutaciones); la comprobación en el navegador, en T9.
 
-- [ ] **T9. Validación en el navegador, arquitectura y cierre.** RF-1…RF-13
+- [x] **T9. Validación en el navegador, arquitectura y cierre.** RF-1…RF-13
   - Chrome DevTools a 1280 y 375 px, con la consola sin errores propios (los 4xx esperados se anotan) y un recorrido solo con teclado:
     - registrarse, ver «Salir», recargar y seguir con sesión, salir;
     - la marca de la barra lleva a `/map`;
