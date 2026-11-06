@@ -54,7 +54,8 @@ export function AppShell({ navigator }: AppShellProps) {
         registerRef={registerRef}
         logoutRef={logoutRef}
       />
-      <div ref={zoneRef} tabIndex={-1} className="relative min-h-0 flex-1">
+      {/* Recibe el foco por código y no es un control; el ! es necesario porque la regla global :focus-visible no va en una capa */}
+      <div ref={zoneRef} tabIndex={-1} className="relative min-h-0 flex-1 outline-none!">
         <LogoutNotice notice={session.notice} onRetry={session.logout} />
         <Page route={resolveRoute(path)} onLeaveRegister={leaveRegister} />
       </div>
