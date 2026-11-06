@@ -1,3 +1,4 @@
+from django.contrib.auth.password_validation import validate_password
 from django.core.exceptions import NON_FIELD_ERRORS, ValidationError
 
 from apps.core.db import CONSTRAINT_VIOLATED, run_guarded
@@ -6,6 +7,7 @@ from apps.core.errors import (
     DomainValidationError,
     translate_validation_error,
 )
+from apps.core.text import contains_lone_surrogate
 from apps.users.models import User
 
 EMAIL_EMPTY = "email_empty"
@@ -16,6 +18,10 @@ EMAIL_TAKEN = "email_taken"
 PASSWORD_REQUIRED = "password_required"
 PASSWORD_INVALID = "password_invalid"
 PASSWORD_TOO_LONG = "password_too_long"
+PASSWORD_TOO_SHORT = "password_too_short"
+PASSWORD_TOO_COMMON = "password_too_common"
+PASSWORD_ENTIRELY_NUMERIC = "password_entirely_numeric"
+PASSWORD_TOO_SIMILAR = "password_too_similar"
 VALIDATION_FAILED = UNMAPPED_ERROR[1]
 
 ERROR_CODES = frozenset(
@@ -28,6 +34,10 @@ ERROR_CODES = frozenset(
         PASSWORD_REQUIRED,
         PASSWORD_INVALID,
         PASSWORD_TOO_LONG,
+        PASSWORD_TOO_SHORT,
+        PASSWORD_TOO_COMMON,
+        PASSWORD_ENTIRELY_NUMERIC,
+        PASSWORD_TOO_SIMILAR,
         CONSTRAINT_VIOLATED,
         VALIDATION_FAILED,
     }
@@ -64,12 +74,24 @@ def create_superuser(*, email, password):
     return _create_account(email, password, is_admin=True)
 
 
+def register_user(*, email, password):
+    return _create_account(
+        email,
+        password,
+        is_admin=False,
+        password_errors=_registration_password_errors,
+    )
+
+
 def change_user_email(*, user, email):
     previous_email = user.email
     errors = {}
     if isinstance(email, str) or email is None:
         user.email = User.objects.normalize_email(email or "")
-        errors.update(_validation_errors(user, exclude=NON_EMAIL_FIELDS))
+        if contains_lone_surrogate(user.email):
+            errors["email"] = [EMAIL_INVALID]
+        else:
+            errors.update(_validation_errors(user, exclude=NON_EMAIL_FIELDS))
         if not errors:
             _, errors = run_guarded(
                 lambda: user.save(update_fields=["email"]), CONSTRAINT_CODES
@@ -82,36 +104,63 @@ def change_user_email(*, user, email):
     return user
 
 
-def _create_account(email, password, *, is_admin):
+def _basic_password_errors(password, *, user):
+    if password is None or password == "":
+        return [PASSWORD_REQUIRED]
+    # make_password falla con un sustituto suelto: se rechaza antes de calcular el hash
+    if not isinstance(password, str) or contains_lone_surrogate(password):
+        return [PASSWORD_INVALID]
+    if len(password) > PASSWORD_MAX_LENGTH:
+        return [PASSWORD_TOO_LONG]
+    return []
+
+
+def _registration_password_errors(password, *, user):
+    if password is None or password == "":
+        return [PASSWORD_REQUIRED]
+    # Los validadores de Django no frenan estos valores: se comprueban antes
+    if (
+        not isinstance(password, str)
+        or "\x00" in password
+        or contains_lone_surrogate(password)
+    ):
+        return [PASSWORD_INVALID]
+    codes = [PASSWORD_TOO_LONG] if len(password) > PASSWORD_MAX_LENGTH else []
+    return codes + _validator_codes(password, user)
+
+
+def _validator_codes(password, user):
+    try:
+        validate_password(password, user=user)
+    except ValidationError as exc:
+        # Solo el código: el mensaje y los params pueden llevar datos
+        return [error.code for error in exc.error_list]
+    return []
+
+
+def _create_account(
+    email, password, *, is_admin, password_errors=_basic_password_errors
+):
     errors = {}
+    user = None
     if isinstance(email, str) or email is None:
-        user = User(
-            email=User.objects.normalize_email(email or ""),
-            is_staff=is_admin,
-            is_superuser=is_admin,
-        )
-        errors.update(_validation_errors(user, exclude={"password"}))
+        normalized = User.objects.normalize_email(email or "")
+        if contains_lone_surrogate(normalized):
+            errors["email"] = [EMAIL_INVALID]
+        else:
+            user = User(email=normalized, is_staff=is_admin, is_superuser=is_admin)
+            errors.update(_validation_errors(user, exclude={"password"}))
     else:
         errors["email"] = [EMAIL_INVALID]
-    password_code = _password_error(password)
-    if password_code:
-        errors["password"] = [password_code]
+    password_codes = password_errors(password, user=user)
+    if password_codes:
+        errors["password"] = password_codes
     if not errors:
         user.set_password(password)
         _, errors = run_guarded(user.save, CONSTRAINT_CODES)
     if errors:
         raise DomainValidationError(errors)
     return user
-
-
-def _password_error(password):
-    if password is None or password == "":
-        return PASSWORD_REQUIRED
-    if not isinstance(password, str):
-        return PASSWORD_INVALID
-    if len(password) > PASSWORD_MAX_LENGTH:
-        return PASSWORD_TOO_LONG
-    return None
 
 
 def _validation_errors(user, *, exclude):

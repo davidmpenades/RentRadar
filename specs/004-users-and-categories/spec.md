@@ -26,6 +26,7 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
   - **Nombre de categoría**: recortado y después en forma NFC.
 - **Longitud**: número de caracteres del texto normalizado, no de bytes.
 - **Carácter de control**: el carácter nulo (`\x00`) y cualquier otro carácter de control Unicode (categoría Cc), incluidos los tabuladores y saltos de línea que queden dentro del texto tras recortarlo.
+- **Sustituto suelto**: un punto de código de la categoría Unicode Cs (U+D800 a U+DFFF) sin su pareja. No se puede codificar en UTF-8 y rompe el guardado y las consultas si llega a la base de datos.
 - **Rechazar**: no guardar el dato ni modificar nada. Tiene dos niveles:
   - **En validación**: el sistema devuelve un error con un código de error y el campo afectado, sin incluir el valor recibido.
   - **En la base de datos**: si se guarda saltándose la validación, la base de datos devuelve un error que no tiene por qué nombrar el campo: de integridad si se viola una unicidad y de datos si se supera una longitud.
@@ -38,7 +39,7 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
 - RF-1: EL SISTEMA identifica a cada usuario por su email, que es su identificador de acceso; no existe un nombre de usuario.
 - RF-2: CUANDO se crea un usuario o se cambia su email, EL SISTEMA guarda el email normalizado: recortado, en forma NFKC y entero en minúsculas (parte local y dominio).
 - RF-3: CUANDO se crea un usuario, EL SISTEMA guarda la contraseña solo en forma de hash.
-- RF-4: SI al crear un usuario o cambiar su email el email normalizado está vacío, no tiene formato de email válido o contiene caracteres de control, ENTONCES EL SISTEMA lo rechaza en validación.
+- RF-4: SI al crear un usuario o cambiar su email el email normalizado está vacío, no tiene formato de email válido, contiene caracteres de control o contiene un sustituto suelto, ENTONCES EL SISTEMA lo rechaza en validación. Un sustituto suelto da `email_invalid`, antes de cualquier consulta a la base de datos.
 - RF-5: SI el email normalizado supera 254 caracteres, ENTONCES EL SISTEMA lo rechaza en validación, y la base de datos lo rechaza con un error de datos.
 - RF-6: SI al crear un usuario o cambiar su email, el email normalizado coincide sin distinguir mayúsculas con el de otro usuario, ENTONCES EL SISTEMA lo rechaza en validación.
 - RF-7: SI se intenta guardar un usuario cuyo email coincide en minúsculas con el de otro usuario, aunque se salte la validación o lleguen dos altas a la vez, ENTONCES la base de datos lo rechaza con un error de integridad.
@@ -65,7 +66,7 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
 - **Permisos**: esta spec no expone endpoints, así que no hay accesos de anónimo, usuario ni propietario que declarar. Las specs de API los declaran según las "Reglas para specs posteriores".
 - **Desconfianza de la entrada (constitución, punto 6)**: reparto del rechazo entre la validación y la base de datos:
   - En validación y en la base de datos: la unicidad del email en minúsculas, la del slug y la del nombre de categoría en minúsculas, y las longitudes del email (254), del slug (50) y del nombre (60), contadas en caracteres sobre el texto normalizado. La base de datos rechaza la unicidad con un error de integridad y la longitud con un error de datos.
-  - Solo en validación: el formato del email, los caracteres de control, la contraseña no vacía y de 128 caracteres como máximo, la inmutabilidad del slug, el formato del slug, el recorte y la normalización Unicode.
+  - Solo en validación: el formato del email, los caracteres de control, los sustitutos sueltos del email, la contraseña no vacía y de 128 caracteres como máximo, la inmutabilidad del slug, el formato del slug, el recorte y la normalización Unicode.
 - **Errores**: cada rechazo en validación lleva un código de error estable en inglés y el campo afectado, no un mensaje en castellano; el cliente traduce los códigos. La lista de códigos se fija en el plan.
 - **Seguridad**: las contraseñas solo se guardan como hash. El límite de 128 caracteres evita que una contraseña enorme dispare el coste del cálculo del hash.
 - **Fechas**: las que trae el modelo de usuario (alta y último acceso) llevan zona horaria, en UTC como referencia (RF-29 y RF-30 de la 001).
@@ -75,9 +76,10 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
   - Las fechas que el modelo de usuario fija por su cuenta (alta) no entran como parámetro.
 
 ## Reglas para specs posteriores
-- **Registro y recuperación de contraseña**: responden de forma uniforme, exista o no el email, sin revelar si un email está registrado.
-- **Login**: compara el email sin distinguir mayúsculas, con la misma normalización de RF-2 (spec de autenticación).
-- **Respuestas públicas**: nunca incluyen el email, `is_staff`, `is_superuser` ni `last_login` de un usuario.
+- **Recuperación de contraseña**: responde de forma uniforme, exista o no el email, sin revelar si un email está registrado.
+- **Registro**: responde de forma explícita que el email ya existe (`email_taken`) hasta la spec 013, que lo hará uniforme con la verificación por correo.
+- **Login**: compara el email sin distinguir mayúsculas, con la misma normalización de RF-2 (spec 015).
+- **Respuestas públicas**: nunca incluyen el email de otros usuarios; `is_staff`, `is_superuser` y `last_login` no se incluyen nunca. Solo la sesión de la propia cuenta recibe su email.
 - **Propiedad de los recursos**: el propietario de cualquier recurso sale siempre del usuario de la sesión, nunca del cuerpo de la petición.
 - **Campos protegidos**: `is_staff`, `is_superuser` e `is_active` nunca se escriben desde la API pública.
 
@@ -90,6 +92,7 @@ Esta spec solo define datos y reglas: no hay endpoints ni pantallas. Todo lo rel
 - Email en caracteres de ancho completo (`ａｎａ@correo.es`) cuando ya existe `ana@correo.es`: tras normalizar a NFKC coincide y se rechaza (RF-2, RF-6).
 - Email con `\x00`, un tabulador interno o un salto de línea interno: se rechaza (RF-4).
 - Email sin arroba o vacío tras recortar: se rechaza (RF-4).
+- Email con un sustituto suelto (U+D800), por ejemplo en el dominio: se rechaza con `email_invalid` al crear un usuario o un superusuario y al cambiar el email, sin error del servidor y sin consultar la base de datos (RF-4).
 - Email de 254 caracteres: se acepta; de 255: se rechaza (RF-5). Guardado saltándose la validación, la base de datos rechaza el de 255 con un error de datos (RF-5).
 - `create_user` o `create_superuser` con contraseña `None` o vacía: se rechaza, sin crear un usuario con contraseña inutilizable (RF-8).
 - Contraseña de 128 caracteres: se acepta; de 129: se rechaza. La fortaleza se valida en la spec de autenticación (RF-9).

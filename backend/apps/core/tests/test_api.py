@@ -23,6 +23,16 @@ class Boom(APIView):
         raise ApiError("invalid_parameters", {"south": "not_a_number"})
 
 
+class ListBoom(APIView):
+    authentication_classes = []
+    permission_classes = [AllowAny]
+
+    def get(self, request):
+        # El valor recibido está en la petición y no debe llegar al cuerpo
+        assert request.query_params["email"]
+        raise ApiError("invalid_fields", {"email": ["email_invalid"]})
+
+
 class Fine(APIView):
     authentication_classes = []
     permission_classes = [AllowAny]
@@ -52,12 +62,93 @@ def test_the_set_of_codes_is_the_documented_table():
         "not_found",
         "forbidden",
         "bad_request",
+        "invalid_fields",
+        "invalid_request",
+        "payload_too_large",
+        "csrf_failed",
     } == ERROR_CODES
 
 
 def test_api_error_rejects_a_code_outside_the_table():
     with pytest.raises(ValueError):
         ApiError("made_up")
+
+
+@pytest.mark.parametrize(
+    ("code", "status"),
+    [
+        ("csrf_failed", 403),
+        ("payload_too_large", 413),
+        ("invalid_request", 400),
+        ("invalid_fields", 400),
+        ("invalid_parameters", 400),
+        ("zone_inverted", 400),
+        ("zone_too_large", 400),
+        ("bad_request", 400),
+    ],
+)
+def test_each_code_has_its_status(code, status):
+    error = ApiError(code)
+    response = api_exception_handler(error, {})
+
+    assert error.status_code == status
+    assert response.status_code == status
+    assert response.data == {"code": code}
+    assert response["Cache-Control"] == "no-store"
+
+
+def test_csrf_failed_is_not_the_general_forbidden():
+    csrf = api_exception_handler(ApiError("csrf_failed"), {})
+    forbidden = api_exception_handler(exceptions.PermissionDenied(), {})
+
+    assert csrf.status_code == forbidden.status_code == 403
+    assert csrf.data == {"code": "csrf_failed"}
+    assert forbidden.data == {"code": "forbidden"}
+
+
+def test_the_status_is_per_instance_and_the_class_default_is_untouched():
+    ApiError("csrf_failed")
+
+    assert ApiError.status_code == 400
+    assert ApiError("zone_inverted").status_code == 400
+
+
+def test_api_error_params_can_carry_lists_of_codes():
+    error = ApiError(
+        "invalid_fields",
+        {"email": ["email_invalid"], "password": ["password_too_short", "x"]},
+    )
+
+    response = api_exception_handler(error, {})
+
+    assert response.status_code == 400
+    assert response.data == {
+        "code": "invalid_fields",
+        "params": {
+            "email": ["email_invalid"],
+            "password": ["password_too_short", "x"],
+        },
+    }
+
+
+def test_api_error_copies_the_lists_it_keeps():
+    codes = ["email_invalid"]
+    error = ApiError("invalid_fields", {"email": codes})
+
+    codes.append("email_taken")
+
+    assert error.params == {"email": ["email_invalid"]}
+
+
+def test_a_view_with_list_params_answers_without_the_received_value():
+    response = call(ListBoom, path=f"/?email={SECRET}")
+
+    assert response.status_code == 400
+    assert body(response) == {
+        "code": "invalid_fields",
+        "params": {"email": ["email_invalid"]},
+    }
+    assert SECRET not in response.content.decode()
 
 
 def test_api_error_without_params_has_only_the_code():

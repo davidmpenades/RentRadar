@@ -1,4 +1,6 @@
 import { boxToQuery, type RequestBox } from "../map/requestBox";
+import { hasJsonContentType } from "./http";
+import { runWithTimeout } from "./timeout";
 import { InvalidResponseError, validateResponse } from "./validate";
 
 type PublicAssetList = ReturnType<typeof validateResponse>;
@@ -16,7 +18,6 @@ type FetcherOptions<Handle> = {
 
 const PUBLIC_ASSETS_URL = "/api/v1/public/assets/";
 const REQUEST_TIMEOUT_MS = 10_000;
-const JSON_CONTENT_TYPE = /^application\/json\s*(;|$)/i;
 
 // Los errores solo llevan la causa: ni el cuerpo ni la dirección pedida
 export class HttpStatusError extends Error {
@@ -42,7 +43,7 @@ export class RequestTimeoutError extends Error {
 
 async function readJson(response: Response): Promise<unknown> {
   // Vite devuelve index.html con un 200 para las rutas que no conoce
-  if (!JSON_CONTENT_TYPE.test(response.headers.get("Content-Type")?.trim() ?? "")) {
+  if (!hasJsonContentType(response)) {
     throw new InvalidResponseError();
   }
   try {
@@ -70,36 +71,19 @@ async function requestAssets(
 export function createPublicAssetsFetcher<Handle>(options: FetcherOptions<Handle>) {
   const { fetch, setTimer, clearTimer, timeoutMs } = options;
 
-  return async function fetchAssets(box: RequestBox, signal: AbortSignal): Promise<PublicAssetList> {
-    signal.throwIfAborted();
-
-    // Controlador propio para enlazar a mano la señal externa y el tiempo máximo
-    const controller = new AbortController();
-    let timedOut = false;
-    const abortWithExternal = () => controller.abort(signal.reason);
-    signal.addEventListener("abort", abortWithExternal, { once: true });
-    const timer = setTimer(() => {
-      timedOut = true;
-      controller.abort();
-    }, timeoutMs);
-
-    try {
-      const response = await requestAssets(fetch, `${PUBLIC_ASSETS_URL}?${boxToQuery(box)}`, {
-        credentials: "omit",
-        signal: controller.signal,
-      });
-      // El cuerpo de un error no se lee: nunca llega a la pantalla
-      if (response.status !== 200) throw new HttpStatusError(response.status);
-      return validateResponse(await readJson(response));
-    } catch (error) {
-      if (timedOut) throw new RequestTimeoutError();
-      // Si abortó la señal externa, el AbortError sale tal cual y quien pidió lo descarta
-      throw error;
-    } finally {
-      // Se cancela al terminar de validar, no al llegar las cabeceras: cubre un cuerpo colgado
-      clearTimer(timer);
-      signal.removeEventListener("abort", abortWithExternal);
-    }
+  return function fetchAssets(box: RequestBox, signal: AbortSignal): Promise<PublicAssetList> {
+    return runWithTimeout(
+      { signal, timeoutMs, setTimer, clearTimer, onTimeout: () => new RequestTimeoutError() },
+      async (inner) => {
+        const response = await requestAssets(fetch, `${PUBLIC_ASSETS_URL}?${boxToQuery(box)}`, {
+          credentials: "omit",
+          signal: inner,
+        });
+        // El cuerpo de un error no se lee: nunca llega a la pantalla
+        if (response.status !== 200) throw new HttpStatusError(response.status);
+        return validateResponse(await readJson(response));
+      },
+    );
   };
 }
 

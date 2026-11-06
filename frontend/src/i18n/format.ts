@@ -29,3 +29,14 @@ export function formatPrice(price: string, unit: string): { amount: string; unit
 export function formatRadius(meters: number): string {
   return meters % 1000 === 0 ? `${meters / 1000} km` : `${meters} m`;
 }
+
+export function waitMinutes(seconds: number): number {
+  return Math.max(1, Math.ceil(seconds / 60));
+}
+
+export function throttledMessage(seconds: number): string {
+  const minutes = waitMinutes(seconds);
+  return minutes === 1
+    ? es.auth.throttledOne
+    : es.auth.throttledMany.replace("{minutes}", String(minutes));
+}

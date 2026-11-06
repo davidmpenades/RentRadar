@@ -3,6 +3,7 @@ import socket
 import pytest
 from django.conf import settings
 from django.core.cache import cache
+from django.test import Client
 
 from config.env import read_optional
 
@@ -49,3 +50,9 @@ def block_internet_sockets(monkeypatch):
     monkeypatch.setattr(socket.socket, "connect", guarded_connect)
     monkeypatch.setattr(socket, "create_connection", _blocked)
     monkeypatch.setattr(socket, "getaddrinfo", _blocked)
+
+
+@pytest.fixture
+def csrf_client():
+    # El cliente por defecto se salta la comprobación CSRF: este la exige
+    return Client(enforce_csrf_checks=True)

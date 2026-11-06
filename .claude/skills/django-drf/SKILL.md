@@ -52,7 +52,7 @@ El throttling de DRF guarda los contadores en la caché por defecto. Con `LocMem
 - Una dependencia nueva solo entra con aprobación explícita.
 
 ## Migraciones
-Pregunta antes de crear o aplicar una migración. Revisa el SQL (`sqlmigrate`) cuando toque campos espaciales o índices.
+Pregunta antes de crear o aplicar una migración. Revisa el SQL (`sqlmigrate`, sobre la BD de test como indica AGENTS.md) cuando toque campos espaciales o índices.
 - Las migraciones generadas incumplen E501 e I001; `pyproject.toml` los ignora solo en `**/migrations/`. El resto de reglas de ruff sigue activo, también en las escritas a mano.
 - Una migración de datos obtiene el modelo con `apps.get_model` (nunca importa el actual), escribe con `.using(schema_editor.connection.alias)`, siembra con `update_or_create` y declara un `reverse_code` explícito con un único `delete()` de QuerySet. Nunca `RunPython.noop`: revertir dejaría los datos.
 

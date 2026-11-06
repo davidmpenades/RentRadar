@@ -15,14 +15,7 @@ class PublicAssetSerializer(serializers.Serializer):
     longitude = serializers.FloatField(read_only=True)
 
 
-# Los dos siguientes solo describen las respuestas en la documentación de la API
+# Solo describe la respuesta en la documentación de la API
 class PublicAssetListSerializer(serializers.Serializer):
     results = PublicAssetSerializer(many=True, read_only=True)
     incomplete = serializers.BooleanField(read_only=True)
-
-
-class ApiErrorSerializer(serializers.Serializer):
-    code = serializers.CharField(read_only=True)
-    # Sin read_only: drf-spectacular publica como obligatorio todo campo de solo lectura
-    params = serializers.DictField(child=serializers.CharField(), required=False)
-    retry_after = serializers.IntegerField(min_value=1, required=False)

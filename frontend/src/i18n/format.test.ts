@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 
-import { formatPrice, formatRadius, parsePriceCents } from "./format";
+import { formatPrice, formatRadius, parsePriceCents, throttledMessage, waitMinutes } from "./format";
 
 // Intl separa el número del símbolo con un espacio duro: se normaliza para comparar con texto visible
 const NBSP = String.fromCharCode(160);
@@ -81,5 +81,33 @@ describe("formatRadius", () => {
     [2000, "2 km"],
   ])("%d m se ve como «%s»", (meters, expected) => {
     expect(formatRadius(meters)).toBe(expected);
+  });
+});
+
+describe("waitMinutes", () => {
+  it.each([
+    [0, 1],
+    [1, 1],
+    [59, 1],
+    [60, 1],
+    [61, 2],
+    [120, 2],
+    [121, 3],
+    [3600, 60],
+    [86400, 1440],
+  ])("%d s se redondean hacia arriba a %d minutos, con 1 como mínimo", (seconds, minutes) => {
+    expect(waitMinutes(seconds)).toBe(minutes);
+  });
+});
+
+describe("throttledMessage", () => {
+  it.each([
+    [1, "Demasiados intentos. Inténtalo de nuevo en 1 minuto."],
+    [60, "Demasiados intentos. Inténtalo de nuevo en 1 minuto."],
+    [61, "Demasiados intentos. Inténtalo de nuevo en 2 minutos."],
+    [3600, "Demasiados intentos. Inténtalo de nuevo en 60 minutos."],
+    [86400, "Demasiados intentos. Inténtalo de nuevo en 1440 minutos."],
+  ])("%d s se ven como «%s»", (seconds, expected) => {
+    expect(throttledMessage(seconds)).toBe(expected);
   });
 });

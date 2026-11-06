@@ -7,14 +7,11 @@ from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
 from apps.assets.selectors import visible_assets_in_zone
-from apps.assets.serializers import (
-    ApiErrorSerializer,
-    PublicAssetListSerializer,
-    PublicAssetSerializer,
-)
+from apps.assets.serializers import PublicAssetListSerializer, PublicAssetSerializer
 from apps.assets.zone import ZoneError, parse_zone
 from apps.core.api import ApiError
 from apps.core.middleware import mark_response_cookieless
+from apps.core.serializers import ApiErrorSerializer
 
 PUBLIC_LIST_LIMIT = 200
 PUBLIC_LIST_MAX_AGE = 60

@@ -16,19 +16,34 @@ ERROR_CODES = frozenset(
         "not_found",
         "forbidden",
         "bad_request",
+        "invalid_fields",
+        "invalid_request",
+        "payload_too_large",
+        "csrf_failed",
     }
 )
+
+# Los códigos que no son un 400 corriente
+STATUS_BY_CODE = {
+    "csrf_failed": status.HTTP_403_FORBIDDEN,
+    "payload_too_large": status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+}
 
 
 class ApiError(exceptions.APIException):
     status_code = status.HTTP_400_BAD_REQUEST
 
-    def __init__(self, code: str, params: Mapping[str, str] | None = None):
+    def __init__(self, code: str, params: Mapping[str, str | list[str]] | None = None):
         if code not in ERROR_CODES:
             raise ValueError(f"Código de error desconocido: {code}")
         super().__init__(detail=code, code=code)
         self.error_code = code
-        self.params = dict(params) if params else {}
+        self.status_code = STATUS_BY_CODE.get(code, status.HTTP_400_BAD_REQUEST)
+        # Las listas se copian: quien llama podría seguir cambiándolas
+        self.params = {
+            name: list(value) if isinstance(value, list) else value
+            for name, value in (params or {}).items()
+        }
 
 
 def _general_code(status_code: int) -> str:

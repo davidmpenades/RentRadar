@@ -12,7 +12,31 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/map")).toBe("map");
   });
 
-  it.each(["/otra", "/map//", "/map/x", "/maps", "/MAP", "/map.html", "/index.html", "//map", ""])(
+  it("normaliza la dirección del registro con barra final", () => {
+    expect(resolveRoute("/register/")).toBe("redirectToRegister");
+  });
+
+  it("muestra el registro en /register", () => {
+    expect(resolveRoute("/register")).toBe("register");
+  });
+
+  it.each([
+    "/otra",
+    "/map//",
+    "/map/x",
+    "/maps",
+    "/MAP",
+    "/map.html",
+    "/index.html",
+    "//map",
+    "",
+    "/register//",
+    "/REGISTER",
+    "/register/x",
+    "/registers",
+    "//register",
+    "/register.html",
+  ])(
     "muestra la página no encontrada en %j",
     (pathname) => {
       expect(resolveRoute(pathname)).toBe("notFound");
