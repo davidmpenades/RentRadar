@@ -32,13 +32,14 @@ Antes del plan se preparan dos o tres variantes visuales en `prototypes/016-visu
 ## Definiciones
 - **Botón**: control que ejecuta una acción, o enlace con forma de botón. Hay dos tipos:
   - **principal** (fondo azul y texto blanco): «Registrarse», «Crear cuenta», «Reintentar» del aviso, «Reintentar» y «Volver a la zona inicial» del panel, «Reintentar» del error del mapa base y el enlace «Ir al mapa» de «Página no encontrada»;
-  - **secundario** (fondo claro con borde): «Salir» y «Cerrar aviso».
+  - **secundario** (cristal claro): «Salir» y «Cerrar aviso». Sobre el mapa o sobre una superficie de cristal, relleno translúcido con desenfoque y borde claro de 1 px. Sobre una superficie blanca (la barra superior y la tarjeta del formulario de registro), su relleno lleva un tinte cielo suave que lo separa del fondo, con el mismo borde claro y la misma sombra. El color, la opacidad, el tono exacto del tinte y la sombra los fija el plan. Lo identifica su texto, no el contraste de su borde.
 
   El control del ojo no es un botón con relieve: es un control del campo.
 - **Relieve**: sombra que proyecta un botón en reposo y lo separa del fondo. Al pulsarlo (con puntero o con teclado), la sombra se reduce: su desplazamiento o su desenfoque son menores que en reposo. Se verifica por el estilo calculado en el navegador. Los valores los fija la variante elegida.
 - **Deshabilitado**: control marcado como deshabilitado de forma accesible, como «Crear cuenta» durante el envío y «Salir» durante la salida en la 009. Sigue en el orden de tabulación y anuncia que está deshabilitado. No tiene relieve, pulsarlo no tiene efecto y no responde al pasar el puntero.
 - **Campo**: entrada de texto con una etiqueta visible fija encima, que no está dentro del campo ni hace de marcador de posición, con borde, estado de error y foco visible.
 - **Indicador**: icono de error dibujado en el color de error, junto al texto, para que el error no se distinga solo por el color.
+- **Anillo de foco**: contorno continuo de 2 px en el azul #1647B8, separado 2 px del control y dibujado fuera de él, para que su sombra y su relleno no lo oculten. Es el mismo en los botones, los campos, el ojo y los enlaces de esta spec. Se mide contra los tres fondos sobre los que puede quedar: la página, el cristal sobre su peor fondo y el blanco (Contraste). No se usa sobre el mapa sin superficie, donde la línea azul de los círculos lo anularía.
 - **Aviso flotante**: mensaje breve que flota sobre la zona de contenido sin desplazarla, con una acción y un botón «Cerrar aviso». En esta spec solo existe uno, el fallo de salida de la 009 (RF-12), y su acción es «Reintentar». No hay avisos sin acción ni avisos que se cierren solos.
 - **Superficie de cristal**: superficie translúcida que deja ver, desenfocado, lo que hay detrás. Su tinte tiene una opacidad de al menos el 80 % (Valores). El color del tinte, el desenfoque, el borde y la sombra los fija la variante elegida.
 - **Superficie sólida**: la misma superficie, opaca, con el color base de la variante y la misma forma, borde y sombra.
@@ -61,7 +62,8 @@ Antes del plan se preparan dos o tres variantes visuales en `prototypes/016-visu
 
   Umbrales AA:
   - 4,5:1 para el texto normal;
-  - 3:1 para el texto grande (24 px, o 18,66 px en negrita) y para los componentes no textuales que informan: borde de campo, borde del botón secundario, anillo de foco, indicador e iconos.
+  - 3:1 para el texto grande (24 px, o 18,66 px en negrita) y para los componentes no textuales que informan: borde de campo, anillo de foco, indicador e iconos.
+  - El borde del botón secundario no se mide: es claro por diseño y lo identifica su texto, que sí cumple 4,5:1 sobre su relleno. Los demás componentes no textuales que informan mantienen el 3:1.
 
 ### Valores de esta spec
 | Valor | Fijado |
@@ -117,6 +119,9 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - RF-13: EL SISTEMA dibuja el icono de RentRadar con el estilo de ilustración: formas de color sólido en al menos tres colores de relleno distintos. Uno es el tono base, otro la sombra (con menor luminancia que el base) y otro el brillo (con mayor luminancia que el base). Ninguno es el limón.
 - RF-14: EL SISTEMA dibuja el icono de RentRadar solo con lo que admite la lista blanca de SVG de la 006: sus etiquetas, sus atributos con la forma exacta de su valor, colores de seis cifras y las transformaciones permitidas.
 
+### Foco
+- RF-15: MIENTRAS un botón, un campo, el ojo o un enlace de esta spec tiene el foco del teclado, EL SISTEMA muestra el anillo de foco (Definiciones) alrededor del control, sin que la sombra ni el relleno del control lo oculten y con al menos 3:1 contra la página, contra el cristal sobre su peor fondo y contra el blanco.
+
 ## Requisitos no funcionales
 - **Entradas y errores**: esta spec no añade entradas del usuario, peticiones a la API ni servicios externos. Las entradas y los errores del formulario y de la salida siguen la 009. La única condición no deseada nueva es un navegador que no puede desenfocar lo que hay detrás (RF-9).
 - **Permisos (constitución, punto 5)**: no hay operaciones de la API nuevas ni cambiadas. El visitante, el usuario y el propietario ven y pueden hacer lo mismo que antes. No hay recursos por identificador, así que no hay casos nuevos de 404 ni de 403.
@@ -133,7 +138,7 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - **Contraste (constitución, punto 7)**:
   - Sobre una superficie de cristal, todo texto y todo componente no textual que informa cumple AA medido contra el peor fondo, y también sobre la superficie sólida. Fuera del mapa, cumple AA contra su fondo.
   - El tinte del cristal nunca baja del 80 % de opacidad, aunque la medición diera AA con menos. Llegar al 80 % tampoco basta: cada par tiene que dar AA en la medición.
-  - Como mínimo se miden estos pares: texto principal, texto secundario, precio, mensaje del aviso, cualquier texto en color de error sobre cristal, icono de radio de la tarjeta, anillo de foco, borde del botón secundario, borde del campo, icono del ojo, indicador y texto blanco sobre el botón principal.
+  - Como mínimo se miden estos pares: texto principal, texto secundario, texto del botón secundario sobre su relleno translúcido, precio, mensaje del aviso, cualquier texto en color de error sobre cristal, icono de radio de la tarjeta, anillo de foco (contra la página, el cristal sobre su peor fondo y el blanco), borde del campo, icono del ojo, indicador y texto blanco sobre el botón principal. El anillo usa el mismo azul #1647B8 que el precio: contra el negro puro da 4,98:1 con un tinte blanco al 80 % (tabla de Valores) y 7,99:1 contra blanco.
 - **Identidad visual**:
   - Se conservan la tipografía y la paleta de la 006, y el color de error que ya usa la interfaz pasa a la paleta del sistema.
   - Ningún elemento de la interfaz de esta spec usa el limón, reservado para la selección de la 007. Tampoco el icono de RentRadar (RF-13).
@@ -150,8 +155,8 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
   - Se diseña a 375 px y se amplía a 1280 px, sin desbordamiento horizontal.
   - Todos los controles miden al menos 44 × 44 px: botones, campos, el ojo, «Cerrar aviso» y el enlace de la marca.
   - Uso completo con teclado. El ojo va en el orden de tabulación justo después del campo de contraseña.
-  - El foco es visible sobre la superficie de cristal y sobre la sólida, y la sombra de un botón no lo oculta.
-  - En el modo de colores forzados del sistema, los botones, los campos y las superficies de cristal conservan un contorno visible, y el icono del ojo se ve con los colores del sistema.
+  - El foco se muestra con el anillo de foco (RF-15), visible sobre la superficie de cristal y sobre la sólida, y la sombra de un botón no lo oculta.
+  - En el modo de colores forzados del sistema, los botones (también el secundario, aunque su borde sea claro), los campos y las superficies de cristal conservan un contorno visible, y el icono del ojo y el anillo de foco se ven con los colores del sistema.
   - Si el navegador añade su propio botón para ver la contraseña, no se muestra: solo se ve el ojo de RentRadar.
 - **Dependencias (constitución, punto 1)**:
   - Ninguna dependencia nueva. Los iconos (marca, ojo, indicador y cierre) son gráficos vectoriales propios, sin librerías de iconos, de animación ni de componentes.
@@ -176,7 +181,11 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - Se pulsa el ojo durante el envío, con el campo en solo lectura: alterna la visibilidad y el valor no cambia (RF-3).
 - El botón se mantiene pulsado con Espacio: se ve pulsado igual que con el puntero (RF-1). Un botón deshabilitado («Crear cuenta» durante el envío o «Salir» durante la salida) no tiene relieve ni responde al puntero (RF-1).
 - El navegador añade su propio botón de ver contraseña (Edge): no aparece. Chrome no lo muestra, así que se comprueba por la regla que lo oculta (Accesibilidad).
-- En colores forzados la sombra desaparece: los botones, los campos y las superficies de cristal se reconocen por su contorno, y el ojo se ve (Accesibilidad).
+- En colores forzados la sombra desaparece: los botones, los campos y las superficies de cristal se reconocen por su contorno, el borde del secundario y el anillo de foco toman los colores del sistema, y el ojo se ve (Accesibilidad; RF-15).
+- Un botón secundario sobre un aviso de cristal sobre su peor fondo: su borde claro da alrededor de 1,5:1 y no se exige. El botón se reconoce por su texto (AA sobre su relleno), su relleno translúcido y su sombra (Definiciones; Contraste).
+- Un botón secundario sobre la barra superior blanca o sobre la tarjeta blanca del registro: se distingue del fondo por su relleno teñido de cielo, no solo por su sombra (Definiciones).
+- El foco llega a un botón con sombra azul o a un campo de un formulario: el anillo de 2 px queda separado 2 px del control y su sombra no lo tapa (RF-15).
+- El foco llega a un control del mapa (zoom, atribución): conserva el anillo de la 006, porque el azul #1647B8 no se distinguiría de la línea azul de los círculos (Fuera de alcance).
 - A 375 px el enlace de la marca muestra solo el icono, y este y «Registrarse» o «Salir» caben en la barra sin desbordarla. El enlace mide al menos 44 × 44 px, el nombre no se ve y su nombre accesible sigue siendo «RentRadar» (RF-11).
 - La ventana cruza los 900 px: el nombre de la marca aparece o se oculta a la vista y el nombre accesible del enlace no cambia (RF-11).
 - En la captura de la pestaña a 16 px, la sombra y el brillo se distinguen del tono base con al menos 1,5:1 de razón de contraste (Valores; RF-12, RF-13).
@@ -193,7 +202,8 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - Avisos flotantes sin acción o con cierre automático, y avisos visibles para otros mensajes (como «Has salido» o los errores del panel).
 - Cerrar el aviso con Escape.
 - La barra superior como superficie de cristal sobre el mapa: sigue sólida y encima de la zona de contenido.
-- Cambiar el aspecto de los controles del mapa (zoom y atribución) más allá de lo que fijó la 006.
+- Cambiar el aspecto de los controles del mapa (zoom y atribución) más allá de lo que fijó la 006. En particular, su anillo de foco sigue el de la 006.
+- Exigir un contraste de 3:1 al borde del botón secundario: lo identifica su texto.
 - Modo oscuro y recolorear el mapa base (como en la 006).
 - Medir el rendimiento en navegadores distintos de Chromium.
 - Un icono de pestaña de respaldo en formato de mapa de bits.
@@ -205,6 +215,7 @@ No hace falta `/sdd-change`:
 - **009, no funcionales**: el control «Mostrar contraseña» que alterna ver y ocultar y sus 44 px se cumplen con el ojo y su nombre fijo (RF-3).
 - **006, RF-8 e identidad visual**: la atribución vuelve a quedar siempre visible (RF-6) y el limón vuelve a quedar sin uso en la interfaz.
 - **006, lista blanca de SVG de las imágenes de categoría**: no cambia la lista ni lo que comprueba su test. El plan puede mover sus reglas a un módulo que usen ese test y el del icono.
+- **006, controles del mapa**: conservan su anillo de foco; el de esta spec solo se usa en sus superficies (RF-15).
 - **009, RF-9**: la marca sigue siendo un enlace a la página del mapa; por debajo de 900 px solo se ve el icono, con el mismo nombre accesible (RF-11).
 
 Ajustes de texto al cerrar la spec:
@@ -221,13 +232,14 @@ Ajustes de texto al cerrar la spec:
 - **Rendimiento medido solo en Chromium**, con la CPU emulada: Safari en iOS y Firefox no quedan medidos.
 - **Altura del panel**: la 007 la cambia (plegado, medio y desplegado), y el aviso tendrá que seguir anclado a ella sin tapar el zoom ni la atribución.
 - **Icono de la pestaña**: un navegador que no admita un icono vectorial en la pestaña muestra su icono por defecto; no hay respaldo en mapa de bits.
+- **Secundario sin contraste de borde**: sobre un cristal claro, el borde del secundario casi desaparece y el botón depende de su texto, su relleno y su sombra. El usuario lo aceptó al elegir el borde claro.
 - **Foco durante «Reintentar»**: deuda heredada de la 009 y anotada para la 014. Al empezar el reintento el aviso se retira, y el foco puede quedar sin elemento hasta 10 s. «Cerrar aviso» es otro botón del aviso que sufre lo mismo si el foco estaba en él.
 
 ## Criterios de finalización
 - **Variantes**: dos o tres en `prototypes/016-visual-system/`, diseñadas con la skill frontend-design en HTML estático. Usan la librería del mapa en la misma versión fijada que el producto, cargada desde una red de distribución de contenidos, el mapa base «positron» y círculos de demostración. Llevan un índice y capturas a 375 y 1280 px, y se commitean con la aprobación del usuario. No cuentan como tareas del plan. Cada variante muestra:
   - el panel de cristal sobre el mapa real, incluido el peor fondo, con un tinte de al menos el 80 %;
   - el aviso flotante, con el mismo mínimo;
-  - los botones en reposo, pulsados, con foco y deshabilitados;
+  - los botones (principal y secundario) en reposo, pulsados, con foco (con el anillo de foco de RF-15) y deshabilitados;
   - el campo de contraseña con el ojo;
   - la superficie sólida;
   - el icono de RentRadar con el estilo de ilustración y dentro de la lista blanca de la 006, también solo, sin el nombre, como se verá por debajo de 900 px;
@@ -245,6 +257,8 @@ Ajustes de texto al cerrar la spec:
     - alternancia del ojo, foco que no se mueve y valor conservado (RF-3);
     - el aviso sigue visible tras 60 s sin interacción y tras navegar a otra página, y al cerrarlo el foco pasa a «Salir» (RF-7);
     - RF-1 por estilo calculado: hay sombra en reposo, se reduce al pulsar y no hay sombra en un botón deshabilitado;
+    - el secundario sobre superficie blanca: captura de «Salir» en la barra superior y de un secundario sobre la tarjeta del formulario de registro, donde el relleno teñido lo separa del fondo;
+    - RF-15 por estilo calculado: anillo de 2 px en #1647B8 separado 2 px en el botón principal, el secundario, el campo, el ojo y el enlace de la marca, y su contraste contra la página, el cristal sobre su peor fondo y el blanco (3:1 como mínimo);
     - RF-2, RF-4, RF-5, RF-8 y RF-9;
     - RF-10, comparando la duración de las transiciones con movimiento normal (mayor que cero) y con movimiento reducido (cero);
     - la posición de RF-6;
@@ -271,6 +285,7 @@ Ajustes de texto al cerrar la spec:
 ## Dudas abiertas
 - Ninguna sobre el comportamiento.
 - **Notas para el plan (no cambian la spec)**:
+  - **Secundario y foco**: el plan fija el relleno, el borde claro y la sombra del secundario (los prototipos usan blanco al 70 % con borde blanco al 90 %), cómo se dibuja el anillo separado 2 px sin que lo recorte un contenedor con desbordamiento oculto, y si los controles de la 006 que hoy usan otro anillo se quedan como están.
   - **Medición de rendimiento**: cómo se reproduce el mismo gesto de arrastre en todas las pasadas, cómo se sirven las dos compilaciones (A y B) en la misma sesión y cómo se obtienen de la traza los fotogramas por segundo y los perdidos.
   - **Respaldo**: cómo se desactiva el desenfoque. Qué emulaciones admite la herramienta del navegador (transparencia reducida, contraste alto y colores forzados; la 006 solo documenta el movimiento reducido) y, para cada una que no admita, qué estilo calculado se comprueba en su lugar.
   - **Contraste**: de dónde salen los colores de los fondos de referencia del estilo «positron».
