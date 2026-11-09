@@ -32,7 +32,7 @@ Antes del plan se preparan dos o tres variantes visuales en `prototypes/016-visu
 ## Definiciones
 - **Botón**: control que ejecuta una acción, o enlace con forma de botón. Hay dos tipos:
   - **principal** (fondo azul y texto blanco): «Registrarse», «Crear cuenta», «Reintentar» del aviso, «Reintentar» y «Volver a la zona inicial» del panel, «Reintentar» del error del mapa base y el enlace «Ir al mapa» de «Página no encontrada»;
-  - **secundario** (cristal claro): «Salir» y «Cerrar aviso». Sobre el mapa o sobre una superficie de cristal, relleno translúcido con desenfoque y borde claro de 1 px. Sobre una superficie blanca (la barra superior y la tarjeta del formulario de registro), su relleno lleva un tinte cielo suave que lo separa del fondo, con el mismo borde claro y la misma sombra. El color, la opacidad, el tono exacto del tinte y la sombra los fija el plan. Lo identifica su texto, no el contraste de su borde.
+  - **secundario** (cristal claro): «Salir» y «Cerrar aviso». Sobre el mapa o sobre una superficie de cristal, relleno translúcido y borde claro de 1 px. Sobre una superficie blanca (la barra superior y la tarjeta del formulario de registro), su relleno lleva un tinte cielo suave que lo separa del fondo, con el mismo borde claro y la misma sombra. El color, la opacidad, el tono exacto del tinte y la sombra los fija el plan. Lo identifica su texto, no el contraste de su borde.
 
   El control del ojo no es un botón con relieve: es un control del campo.
 - **Relieve**: sombra que proyecta un botón en reposo y lo separa del fondo. Al pulsarlo (con puntero o con teclado), la sombra se reduce: su desplazamiento o su desenfoque son menores que en reposo. Se verifica por el estilo calculado en el navegador. Los valores los fija la variante elegida.
@@ -126,7 +126,7 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - **Entradas y errores**: esta spec no añade entradas del usuario, peticiones a la API ni servicios externos. Las entradas y los errores del formulario y de la salida siguen la 009. La única condición no deseada nueva es un navegador que no puede desenfocar lo que hay detrás (RF-9).
 - **Permisos (constitución, punto 5)**: no hay operaciones de la API nuevas ni cambiadas. El visitante, el usuario y el propietario ven y pueden hacer lo mismo que antes. No hay recursos por identificador, así que no hay casos nuevos de 404 ni de 403.
 - **Comportamiento conservado**:
-  - El comportamiento de la 006 y de la 009 no cambia. Sus tests de comportamiento siguen comprobando lo mismo; solo pueden cambiar los selectores que dependan de la presentación.
+  - El comportamiento de la 006 y de la 009 no cambia. Sus tests de comportamiento siguen comprobando lo mismo; solo pueden cambiar los selectores que dependan de la presentación y, por Presentación, la cadena esperada de dos tests.
   - Del aviso de fallo de salida se conservan los de la 009 (RF-12):
     - el texto «No se ha podido salir. Inténtalo de nuevo.» y «Reintentar»;
     - el anuncio en cada fallo, que es solo ese mensaje, sin los nombres de los botones;
@@ -144,6 +144,12 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
   - Ningún elemento de la interfaz de esta spec usa el limón, reservado para la selección de la 007. Tampoco el icono de RentRadar (RF-13).
   - La imagen de categoría de referencia no es interfaz y no se le aplica esta regla. La gama de las imágenes de categoría, y si un amarillo parecido al limón choca con la reserva de la 007, lo decide la 008.
   - Los colores nuevos (los tintes del cristal y los del icono) se listan en el plan con su contraste.
+- **Presentación** (mejoras de la revisión con web-design-guidelines asignadas a esta spec; no añaden requisitos funcionales):
+  - Una cifra y su unidad no se separan al partir línea: espacio de no separación (U+00A0) en las distancias del panel («500 m», «1 km») y entre la barra y la unidad del precio. Cambia la cadena esperada de dos tests de la 006, sin cambiar lo que comprueban: `format.test.ts` (distancia) y `ResultsPanel.test.ts` (importe y unidad).
+  - La página declara el color de tema del navegador, el esquema de color claro (no hay modo oscuro) y la preconexión al servidor de teselas del mapa.
+  - Los botones y el ojo no esperan al doble toque en móvil, y el ojo y el enlace de la marca responden al pasar el puntero.
+  - El nombre de la marca no se traduce y los títulos de página reparten sus líneas de forma equilibrada.
+  - Verificación: vitest para la distancia, el precio y el marcado de la marca; en el navegador, las etiquetas de la cabecera de la página y los estilos calculados.
 - **Rendimiento (excepción pedida por el usuario para esta spec, no regla general)**:
   - **Condiciones**: interfaz compilada para producción y servida en local, 375 px de ancho con emulación de móvil, CPU ralentizada 4× en las herramientas del navegador y vista inicial con los bienes de demostración y el panel mostrando sus tarjetas.
   - **Gesto**: un arrastre continuo del mapa de unos 5 s, el mismo en todas las pasadas.
