@@ -165,11 +165,7 @@ export function MapView({
     return (
       <div role="alert" className="absolute inset-0 flex flex-col items-center justify-center gap-4 p-4 text-center">
         <p className="text-lg font-semibold">{es.map.styleError}</p>
-        <button
-          type="button"
-          onClick={retry}
-          className="inline-flex min-h-11 items-center rounded-lg bg-accent px-6 font-semibold text-white"
-        >
+        <button type="button" onClick={retry} className="btn btn-primary">
           {es.map.retry}
         </button>
       </div>

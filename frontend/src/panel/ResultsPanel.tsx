@@ -11,8 +11,7 @@ type ResultsPanelProps = {
   onReset: () => void;
 };
 
-const BUTTON =
-  "mt-3 inline-flex min-h-11 items-center rounded-lg bg-accent px-6 font-semibold text-white motion-safe:transition-colors hover:bg-ink";
+const BUTTON = "btn btn-primary mt-3";
 
 type PanelActionProps = ResultsPanelProps & { afterAction: () => void };
 

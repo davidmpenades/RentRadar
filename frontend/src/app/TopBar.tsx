@@ -13,8 +13,6 @@ type TopBarProps = {
   logoutRef?: Ref<HTMLButtonElement>;
 };
 
-const ACTION = "inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg px-4 font-semibold";
-
 export function TopBar({ action, logoutPending, onNavigate, onLogout, registerRef, logoutRef }: TopBarProps) {
   const followLink = (path: string) => (event: MouseEvent<HTMLAnchorElement>) => {
     if (!isPlainLeftClick(event)) return;
@@ -28,7 +26,7 @@ export function TopBar({ action, logoutPending, onNavigate, onLogout, registerRe
         {es.topBar.brand}
       </a>
       {action === "register" && (
-        <a ref={registerRef} href="/register" onClick={followLink("/register")} className={`${ACTION} bg-accent text-white`}>
+        <a ref={registerRef} href="/register" onClick={followLink("/register")} className="btn btn-primary">
           {es.topBar.register}
         </a>
       )}
@@ -38,7 +36,7 @@ export function TopBar({ action, logoutPending, onNavigate, onLogout, registerRe
           type="button"
           onClick={onLogout}
           aria-disabled={logoutPending || undefined}
-          className={`${ACTION} border-2 border-ink aria-disabled:opacity-60`}
+          className="btn btn-secondary"
         >
           {es.topBar.logout}
         </button>

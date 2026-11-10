@@ -13,11 +13,7 @@ export function LogoutNotice({ notice, onRetry }: LogoutNoticeProps) {
       {notice === "logout_failed" && (
         <div className="pointer-events-auto m-2 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-lemon px-4 py-2 shadow-lg">
           <p className="font-semibold">{es.session.logoutFailed}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-white"
-          >
+          <button type="button" onClick={onRetry} className="btn btn-primary">
             {es.session.retry}
           </button>
         </div>

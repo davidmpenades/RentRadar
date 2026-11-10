@@ -122,7 +122,7 @@ export function RegistrationForm({
           <button
             type="submit"
             aria-disabled={submitting || undefined}
-            className={`${BUTTON} w-full bg-accent text-white aria-disabled:opacity-60`}
+            className="btn btn-primary btn-form w-full"
           >
             {es.register.submit}
           </button>

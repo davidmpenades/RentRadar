@@ -82,11 +82,16 @@ describe("RegistrationForm: estructura", () => {
     ["el email", (html: string) => inputOf(html, "register-email")],
     ["la contraseña", (html: string) => inputOf(html, "register-password")],
     ["«Mostrar contraseña»", (html: string) => buttonWith(html, es.register.showPassword)],
-    ["«Crear cuenta»", (html: string) => buttonWith(html, es.register.submit)],
   ])("%s mide al menos 44 px", (_name, find) => {
     const element = find(render());
     expect(element).not.toBe("");
     expect(classesOf(element)).toContain("min-h-11");
+  });
+
+  it("«Crear cuenta» es el botón principal de formulario", () => {
+    const submit = buttonWith(render(), es.register.submit);
+    expect(submit).not.toBe("");
+    expect(classesOf(submit)).toEqual(expect.arrayContaining(["btn", "btn-primary", "btn-form"]));
   });
 
   it("la región de estado está siempre montada, es role=status y se puede enfocar por código", () => {

@@ -34,6 +34,7 @@ const NBSP = String.fromCharCode(160);
 const panel = (view: ViewState) => renderToStaticMarkup(createElement(ResultsPanel, { view, onRetry: noop, onReset: noop }));
 const card = (item: PublicAsset) => renderToStaticMarkup(createElement("ul", null, createElement(AssetCard, { asset: item })));
 const imgTags = (html: string) => html.match(/<img\b[^>]*>/g) ?? [];
+const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
 
 describe("AssetCard: el texto del anuncio es texto", () => {
   it.each(HOSTILE)("el título %s sale escapado y dentro de <bdi>", (title) => {
@@ -168,8 +169,11 @@ describe("ResultsPanel", () => {
     if (list !== -1) expect(html.slice(header, list).match(/<\/div>/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("los botones miden al menos 44 px", () => {
-    expect(panel({ kind: "error", failure: "network" })).toContain("min-h-11");
-    expect(panel({ kind: "empty", canReset: true })).toContain("min-h-11");
+  it("los botones son botones principales", () => {
+    for (const view of [{ kind: "error", failure: "network" }, { kind: "empty", canReset: true }] satisfies ViewState[]) {
+      const buttons = panel(view).match(/<button\b[^>]*>/g) ?? [];
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) expect(classesOf(button)).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
+    }
   });
 });

@@ -40,22 +40,22 @@ describe("TopBar", () => {
     expect(html).not.toContain(es.topBar.logout);
   });
 
-  it("sin sesión muestra el enlace «Registrarse» a /register, de 44 px, y no «Salir»", () => {
+  it("sin sesión muestra el enlace «Registrarse» a /register, como botón principal, y no «Salir»", () => {
     const html = bar("register");
     const register = links(html).find((tag) => tag.includes(es.topBar.register));
     expect(register).toMatch(/href="\/register"/);
-    expect(classesOf(register ?? "")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    expect(classesOf(register ?? "")).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
     expect(buttons(html)).toHaveLength(0);
     expect(es.topBar.register).toBe("Registrarse");
   });
 
-  it("con sesión muestra el botón «Salir», de 44 px, y no «Registrarse»", () => {
+  it("con sesión muestra el botón «Salir», como botón secundario, y no «Registrarse»", () => {
     const html = bar("logout");
     const [logout] = buttons(html);
     expect(buttons(html)).toHaveLength(1);
     expect(logout).toContain(es.topBar.logout);
     expect(logout).toMatch(/type="button"/);
-    expect(classesOf(logout ?? "")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    expect(classesOf(logout ?? "")).toEqual(expect.arrayContaining(["btn", "btn-secondary"]));
     expect(logout).not.toMatch(/\saria-disabled=/);
     expect(html).not.toContain("/register");
     expect(es.topBar.logout).toBe("Salir");
@@ -83,7 +83,7 @@ describe("LogoutNotice", () => {
     expect(classesOf(region)).toEqual(expect.arrayContaining(["absolute", "inset-x-0", "top-0"]));
   });
 
-  it("con el fallo de salida muestra el texto y el botón «Reintentar» de 44 px dentro de la región", () => {
+  it("con el fallo de salida muestra el texto y el botón principal «Reintentar» dentro de la región", () => {
     const html = notice("logout_failed");
     expect(html).toMatch(/^<div\b[^>]*role="status"/);
     expect(html).toContain(es.session.logoutFailed);
@@ -91,6 +91,6 @@ describe("LogoutNotice", () => {
     expect(buttons(html)).toHaveLength(1);
     expect(retry).toContain(es.session.retry);
     expect(retry).toMatch(/type="button"/);
-    expect(classesOf(retry ?? "")).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    expect(classesOf(retry ?? "")).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
   });
 });
