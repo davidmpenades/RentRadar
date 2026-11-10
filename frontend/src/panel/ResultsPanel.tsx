@@ -47,7 +47,8 @@ export function ResultsPanel({ view, onRetry, onReset }: ResultsPanelProps) {
   return (
     <aside
       aria-label={es.panel.label}
-      className="absolute inset-x-0 bottom-0 z-10 flex h-[40dvh] min-h-60 flex-col bg-sky shadow-lg min-[900px]:inset-y-0 min-[900px]:right-auto min-[900px]:h-auto min-[900px]:w-[400px]"
+      data-results-panel=""
+      className="glass absolute inset-x-0 bottom-0 z-10 flex h-(--panel-height) flex-col rounded-t-surface min-[900px]:inset-y-0 min-[900px]:right-auto min-[900px]:h-auto min-[900px]:w-[400px] min-[900px]:rounded-t-none min-[900px]:rounded-r-surface"
     >
       <div className="shrink-0 px-4 py-3">
         <div ref={headerRef} tabIndex={-1}>

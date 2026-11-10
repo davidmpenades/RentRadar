@@ -1,0 +1,52 @@
+@layer components {
+  .glass {
+    --glass-bg: rgb(236 243 255 / 0.88);
+    --glass-filter: blur(22px);
+    --btn-secondary-bg: rgb(255 255 255 / 0.7);
+    --btn-secondary-bg-hover: rgb(255 255 255 / 0.9);
+    border: 1px solid rgb(255 255 255 / 0.95);
+    background-color: var(--glass-bg);
+    box-shadow: var(--shadow-glass);
+    -webkit-backdrop-filter: var(--glass-filter);
+    backdrop-filter: var(--glass-filter);
+  }
+
+  /* Los tres respaldos dejan la misma superficie, opaca y sin filtro */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    .glass {
+      --glass-bg: #edf3ff;
+      --glass-filter: none;
+      --btn-secondary-bg: #dfe8ff;
+      --btn-secondary-bg-hover: #d3e0ff;
+    }
+  }
+
+  @media (prefers-reduced-transparency: reduce) {
+    .glass {
+      --glass-bg: #edf3ff;
+      --glass-filter: none;
+      --btn-secondary-bg: #dfe8ff;
+      --btn-secondary-bg-hover: #d3e0ff;
+    }
+  }
+
+  @media (prefers-contrast: more) {
+    .glass {
+      --glass-bg: #edf3ff;
+      --glass-filter: none;
+      --btn-secondary-bg: #dfe8ff;
+      --btn-secondary-bg-hover: #d3e0ff;
+    }
+  }
+
+  /* Sin sombra ni translucidez, la superficie se reconoce por su contorno */
+  @media (forced-colors: active) {
+    .glass {
+      border: 2px solid CanvasText;
+      background-color: Canvas;
+      box-shadow: none;
+      -webkit-backdrop-filter: none;
+      backdrop-filter: none;
+    }
+  }
+}

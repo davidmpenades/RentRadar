@@ -35,6 +35,7 @@ const panel = (view: ViewState) => renderToStaticMarkup(createElement(ResultsPan
 const card = (item: PublicAsset) => renderToStaticMarkup(createElement("ul", null, createElement(AssetCard, { asset: item })));
 const imgTags = (html: string) => html.match(/<img\b[^>]*>/g) ?? [];
 const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
+const asideTag = (html: string) => html.match(/<aside\b[^>]*>/)?.[0] ?? "";
 
 describe("AssetCard: el texto del anuncio es texto", () => {
   it.each(HOSTILE)("el título %s sale escapado y dentro de <bdi>", (title) => {
@@ -64,6 +65,10 @@ describe("AssetCard: el texto del anuncio es texto", () => {
     const tags = imgTags(card(asset(1)));
     expect(tags).toHaveLength(1);
     expect(tags[0]).toContain('alt=""');
+  });
+
+  it("la miniatura tiene las esquinas de 16 px de la tarjeta", () => {
+    expect(classesOf(imgTags(card(asset(1)))[0] ?? "")).toContain("rounded-2xl");
   });
 
   it("enseña el nombre de la categoría, la zona y el precio", () => {
@@ -167,6 +172,41 @@ describe("ResultsPanel", () => {
     // La cabecera se cierra antes de la lista, que se desplaza por debajo y no forma parte de ella
     const list = html.indexOf("<ul");
     if (list !== -1) expect(html.slice(header, list).match(/<\/div>/g)?.length).toBeGreaterThanOrEqual(3);
+  });
+
+  it("es una sola superficie de cristal y se marca para anclar el aviso", () => {
+    const views: ViewState[] = [
+      { kind: "loading" },
+      { kind: "results", cards: [asset(1)], incomplete: false },
+      { kind: "empty", canReset: true },
+      { kind: "zoomIn", canReset: false },
+      { kind: "error", failure: "network" },
+    ];
+    for (const view of views) {
+      const aside = asideTag(panel(view));
+      expect(classesOf(aside)).toContain("glass");
+      expect(aside).toMatch(/\sdata-results-panel=""/);
+    }
+  });
+
+  it("la altura sale de la variable del panel y la superficie no lleva fondo ni sombra propios", () => {
+    const classes = classesOf(asideTag(panel({ kind: "loading" })));
+    expect(classes).toContain("h-(--panel-height)");
+    for (const old of ["h-[40dvh]", "min-h-60", "bg-sky", "shadow-lg"]) expect(classes).not.toContain(old);
+  });
+
+  it("redondea las esquinas superiores por debajo de 900 px y las derechas desde 900 px", () => {
+    const classes = classesOf(asideTag(panel({ kind: "loading" })));
+    expect(classes).toEqual(expect.arrayContaining(["rounded-t-surface", "min-[900px]:rounded-t-none", "min-[900px]:rounded-r-surface"]));
+  });
+
+  it("ni la lista ni las tarjetas llevan una superficie propia", () => {
+    const html = panel({ kind: "results", cards: [asset(1), asset(2)], incomplete: false });
+    const tags = [...(html.match(/<ul\b[^>]*>/g) ?? []), ...(html.match(/<li\b[^>]*>/g) ?? [])];
+    expect(tags).toHaveLength(3);
+    for (const tag of tags) {
+      for (const name of classesOf(tag)) expect(name).not.toMatch(/^(glass|bg-|backdrop-|shadow-)/);
+    }
   });
 
   it("los botones son botones principales", () => {

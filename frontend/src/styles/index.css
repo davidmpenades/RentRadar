@@ -2,6 +2,7 @@
 @import "@fontsource-variable/bricolage-grotesque";
 @import "./buttons.css";
 @import "./fields.css";
+@import "./surfaces.css";
 
 @theme {
   --color-accent: #1647b8;
@@ -26,6 +27,15 @@
     0 1px 2px rgb(30 45 80 / 0.08), 0 6px 16px -6px rgb(30 45 80 / 0.16), inset 0 1px 0 rgb(255 255 255 / 0.9);
   --shadow-btn-secondary-pressed: 0 0 1px rgb(30 45 80 / 0.1), 0 2px 6px -3px rgb(30 45 80 / 0.14);
   --shadow-field: inset 0 2px 0 rgb(24 44 96 / 0.08);
+  --shadow-glass:
+    0 10px 36px rgb(24 44 96 / 0.26), 0 0 0 1px rgb(24 44 96 / 0.08), inset 0 0 0 2px rgb(255 255 255 / 0.7),
+    inset 0 3px 0 #fff;
+  --radius-surface: 1.5rem;
+}
+
+/* Altura del panel: la comparten el panel y, en la T5, el aviso anclado a él */
+:root {
+  --panel-height: max(40dvh, 15rem);
 }
 
 body {

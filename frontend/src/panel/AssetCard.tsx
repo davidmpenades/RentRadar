@@ -17,7 +17,7 @@ export function AssetCard({ asset }: { asset: PublicAsset }) {
         height={72}
         loading="lazy"
         decoding="async"
-        className="size-18 shrink-0 rounded-xl object-cover"
+        className="size-18 shrink-0 rounded-2xl object-cover"
       />
       <div className="grid min-w-0 content-center gap-0.5">
         <p className="line-clamp-2 leading-tight font-semibold wrap-anywhere">
