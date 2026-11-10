@@ -12,7 +12,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
 
 ## Tareas
 
-- [ ] **T1. Botones y anillo de foco.** RF-1, RF-10, RF-15
+- [x] **T1. Botones y anillo de foco.** RF-1, RF-10, RF-15
   - Ficheros:
     - Crea `frontend/src/styles/buttons.css`: `btn`, `btn-primary`, `btn-secondary`, `btn-form`, con relieve, pulsado, deshabilitado, transiciones solo con movimiento normal, colores forzados y `touch-action: manipulation`. El secundario lee `--btn-secondary-bg` con el cielo `#DFE8FF` por defecto.
     - Modifica `frontend/src/styles/index.css`: tokens nuevos en `@theme`, anillo global azul de 2 px a 2 px, anillo de tinta de 3 px ampliado a `.maplibregl-map :focus-visible`, importa `buttons.css`.
@@ -24,7 +24,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
   - Commit: `feat(frontend): add button styles and blue focus ring`
   - Hecho cuando: los tests adaptados fallan primero y luego pasan; vitest, build y eslint en verde; la comprobación en el navegador a 1280 y 375 px sin errores de consola.
 
-- [ ] **T2. Campos, ojo e indicador.** RF-2, RF-3, RF-4, RF-5, RF-10, RF-15
+- [x] **T2. Campos, ojo e indicador.** RF-2, RF-3, RF-4, RF-5, RF-10, RF-15
   - Ficheros:
     - Crea `frontend/src/styles/fields.css`: `field`, `field-box`, `eye`, con borde, error, sombra interior, transición de estado, solo lectura, hover del ojo, `touch-action: manipulation` y la regla `::-ms-reveal` / `::-ms-clear`.
     - Crea `frontend/src/ui/Indicator.tsx` y `frontend/src/register/EyeIcons.tsx` (`EyeIcon` y `EyeOffIcon`).
@@ -36,7 +36,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
   - Commit: `feat(frontend): add field styles and password eye toggle`
   - Hecho cuando: los tests fallan primero y luego pasan; vitest, build y eslint en verde; recorrido del formulario de registro solo con teclado a 1280 y 375 px.
 
-- [ ] **T3. Superficies de cristal y panel.** RF-8, RF-9, RF-10
+- [x] **T3. Superficies de cristal y panel.** RF-8, RF-9, RF-10
   - Ficheros:
     - Crea `frontend/src/styles/surfaces.css`: `glass` con sus variables (`--glass-bg`, `--glass-blur`, `--glass-btn-bg`, `--glass-btn-bg-hover`), borde, sombra y radio; respaldos sólidos bajo `@supports not`, transparencia reducida y contraste alto; colores forzados aparte. `.glass` redefine `--btn-secondary-bg` para el secundario translúcido.
     - Modifica `index.css`: `--panel-height: max(40dvh, 15rem)` en `:root` y la importación.
