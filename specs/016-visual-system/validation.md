@@ -39,7 +39,7 @@ Fecha: 2026-11-10 · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`. Cada tar
 - **Alfa emitida por el build:** el minificador emite `#ecf3ffe0`, es decir 0,8784 (cuantización de 8 bits), por encima del 0,8. Con ese alfa, texto principal 12,12:1 y precio 5,44:1.
 - **Contraste recalculado** con los colores finales, tinte al 88 % sobre el negro puro, que sigue siendo el peor fondo: texto principal 12,16, secundario 6,02, precio 5,46, icono de radio 6,02, anillo 5,46, indicador de error 4,47 (sólida 5,87); texto en error 4,47, que no llega a 4,5 y no se usa sobre cristal; texto del secundario 15,96 (blanco al 70 %) y 14,51 (cielo, hover 13,45); texto blanco del principal 5,06 / 5,71 / 7,99. Coincide con la tabla del plan.
 - **Medidas del panel:** altura de 324,797 px a 375 × 812 (el valor esperado, `max(0,4 × 812, 240)`), 240 px a 667 × 375, panel inferior de 280 px a 899 px y columna de 400 px a 900 px, con las esquinas superiores o las derechas de 24 px según el caso. La barra superior y la tarjeta del registro son opacas.
-- **Arrastre sintético del mapa:** el desplazamiento con eventos de ratón sintéticos funciona a 1280 px sin táctil. Con la emulación táctil a 375 px no se ha probado, y es relevante para el gesto de la medición de rendimiento.
+- **Arrastre sintético del mapa:** el desplazamiento con eventos de ratón sintéticos funciona a 1280 px sin táctil. Con la emulación táctil a 375 px funciona si los eventos llevan `buttons: 1` y `bubbles: true` (ver la medición de prueba).
 - **Test vigilado con mutación:** `surfaces.test.ts` se probó con el alfa de `--glass-bg` a 0,79, sobre el propio fichero de la tarea (aún sin commitear) con copia de seguridad fuera del repositorio. Falla un solo test, `el tinte del cristal tiene al menos el 80 % de opacidad`, con `expected 0.79 to be greater than or equal to 0.8`; los otros 5 pasan. Restaurado a 0,88: 6 de 6 y sha256 idéntico antes y después (`adf89ed0889309ff524ccfd595a3a8ba7d4632f7029524e13b5dece1bf0d0fb9`, también con `cmp` contra la copia). Antes de eso el test falló primero por `ENOENT` (el fichero no existía) y después por la cadena vacía de Vitest, no por la razón de fondo.
 - **`vite.config.ts`:** una línea, `test.css: { include: [/\.css\?raw$/] }`, porque Vitest sustituye por vacío los CSS importados, incluso con `?raw`. Leer el fichero con `node:fs` habría exigido `@types/node`, que no está instalado. No cambia el build ni las dependencias.
 - **Decisiones respecto al plan:**
@@ -50,8 +50,26 @@ Fecha: 2026-11-10 · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`. Cada tar
   - `surfaces.test.ts` se añade a los tests previstos.
 - **Capturas** del panel (1280 y 375 px, sobre el peor fondo y en colores forzados) en `prototypes/016-visual-system/capturas/`, que no se versiona.
 
+### Medición de rendimiento de prueba (no oficial)
+Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× · orden A, B, B, A (T1-A, T2-B, T3-B, T4-A), una pestaña por traza.
+- **Conclusión:** procedimiento validado: dos compilaciones servidas, gesto reproducible, recuento por fotograma y perfil de CPU. La GPU solo se ve de forma indirecta. La métrica de la spec está saturada en este portátil, con unos 60 fps y casi 0 % de perdidos en las dos versiones, y no distingue A de B. Sin veredicto sobre los 22 px.
+- **Fotogramas** (fps; perdidos): T1-A 59,82; 0 %. T2-B 59,87; 0,33 %. T3-B 59,54; 0,33 %. T4-A 59,67; 0 %.
+  - Los 0,33 % de B son un fotograma sin presentar completo en los primeros 90 ms del gesto: a los 25 ms, solo con `DROPPED`, en T2-B; a los 85 ms, solo con `PRESENTED_PARTIAL`, en T3-B. A no tiene ninguno.
+  - Cada traza de B tiene además un intervalo de 33,3 ms entre `requestAnimationFrame` medido por el script; A no tiene ninguno. Son dos datos separados: el script no guardó el instante del intervalo y, con los `FireAnimationFrame` de la traza, el hueco coincide con el fotograma sin presentar en T2-B y no en T3-B (unos 22 ms de diferencia).
+  - Fotogramas en pareja (`PRESENTED_ALL` más `PRESENTED_PARTIAL`): 99,3 % a 99,7 % en las cuatro. En el calentamiento B lo estuvo solo la mitad de la ventana, así que no se usa como medida del cristal.
+- **Hilo principal:** A 2688 y 2843 ms; B 3224 y 2998 ms, +12,5 % de media.
+  - Las dos trazas de B quedan por encima de las dos de A: por azar saldría 1 de cada 6 veces. La dirección (B por encima) la fijó el calentamiento (+14 %) antes de grabar A, B, B, A.
+  - Perfil de CPU: +360 ms, de ellos +243 en MapLibre y sus librerías y +44 en llamadas nativas a WebGL, sin muestras de `flush`, `finish` ni `readPixels` (`drawElements` pasa de 25 a 29 ms).
+  - Ralentización casi uniforme (+10 % a +19 %) en MapLibre, WebGL, recolección de basura e incluso `dispatchEvent` del script del gesto. El código de la app no aparece en el perfil.
+- **GPU:**
+  - `GPUTask` no distingue las versiones (A 335 y 373 ms; B 357 y 342 ms), y todas llevan el `renderer_pid` de la pestaña.
+  - La traza del MCP no tiene eventos de dibujo de viz ni de Skia en el proceso de GPU: el coste del desenfoque solo se ve de forma indirecta.
+  - `VizCompositorThread` +42 % (A 216 y 234 ms; B 323 y 314 ms): pista encontrada a posteriori, mirando varios hilos con las trazas ya grabadas. Sin probabilidad.
+  - T4-A tiene `CrGpuMain` anómalo (3784 ms, 232 tareas de unos 13 ms): causa desconocida y sin efecto en los fotogramas.
+- **Límites:** GPU integrada del portátil (AMD Lucienne), no la de un móvil; el 4× solo frena la CPU; dos trazas por versión, con una diferencia entre las dos de la misma versión del 5 % al 7 % en el hilo principal y de hasta el 11 % en la GPU; escena solo con el panel, porque el aviso de cristal aún no existe; solo Chromium.
+- **Herramientas y trazas** (fuera del repositorio): `~/rentradar-perf/tools` (scripts del gesto y del análisis, con `LEEME.txt`) y `~/rentradar-perf/prueba-2026-11-10` (seis trazas: calentamiento y las cuatro de arriba).
+
 ### Pendiente para la validación
 - Medición de rendimiento A/B con la CPU a 4×, calentamiento y seis pasadas alternadas.
-- Un gesto de arrastre con emulación táctil a 375 px (ver la nota del arrastre sintético).
 - Comparación de los colores de «positron» con una descarga nueva del estilo.
 - Estados de la T4 y la T5 con una cuenta nueva.
