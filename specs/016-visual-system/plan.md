@@ -219,7 +219,7 @@ Ninguno. No hay operaciones nuevas ni cambiadas; no hay recursos por identificad
 - *Límite de la traza.* Las categorías de traza que fija el MCP no recogen el dibujo del compositor de pantalla: el proceso de GPU solo trae `RunTask` y `GPUTask`, sin eventos de viz ni de Skia. El coste del desenfoque solo se ve de forma indirecta, en el tiempo de `VizCompositorThread` y de `CrGpuMain`.
 - *Tráfico.* En cada pasada, `list_network_requests` con las teselas y el estilo descargados: después de la petición de la lista del gesto previo no debe haber teselas, y si una versión descarga teselas que la otra tuvo en caché, se repite la pasada.
 - *Orden.* Calentamiento de A y de B (descartados) y A, B, A, B, A, B. Mediana de las tres pasadas de cada una; veredicto según el umbral de la spec.
-- *Scripts.* Los scripts están en `~/rentradar-perf/tools` hasta el cierre de la 016; al cierre se decide si se versionan en `specs/016-visual-system/medicion/`.
+- *Scripts.* Los scripts están en `~/rentradar-perf/tools` hasta el cierre de la 016; al cierre se decide si se versionan en `specs/016-visual-system/measurement/`.
 - *Ruido observado en la prueba.* Con dos trazas por versión, la diferencia entre las dos de la misma versión fue del 5 % al 7 % en el hilo principal y de hasta el 11 % en la GPU: del orden de la diferencia entre versiones de la prueba (ver `validation.md`).
 - *Propuestas para un `/sdd-change`.* Se hará una sola vez, después de la T5 y antes de la medición oficial, con estos puntos:
   - Orden cruzado A, B, B, A, A, B en lugar de A, B, A, B, A, B.
