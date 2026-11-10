@@ -1,0 +1,75 @@
+@layer components {
+  .field {
+    width: 100%;
+    min-height: 3rem;
+    padding-inline: 0.75rem;
+    border: 2px solid var(--color-muted);
+    border-radius: 0.75rem;
+    background-color: #fff;
+    box-shadow: var(--shadow-field);
+    font-size: 1rem;
+  }
+
+  .field[aria-invalid="true"] {
+    border-color: var(--color-danger);
+  }
+
+  .field:read-only {
+    opacity: 0.7;
+  }
+
+  /* Edge pinta su propio botón de ver contraseña: solo se ve el ojo de RentRadar */
+  .field::-ms-reveal {
+    display: none;
+  }
+
+  .field::-ms-clear {
+    display: none;
+  }
+
+  .field-box {
+    position: relative;
+  }
+
+  /* Deja sitio al ojo, que va dentro del campo */
+  .field-box > .field {
+    padding-inline-end: 3.25rem;
+  }
+
+  /* El campo mide 48 px y su borde 2 px: el interior de 44 px aloja el ojo sin taparlo */
+  .eye {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    display: grid;
+    place-items: center;
+    width: 2.75rem;
+    height: calc(100% - 4px);
+    min-height: 2.75rem;
+    padding: 0;
+    border: 0;
+    border-radius: 0.625rem;
+    background-color: transparent;
+    color: var(--color-ink);
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  @media (hover: hover) {
+    .eye:hover {
+      background-color: rgb(20 24 31 / 0.06);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .field {
+      transition:
+        border-color 0.14s,
+        opacity 0.14s;
+    }
+
+    .eye {
+      transition: background-color 0.14s;
+    }
+  }
+}
