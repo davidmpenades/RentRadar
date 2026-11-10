@@ -226,6 +226,8 @@ Ninguno. No hay operaciones nuevas ni cambiadas; no hay recursos por identificad
   - Dispositivo de la medición oficial: pendiente de decidir.
   - Escena con panel y aviso: entra en la medición oficial si el aviso puede seguir abierto mientras se arrastra el mapa.
   - Qué hacer con la métrica saturada, que en el portátil de la prueba no distingue A de B.
+  - Definición de «presentados a medias» (spec, línea 158), con dos lecturas. Primera: cada informe `PRESENTED_PARTIAL` cuenta como «a medias». Da un 50 % de los informes (A 50,0 % y 50,0 %; B 50,1 % y 50,1 %) o un 99 % de los fotogramas (A 99,7 % y 99,7 %; B 99,3 % y 99,3 %), porque Chrome emite casi siempre un informe parcial y otro completo por fotograma. Segunda: el fotograma cuenta como presentado si acaba con `PRESENTED_ALL`. Da 0 % y 0 % en A y 0,33 % y 0,33 % en B. El plan usa la segunda; la spec debería decirlo.
+  - «Misma sesión» (spec, línea 156): aclarar que se refiere a la misma tanda de medición y que cada traza usa una pestaña nueva del mismo Chrome.
 - *Palancas si no aprueba* (se acuerdan con el usuario, sin bajar del 80 % de opacidad): desenfoque de 22 a 14 px; quitar la sombra interior del cristal; quitar el desenfoque del aviso y dejarlo solo en el panel.
 
 **Respaldo.**
