@@ -1,7 +1,7 @@
 # Validación — 016-visual-system
 Rama: `feature/016-visual-system` · Entorno: frontend en el host (Vite 8.3.5, Vitest 5.0.5, Tailwind 4.3.3, maplibre-gl 6.14.0), Chrome DevTools MCP y stack de Docker Compose para la API pública
 
-Validación en curso: T1 a T8 hechas. La validación completa (cada RF, contraste, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`; la comprobación de rendimiento en un Android real queda pendiente hasta antes del despliegue y no bloquea el cierre (ver «Cambio de requisitos: comprobación de rendimiento»). Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
+T1 a T8 hechas y validación del cierre escrita (sección «Validación del cierre», al final: resultado por RF, recorrido con teclado, revisores y veredicto). La comprobación de rendimiento en un Android real queda pendiente hasta antes del despliegue y no bloquea el cierre (ver «Cambio de requisitos: comprobación de rendimiento»). Antes de esa sección se conservan las notas de implementación de T1 a T8.
 
 ## Notas de implementación (T1–T8)
 Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T8) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono), T7 `e2dc7e7`, T8 `b2de3b0`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests; tras la T7, 31 ficheros y 1088 tests; tras la T8, 31 ficheros y 1092 tests. `package.json` y `package-lock.json` no cambian.
@@ -12,7 +12,7 @@ Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T8) · Commits: T1 `e252367`, T2 
 | Línea base A del rendimiento (sin uso desde el cambio de la medición) | `~/rentradar-perf/a`, compilada del commit `d458e30` (`docs(spec-016): tasks`), antes de la T1. `index.html` y `assets/` comprobados; idéntica a `frontend/dist` en el momento de la copia. Solo sirvió para la prueba del 2026-11-10. |
 | Vite de desarrollo | Puerto 5173, en la terminal del desarrollador. No se lanza, para ni relanza desde la sesión. |
 | Stack de Docker Compose | `backend` y `db` arriba y sanos. La T3 solo lee la API pública. Al empezar la T4 estaba parado (el proxy de Vite devolvía 502) y se levantó antes de repetir el registro. |
-| Cuentas de prueba | `t16-a@example.com`, creada en la T1 en la BD de desarrollo desde el formulario de registro: su sesión se cerró por un clic accidental (`POST /api/v1/auth/logout/` 204 a las 08:11:37 UTC). `t16-b@example.com`, creada en la T4 con autorización expresa, también desde el formulario: su sesión se cerró en la T5 (ver el recorrido final). `t16-c@example.com`, creada en la T5 con autorización expresa, desde el formulario: su sesión se cerró con el reintento de la salida. Las contraseñas se generaron en la página y no se guardaron. Ninguna sesión queda abierta. |
+| Cuentas de prueba | `t16-a@example.com`, creada en la T1 en la BD de desarrollo desde el formulario de registro: su sesión se cerró por un clic accidental (`POST /api/v1/auth/logout/` 204 a las 08:11:37 UTC). `t16-b@example.com`, creada en la T4 con autorización expresa, también desde el formulario: su sesión se cerró en la T5 (ver el recorrido final). `t16-c@example.com`, creada en la T5 con autorización expresa, desde el formulario: su sesión se cerró con el reintento de la salida. Las contraseñas se generaron en la página y no se guardaron. `t16-d@example.com`, creada en el cierre con autorización expresa, desde el formulario: su sesión se cerró con el reintento de la salida. Ninguna sesión queda abierta. |
 | Navegador | Una pestaña abierta, sin sesión. Las pestañas de prueba aisladas se cierran al terminar. El perfil de Chrome DevTools MCP solo admite un navegador: con otro servidor `chrome-devtools-mcp` activo, `new_page` falla con «already running». |
 
 ### T1. Botones y anillo de foco
@@ -266,9 +266,97 @@ Fecha: 2026-11-11 · `/sdd-change` sobre la spec, el plan, las tareas y este fic
 
 ### Pendiente para la validación
 - Comprobación de rendimiento en un Android real conectado por USB (spec, «Rendimiento»; plan, «Comprobación de rendimiento»): aplazada hasta antes del despliegue (spec 011); no bloquea el cierre de la 016.
-- Comparación de los colores de «positron» con una descarga nueva del estilo.
 - Texto al 200 % con el ajuste real del navegador y transparencia reducida del sistema: no se pueden emular con las herramientas (ver la T5).
 - Dos `csrf_failed` seguidos en la salida: cubiertos solo por vitest; no se ha reproducido en el navegador.
 - Gris real de las pestañas de Chrome: `#202124` y `#35363A` son valores supuestos (ver la T7); si la validación puede medirlos, manda la medición.
-- Ninguna sesión abierta: `/sdd-validate` pedirá una cuenta nueva, con autorización expresa, si repite alguna comprobación con «Salir».
+- Hechas en el cierre y ya no pendientes: la comparación de los colores de «positron» con una descarga nueva del estilo y la cuenta de pruebas para «Salir» y el aviso (`t16-d@example.com`); ver «Validación del cierre». Ninguna sesión queda abierta.
 - La T5 comprobó que el aviso sigue abierto mientras se arrastra el mapa, así que la escena de la comprobación de rendimiento puede incluir el aviso, que es opcional: solo si ya hay una sesión abierta en el móvil.
+
+## Validación del cierre
+Fecha: 2026-11-11 · Rama `feature/016-visual-system` (último commit al empezar, `6b318f0`) · Base del diff: `dev`, punto de partida real de la rama (`git merge-base dev HEAD` = `20e3624`; 30 commits y 36 ficheros de frontend). Lo ya medido en las notas T1–T8 se cita y no se repite; aquí solo lo nuevo o lo que cambió después.
+
+### Comprobaciones del cierre
+- **Dependencias:** `git diff` de `frontend/package.json` y `frontend/package-lock.json` desde `20e3624` (el punto de partida real): vacío. Contra `git merge-base main HEAD` (`3155783`) salen 4221 líneas añadidas, pero `main` está muy por detrás de `dev` (le faltan 241 commits, entre ellos el `build(frontend): scaffold app with api contract` que trae las dependencias), así que esa comparación no mide esta spec.
+- **Limón:** `bg-lemon` y `--color-lemon` no aparecen en `src/` fuera de la definición del token (`index.css:18`). Solo aparece la palabra en dos aserciones de `RegistrationForm.test.ts` que exigen que el marcado no la lleve.
+- **Colores de «positron»:** el `curl` a un fichero no pudo hacerse (el shell no resuelve `tiles.openfreemap.org` desde su sandbox, que no se saltó). Se descargó el estilo con `fetch` desde el navegador (HTTP 200, 55 capas) y se compararon 15 valores con la tabla del plan: 14 iguales y uno distinto solo por redondeo, `boundary_2` (`hsl(0,0%,70%)`, 178,5 por canal: el plan lo redondeó a `#B2B2B2` y el navegador a `#B3B3B3`). Es un límite administrativo, no un fondo de etiqueta; el peor fondo sigue siendo el negro puro. No hay que recalcular ningún par.
+- **Contrastes recalculados hoy** (script `python3 -I`): anillo `#1647B8` contra la página `#E8EEFF` 6,89, contra el blanco 7,99 y contra la superficie sólida `#EDF3FF` 7,18; borde del campo `#424B5A` contra blanco 8,80; icono del ojo `#14181F` contra blanco 17,79. Coinciden con la tabla del plan; sobre el cristal, 5,46 (T3).
+- **Cuenta de pruebas:** `t16-d@example.com`, creada desde `/register` con autorización expresa: contraseña generada en la página y no devuelta, sin pulsar el ojo y sin capturas ni snapshots con la contraseña en el campo. Su sesión se cerró con el reintento de la salida (`GET /api/v1/auth/session/` después: `user: null`). Ninguna sesión abierta.
+
+### Recorrido solo con teclado
+- **Sin sesión, a 1280 y 375 px** (`/register`): marca, «Registrarse», email, contraseña, ojo, «Crear cuenta», en ese orden (el ojo justo después de la contraseña). `/no-existe`: marca, «Registrarse», «Ir al mapa». Todos con `outline` de 2 px sólido `rgb(22, 71, 184)` a 2 px y al menos 44 px de alto (el ojo 44 × 44, el enlace de la marca 44 × 44 a 375 px).
+- **Con sesión, a 1280 px** (`/map`): marca, «Salir», el lienzo del mapa, los tres enlaces de la atribución, «Acercar», «Alejar» y la lista del panel; los controles del mapa conservan su anillo de tinta de 3 px de la 006 y la lista del panel el azul de 2 px. Con la red cortada, Enter sobre «Salir» muestra el aviso (560 × 74 px, de x 560 a 1120, a 8 px del fondo, sin cruzar la barra ni el zoom), el foco sigue en «Salir», Tab va a «Reintentar» (135,5 × 44) y a «Cerrar aviso» (147,9 × 44), y Enter en «Cerrar aviso» cierra el aviso, pone `data-open` ausente y `inert`, y devuelve el foco a «Salir»; la región de estado anuncia el mensaje una sola vez.
+- **Panel con la red cortada, a 1280 px:** al mover el mapa con las flechas, el panel muestra «No hay conexión…» con «Reintentar» (44 px de alto); con la red de vuelta, Enter lo recarga (24 tarjetas, anuncio «24 bienes en esta zona»). Al alejar el mapa con la tecla menos, el panel muestra «Acerca el mapa para ver los bienes» con «Volver a la zona inicial» (44 px), con el mismo anillo, y Enter vuelve a la zona inicial.
+- **Con sesión, a 375 px:** marca (44 × 44), «Salir» (89 × 44), aviso de 359 × 130 px a 8 px encima del panel, sin cruzar la barra, el zoom ni la atribución, y sin desbordamiento (375/375). Con la red de vuelta, Enter en «Reintentar» retira el aviso, se anuncia «Has salido», la barra pasa a «Registrarse», el foco va a «Registrarse» y la sesión queda cerrada.
+- **Error del mapa base, a 375 px:** con las peticiones a `tiles.openfreemap.org` fallando (un `initScript` que rechaza el `fetch`), `/map` muestra «No se ha podido cargar el mapa.» con «Reintentar» (136 × 44, sin panel, sin desbordamiento) y Tab llega a «Reintentar» tras la marca y «Registrarse» con el anillo de 2 px azul.
+- **Consola:** sin errores propios en ninguna página, a 375 y 1280 px. Los mensajes que aparecen son los dos avisos de estilo de MapLibre de siempre y el `net::ERR_INTERNET_DISCONNECTED` del corte de red que se provoca a propósito.
+- **Desbordamiento horizontal:** ninguno (`scrollWidth` igual a `clientWidth` en todas las páginas medidas, a 375 y 1280 px).
+
+### Verificaciones añadidas por el revisor de calidad
+- **Hover del ojo** (medido a 1280 px con el puntero encima): fondo de tinta al 6 % (`rgba(20, 24, 31, 0.06)`), radio de 10 px, cursor `pointer`, 44 × 44 px.
+- **Colores forzados** (emulación real, `forcedColors: "active"`): los dos campos con borde de 2 px sólido `rgb(255, 255, 255)` (color del sistema), texto y fondo del sistema y sin sombra; el ojo sin borde y con el icono (`stroke`) del color del sistema; «Crear cuenta» con borde de 2 px y sin sombra; la tarjeta del registro con borde de 1 px y sin sombra.
+
+### Resultado por RF
+Los resultados son: OK, FALLO, PENDIENTE o NO VERIFICABLE.
+
+| RF | Resultado | Verificación |
+|---|---|---|
+| RF-1 | OK, salvo el estado pulsado: NO VERIFICABLE | vitest: clase de tipo en `TopBar.test.ts`, `ResultsPanel.test.ts` y `RegistrationForm.test.ts`. Navegador (T1): reposo y deshabilitado medidos. El pulsado se leyó de la hoja (la herramienta no mantiene `:active`), sin medirlo ni tener un test del valor |
+| RF-2 | OK | vitest: etiqueta asociada, `aria-invalid` y `aria-describedby` (`RegistrationForm.test.ts`). Navegador (T2): etiqueta fija y borde de error. El borde de error y la etiqueta fija solo se comprueban en el navegador |
+| RF-3 | OK | vitest: ojo con nombre fijo, `aria-pressed`, icono y orden en el marcado. Navegador (T2) y hoy: orden de tabulación y hover |
+| RF-4 | OK | vitest (región de estado) y navegador (T2) |
+| RF-5 | OK | vitest (región de estado) y navegador (T2) |
+| RF-6 | OK | vitest: `freeZoneTop.test.ts` y `LogoutNotice.test.ts`. Navegador (T5) y hoy: 1280 y 375 px, sin cruces |
+| RF-7 | OK | vitest: `dismissResult` y `LogoutNotice.test.ts`. Navegador (T4, T5) y hoy: cerrar devuelve el foco a «Salir»; el reintento con éxito retira el aviso, anuncia «Has salido» y lleva el foco a «Registrarse». «Cerrar aviso» no tiene test de vitest del cableado en `AppShell`: solo navegador |
+| RF-8 | OK | vitest: panel con `glass` y tarjetas sin superficie. Navegador (T3, T5) |
+| RF-9 | OK, salvo la transparencia reducida y la falta de desenfoque reales: NO VERIFICABLE | vitest: `surfaces.test.ts` (las tres reglas de respaldo, como texto). Navegador (T3): el cuerpo de las reglas ejercitado con otra condición; contraste alto y colores forzados emulados de verdad |
+| RF-10 | OK | Navegador (T1, T2, T3, T5): `transition-duration` mayor que 0 con movimiento normal y 0 con reducido. Sin test de vitest |
+| RF-11 | OK | vitest: `TopBar.test.ts`. Navegador (T7), medido otra vez con `px-1` y hoy con teclado (44 × 44 a 375 px) |
+| RF-12 | OK, con el gris de las pestañas como valor supuesto | vitest: `indexHtml.test.ts`. Navegador (T7): `link rel="icon"` y lienzo a 16 y 32 px. Los grises `#202124` y `#35363A` y la pestaña real: NO VERIFICABLE |
+| RF-13 | OK | vitest: `icon.test.ts`, con las cuatro mutaciones (T6) |
+| RF-14 | OK | vitest: `icon.test.ts` con `svgWhitelist.ts` y los cuatro casos negativos (T6) |
+| RF-15 | OK | Navegador (T1, T2, T4, T5, T7) y hoy: anillo de 2 px `#1647B8` a 2 px en la marca, «Registrarse», email, contraseña, ojo, «Crear cuenta», «Salir», «Reintentar», «Cerrar aviso», «Volver a la zona inicial» e «Ir al mapa», a 375 y 1280 px; 6,89 contra la página, 7,99 contra el blanco y 5,46 contra el cristal. Sin test de vitest |
+| Presentación | OK | vitest (T8): distancia, importe y unidad, marca e `index.html`. Navegador (T8): cabecera, `text-wrap`, `touch-action` y 24 tarjetas a 375 px |
+| Rendimiento | PENDIENTE | Aplazado por el `/sdd-change` de `6b318f0` hasta antes del despliegue (spec 011); no bloquea el cierre |
+
+### Lo que no se pudo verificar y por qué
+- **Estado pulsado de los botones (RF-1):** el MCP no mantiene `:active`; se leyó de la hoja (T1).
+- **Texto al 200 % real y transparencia reducida del sistema (RF-9):** `emulate` no los admite; solo se aproximó el 200 % con `font-size: 200%` en `html` y la transparencia reducida por sus variables (T3, T5, T8).
+- **Gris de las pestañas y la pestaña real (RF-12):** las capturas de página no incluyen la barra de pestañas y no se capturó el sistema; `#202124` y `#35363A` quedan como valores supuestos, con Chrome 156 (T7).
+- **Reutilización de la conexión por la preconexión (T8):** el MCP solo ve la etiqueta.
+- **Dos `csrf_failed` seguidos en la salida:** solo vitest (`session.test.ts`); no se reprodujo en el navegador.
+- **Un secundario sobre la tarjeta blanca del registro:** hoy no hay ninguno en esa tarjeta; solo se midió «Salir» sobre la barra blanca (T1).
+- **`curl` del estilo de «positron»:** el shell no tiene red; se hizo con `fetch` desde el navegador.
+
+### Revisores (calidad, seguridad y documentación)
+Los tres trabajaron sobre `git diff dev...HEAD`, solo con lectura; vitest (31 ficheros, 1092 tests) y eslint de los ficheros tocados en verde en los dos que los ejecutaron.
+- **Documentación (Context7 y las versiones instaladas): sin bloqueantes.** Tailwind 4.3.3, React 19.3.1, Vite 8.3.5, Vitest 5.0.5 y maplibre-gl 6.14.0 se usan como indica su documentación; `?raw` sobre `index.html`, `css.include`, `inert`, `translate`, `@starting-style` con `allow-discrete`, `@supports not`, `prefers-contrast`, `forced-colors`, container queries y `<link rel="preconnect" crossorigin>` son correctos. Opcionales:
+  - `notice.css:12`, `justify-content: safe flex-end` sin valor de respaldo: no se pudo comprobar dónde se admite `safe` en flex. Propuesta: poner antes `justify-content: flex-end`. `NotFoundPage.tsx` usa el mismo patrón (`justify-center-safe`).
+  - `index.html:7`, el icono de pestaña es solo SVG: Safari lo admite desde la 26.0 (Chrome 80, Firefox 41); en versiones anteriores la pestaña queda sin icono. Propuesta: aceptarlo por escrito (la spec ya lo recoge como riesgo aceptado, sin respaldo de mapa de bits) o añadir uno, que exigiría tocar la spec.
+  - `surfaces.css:24`, `prefers-reduced-transparency`: casi inerte hoy (Firefox la tiene tras un indicador; Chrome y Safari, sin comprobar). La sintaxis es correcta y RF-9 lo cubren `@supports not` y `prefers-contrast`. Propuesta: aceptado.
+  - `EyeIcons.tsx:9` e `Indicator.tsx:13`, `focusable="false"` en SVG con `aria-hidden`: probablemente heredado de IE y sin efecto; no se pudo confirmar. Propuesta: quitarlo o dejarlo.
+  - `icon.test.ts:2`, importa `public/icon.svg?raw`: la guía de Vite pide referenciar `public/` por ruta absoluta, pero con `?raw` funciona (lo carga el plugin de assets). Solo afecta a un test.
+  - Las clases internas de MapLibre (`.maplibregl-ctrl-top-right`, `.maplibregl-ctrl-group button`) no son API pública; existen en 6.14.0 y el hook degrada bien sin ellas. El selector `.maplibregl-ctrl-attrib-button:focus-visible` de `index.css:61` no se usa (la atribución no es compacta) y es anterior a esta rama.
+  - Aceptados como riesgo, porque degradan sin romper: `:has()` en `notice.css:18`, `text-wrap: balance` y `touch-action: manipulation`.
+  - No pudo comprobar: dónde se admite `safe` en `justify-content`, `prefers-reduced-transparency` en Chrome y Safari, si `focusable` está obsoleto y `theme-color` en Firefox de escritorio.
+- **Seguridad: aprobado, sin bloqueantes.** El diff no añade ni cambia llamadas a la API ni rutas; el formulario de registro conserva los tipos, `autocomplete` y el ojo accesible, y la contraseña no se registra ni se persiste; no hay `innerHTML`, `eval` ni secretos; la lista blanca de SVG cubre el icono; `package.json` y el lock no cambian; el comportamiento de la 006 y la 009 (salida, reintento ante `csrf_failed`, foco) se conserva. Está de acuerdo en que la spec no toca privacidad ni seguridad (sin pruebas de mecanismo). Opcionales:
+  - El `preconnect` a `tiles.openfreemap.org` va en todas las rutas, también en `/register` y en la 404, así que un visitante que nunca abre el mapa contacta con un tercero (IP, TLS y SNI). La URL es la misma que ya usa `MapView.tsx`. Propuesta: aceptarlo y anotarlo en la spec de despliegue, junto con la política de privacidad, o inyectarlo solo desde la página del mapa.
+  - `dismissResult` pide siempre el foco en «Salir», aunque hoy es inalcanzable fuera de la sesión abierta. Propuesta: no hacer nada.
+- **Calidad: cambios necesarios.** Bloqueantes según el revisor, con su estado tras esta validación:
+  - **Sin registro por RF en este fichero:** resuelto por la sección «Validación del cierre».
+  - **RF-1, estado pulsado sin medir ni test del valor:** sigue abierto. Opciones: forzar `:active` y medir, un test sobre el CSS (como `surfaces.test.ts`) que compare los tokens pulsado y reposo, o aceptar el límite.
+  - **Verificaciones exigidas que no constaban** (hover del ojo, colores forzados en el campo y el ojo, anillo contra la página y el blanco): medidas en el cierre (ver arriba). Queda el secundario sobre la tarjeta del registro, que hoy no existe en la interfaz.
+  - **`classesOf` duplicado en cuatro ficheros de test** (`LogoutNotice.test.ts:39`, `TopBar.test.ts:17`, `ResultsPanel.test.ts:37`, `RegistrationForm.test.ts:29`; esta rama añadió dos de las copias), contra la regla de extraer a la tercera repetición: sigue abierto. Propuesta: moverlo a `src/testing/`, junto a `svgWhitelist.ts`, en un commit aparte.
+- **Opcionales de calidad:** RF-2 con cobertura débil en vitest (el borde de error solo se comprueba en el navegador) y el cableado de «Cerrar aviso» sin test de vitest (solo navegador); `surfaces.test.ts` y `declarationsOf` dependen del formato del CSS; tres bloques idénticos de respaldo en `surfaces.css` (aceptado: el CSS plano no permite unirlos); un comentario largo en `LogoutNotice.tsx:11` y un título de test que cita «la 009» (`LogoutNotice.test.ts:68`); la silueta contra el gris oscuro solo se mide en el navegador y con valores supuestos.
+- **Cambios fuera del alcance de `tasks.md`** (los dos revisores los señalan): `vite.config.ts` (`test.css`, justificado en la T3), la miniatura de `rounded-xl` a `rounded-2xl` en `AssetCard.tsx` (justificada en la T3) y el commit `f7e95f9` (`docs(constitution): require english names for versioned files and folders`), que cambia el principio 8 de `docs/constitution.md` dentro de esta rama. Los dos primeros ya constan en las notas de la T3; el de la constitución no consta en ninguna spec ni nota, y una constitución modificada pide la aprobación expresa del usuario: falta confirmarla y, si procede, anotarla aquí.
+- **`MEMORY.md` desactualizado** (todavía habla de compilar la línea base A del rendimiento antes de la T1): se actualiza al cierre, como indica `tasks.md`.
+
+### Decisiones del cierre
+- **`classesOf` compartido:** movido a `frontend/src/testing/classesOf.ts` en el commit `a35f95f` (`refactor(frontend): share classesOf test helper`), que solo mueve código. Prueba: `vitest --reporter=verbose` de los cuatro ficheros afectados (`LogoutNotice.test.ts`, `TopBar.test.ts`, `ResultsPanel.test.ts` y `RegistrationForm.test.ts`) antes y después da los mismos 104 `it`, con el mismo nombre completo y los 104 en `passed`. El diff solo elimina las cuatro definiciones y añade una, con el `import` en cada fichero; `git diff --color-moved` no marca la línea porque la nueva lleva `export` y en un fichero el parámetro se llamaba `element`, así que se comprobó con un script que las cuatro definiciones eliminadas y la añadida son iguales una vez normalizados esos dos detalles. Después: vitest completo (31 ficheros y 1092 tests), eslint de los ficheros tocados y `npm run build` en verde.
+- **RF-1, estado pulsado:** se acepta el límite. Queda como NO VERIFICABLE, leído de la hoja (T1); no se añade un test del CSS.
+- **`docs/constitution.md` (`f7e95f9`):** el cambio del principio 8 (nombres de carpetas y ficheros versionados en inglés) lo aprobó el usuario y va en esta rama; se mencionará en la descripción del PR.
+- **`preconnect` en todas las rutas:** aceptado. Se anota para la spec de despliegue (011), junto con la política de privacidad.
+- **`justify-content: safe flex-end` sin respaldo (`notice.css`):** el respaldo (`justify-content: flex-end` justo antes) se probó y se descartó. El minificador lo elimina porque los navegadores de destino de la compilación admiten `safe`: en `dist` solo queda `justify-content:safe flex-end`. Se acepta, porque Tailwind 4 ya exige navegadores modernos y, sin `safe`, el aviso solo se colocaría arriba de la zona libre, sin tapar nada. En el navegador a 1280 px el valor calculado es `safe flex-end` y la tarjeta queda a 8 px del fondo. El cambio no se commiteó y `notice.css` queda sin tocar.
+- **Aceptados como están:** el icono de pestaña solo SVG, `prefers-reduced-transparency`, `focusable="false"` en los SVG, el import de `public/icon.svg?raw` en el test, la cobertura de RF-2 y del cableado de «Cerrar aviso», el comentario largo de `LogoutNotice.tsx:11` y el título de test que cita «la 009».
+
+### Veredicto
+La spec se cumple: ningún RF está en FALLO, lo que no se pudo verificar consta como NO VERIFICABLE y la comprobación de rendimiento queda PENDIENTE por el `/sdd-change` de `6b318f0`, sin bloquear el cierre. Con las decisiones de arriba, la spec puede pasar a «implementada», con el rendimiento PENDIENTE. Hasta la aprobación del usuario, la spec sigue en «aprobada» y `MEMORY.md` sin actualizar.
