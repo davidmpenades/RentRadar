@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 
+import { useFreeZoneTop } from "../map/useFreeZoneTop";
 import { MapPage } from "../pages/MapPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { useSession } from "../session/SessionProvider";
@@ -29,6 +30,7 @@ export function AppShell({ navigator }: AppShellProps) {
   const shownPath = useRef(path);
   // replace y no navigate: Atrás no debe volver al formulario
   const leaveRegister = useCallback(() => navigator.replace("/map"), [navigator]);
+  useFreeZoneTop(zoneRef);
 
   // El destino del foco solo existe tras pintar el nuevo estado de la barra
   useEffect(() => {
@@ -55,7 +57,7 @@ export function AppShell({ navigator }: AppShellProps) {
         logoutRef={logoutRef}
       />
       {/* Recibe el foco por código y no es un control; el ! es necesario porque la regla global :focus-visible no va en una capa */}
-      <div ref={zoneRef} tabIndex={-1} className="relative min-h-0 flex-1 outline-none!">
+      <div ref={zoneRef} tabIndex={-1} className="notice-host relative min-h-0 flex-1 outline-none!">
         <LogoutNotice notice={session.notice} onRetry={session.logout} onDismiss={session.dismissNotice} />
         <Page route={resolveRoute(path)} onLeaveRegister={leaveRegister} />
       </div>

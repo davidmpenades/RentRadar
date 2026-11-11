@@ -1,0 +1,98 @@
+@layer components {
+  /* Ocupa desde donde acaban el zoom y la atribución hasta el borde inferior de la zona libre, y solo la tarjeta recibe el puntero */
+  .notice-zone {
+    position: absolute;
+    z-index: 20;
+    top: var(--free-top, 0px);
+    right: 0;
+    bottom: 0;
+    left: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: safe flex-end;
+    container: notice / inline-size;
+    pointer-events: none;
+  }
+
+  /* Con panel, el aviso queda justo encima por debajo de 900 px y a la derecha de su columna desde 900 px */
+  .notice-host:has([data-results-panel]) .notice-zone {
+    bottom: var(--panel-height);
+  }
+
+  @media (min-width: 900px) {
+    .notice-host:has([data-results-panel]) .notice-zone {
+      bottom: 0;
+      left: 400px;
+    }
+  }
+
+  /* Cerrada se quita con display y no con hidden, para que la salida pueda animarse; no se encoge si no cabe, se desborda hacia abajo */
+  .notice-card {
+    display: none;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    align-self: center;
+    box-sizing: border-box;
+    width: min(100% - 1rem, 560px);
+    margin-bottom: 0.5rem;
+    padding: 0.75rem 1rem;
+    border-radius: 22px;
+    pointer-events: auto;
+  }
+
+  .notice-card[data-open] {
+    display: flex;
+  }
+
+  .notice-message {
+    display: flex;
+    min-width: 0;
+    flex: 1 1 0;
+    align-items: center;
+    gap: 0.75rem;
+  }
+
+  .notice-actions {
+    display: flex;
+    flex-shrink: 0;
+    flex-wrap: wrap;
+    gap: 0.5rem;
+  }
+
+  /* Por debajo de 560 px de tarjeta, el texto y los botones van en dos filas */
+  @container notice (width < 576px) {
+    .notice-card {
+      flex-direction: column;
+      align-items: stretch;
+    }
+
+    .notice-message {
+      flex: 0 0 auto;
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .notice-card {
+      opacity: 0;
+      transform: translateY(8px);
+      transition:
+        opacity 0.24s,
+        transform 0.24s,
+        display 0.24s allow-discrete;
+    }
+
+    .notice-card[data-open] {
+      opacity: 1;
+      transform: none;
+    }
+
+    @starting-style {
+      .notice-card[data-open] {
+        opacity: 0;
+        transform: translateY(8px);
+      }
+    }
+  }
+}

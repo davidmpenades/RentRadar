@@ -2,6 +2,7 @@
 @import "@fontsource-variable/bricolage-grotesque";
 @import "./buttons.css";
 @import "./fields.css";
+@import "./notice.css";
 @import "./surfaces.css";
 
 @theme {
@@ -33,7 +34,7 @@
   --radius-surface: 1.5rem;
 }
 
-/* Altura del panel: la comparten el panel y, en la T5, el aviso anclado a él */
+/* Altura del panel: la comparten el panel y el aviso anclado a él */
 :root {
   --panel-height: max(40dvh, 15rem);
 }
