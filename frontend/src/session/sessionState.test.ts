@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { FailureReason, LogoutOutcome, WhoAmIResult } from "../api/session";
 import { es } from "../i18n/es";
 import {
+  dismissResult,
   loadSessionStatus,
   logoutResult,
   registrationResult,
@@ -188,6 +189,16 @@ describe("logoutResult", () => {
   it("el texto del aviso y el de su botón son los de la spec", () => {
     expect(es.session.logoutFailed).toBe("No se ha podido salir. Inténtalo de nuevo.");
     expect(es.session.retry).toBe("Reintentar");
+  });
+
+  it("el botón que cierra el aviso sale del catálogo", () => {
+    expect(es.session.dismiss).toBe("Cerrar aviso");
+  });
+});
+
+describe("dismissResult", () => {
+  it("retira el aviso y devuelve el foco a Salir, sin tocar la sesión ni el anuncio", () => {
+    expect(dismissResult()).toStrictEqual({ notice: null, focus: "logout" });
   });
 });
 

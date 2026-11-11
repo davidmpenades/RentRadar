@@ -15,5 +15,7 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // Vitest vacía los CSS importados; los tests que leen una hoja como texto la piden con ?raw
+    css: { include: [/\.css\?raw$/] },
   },
 });

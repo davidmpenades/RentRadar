@@ -13,6 +13,7 @@ export const es = {
     registered: "Cuenta creada.",
     logoutFailed: "No se ha podido salir. Inténtalo de nuevo.",
     retry: "Reintentar",
+    dismiss: "Cerrar aviso",
   },
   auth: {
     throttledOne: "Demasiados intentos. Inténtalo de nuevo en 1 minuto.",

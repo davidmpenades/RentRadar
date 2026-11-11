@@ -17,7 +17,7 @@ export function AssetCard({ asset }: { asset: PublicAsset }) {
         height={72}
         loading="lazy"
         decoding="async"
-        className="size-18 shrink-0 rounded-xl object-cover"
+        className="size-18 shrink-0 rounded-2xl object-cover"
       />
       <div className="grid min-w-0 content-center gap-0.5">
         <p className="line-clamp-2 leading-tight font-semibold wrap-anywhere">
@@ -39,7 +39,7 @@ export function AssetCard({ asset }: { asset: PublicAsset }) {
           {es.panel.radius.replace("{radius}", formatRadius(asset.privacy_radius))}
         </p>
         <p className="tabular-nums">
-          <span className="font-bold text-accent">{price.amount}</span>&nbsp;/ {price.unit}
+          <span className="font-bold text-accent">{price.amount}</span>&nbsp;/&nbsp;{price.unit}
         </p>
       </div>
     </li>

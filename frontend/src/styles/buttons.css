@@ -1,0 +1,92 @@
+@layer components {
+  .btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding-inline: 1.625rem;
+    border: 1px solid transparent;
+    border-radius: 9999px;
+    font-size: 1rem;
+    font-weight: 600;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .btn-primary {
+    color: #fff;
+    border-color: var(--color-accent-deep);
+    background-image: linear-gradient(to bottom, var(--color-accent-light), var(--color-accent));
+    box-shadow: var(--shadow-btn-primary);
+  }
+
+  .btn-secondary {
+    color: var(--color-ink);
+    border-color: rgb(255 255 255 / 0.9);
+    background-color: var(--btn-secondary-bg, var(--color-sky-button));
+    box-shadow: var(--shadow-btn-secondary);
+  }
+
+  .btn-form {
+    min-height: 3rem;
+    padding-inline: 2rem;
+  }
+
+  @media (hover: hover) {
+    .btn-primary:hover:not([aria-disabled="true"]) {
+      background-image: linear-gradient(to bottom, var(--color-accent-light-hover), var(--color-accent-deep));
+    }
+
+    .btn-secondary:hover:not([aria-disabled="true"]) {
+      background-color: var(--btn-secondary-bg-hover, var(--color-sky-button-hover));
+    }
+
+    .btn-form:hover:not([aria-disabled="true"]) {
+      box-shadow: var(--shadow-btn-form-hover);
+    }
+  }
+
+  /* Pulsado, con puntero o con Espacio: la sombra se reduce y el botón se hunde */
+  .btn-primary:active:not([aria-disabled="true"]) {
+    box-shadow: var(--shadow-btn-primary-pressed);
+    transform: scale(0.97);
+  }
+
+  .btn-secondary:active:not([aria-disabled="true"]) {
+    box-shadow: var(--shadow-btn-secondary-pressed);
+    transform: scale(0.97);
+  }
+
+  .btn[aria-disabled="true"] {
+    box-shadow: none;
+    opacity: 0.6;
+    cursor: not-allowed;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .btn {
+      transition:
+        box-shadow 0.14s,
+        transform 0.14s,
+        background-color 0.14s;
+    }
+  }
+
+  /* Sin sombras ni degradados, el botón se reconoce por su contorno */
+  @media (forced-colors: active) {
+    .btn {
+      border: 2px solid ButtonText;
+      color: ButtonText;
+      background-color: ButtonFace;
+      background-image: none;
+      box-shadow: none;
+    }
+
+    .btn[aria-disabled="true"] {
+      border-color: GrayText;
+      color: GrayText;
+      opacity: 1;
+    }
+  }
+}

@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { components } from "../api/schema.gen";
 import { es } from "../i18n/es";
 import type { ViewState } from "../state/viewState";
+import { classesOf } from "../testing/classesOf";
 import { AssetCard } from "./AssetCard";
 import { ResultsPanel } from "./ResultsPanel";
 
@@ -34,6 +35,7 @@ const NBSP = String.fromCharCode(160);
 const panel = (view: ViewState) => renderToStaticMarkup(createElement(ResultsPanel, { view, onRetry: noop, onReset: noop }));
 const card = (item: PublicAsset) => renderToStaticMarkup(createElement("ul", null, createElement(AssetCard, { asset: item })));
 const imgTags = (html: string) => html.match(/<img\b[^>]*>/g) ?? [];
+const asideTag = (html: string) => html.match(/<aside\b[^>]*>/)?.[0] ?? "";
 
 describe("AssetCard: el texto del anuncio es texto", () => {
   it.each(HOSTILE)("el título %s sale escapado y dentro de <bdi>", (title) => {
@@ -65,6 +67,10 @@ describe("AssetCard: el texto del anuncio es texto", () => {
     expect(tags[0]).toContain('alt=""');
   });
 
+  it("la miniatura tiene las esquinas de 16 px de la tarjeta", () => {
+    expect(classesOf(imgTags(card(asset(1)))[0] ?? "")).toContain("rounded-2xl");
+  });
+
   it("enseña el nombre de la categoría, la zona y el precio", () => {
     const html = card(asset(1, { privacy_radius: 2000, price: "30.00", price_unit: "week" })).replaceAll(String.fromCharCode(160), " ");
     expect(html).toContain("Kayak");
@@ -73,10 +79,11 @@ describe("AssetCard: el texto del anuncio es texto", () => {
     expect(html).toContain("semana");
   });
 
-  it("une el importe y la unidad con un espacio duro, para que no se parta antes de la barra", () => {
+  it("une el importe, la barra y la unidad con espacios duros, para que no se parta ni antes ni después de la barra", () => {
     const html = card(asset(1, { price: "12.50", price_unit: "day" }));
-    expect(html).toContain(`</span>${NBSP}/ día`);
+    expect(html).toContain(`</span>${NBSP}/${NBSP}día`);
     expect(html).not.toContain("</span> / día");
+    expect(html).not.toContain(`/ día`);
   });
 
   it("usa la imagen de other si el slug es hostil", () => {
@@ -168,8 +175,46 @@ describe("ResultsPanel", () => {
     if (list !== -1) expect(html.slice(header, list).match(/<\/div>/g)?.length).toBeGreaterThanOrEqual(3);
   });
 
-  it("los botones miden al menos 44 px", () => {
-    expect(panel({ kind: "error", failure: "network" })).toContain("min-h-11");
-    expect(panel({ kind: "empty", canReset: true })).toContain("min-h-11");
+  it("es una sola superficie de cristal y se marca para anclar el aviso", () => {
+    const views: ViewState[] = [
+      { kind: "loading" },
+      { kind: "results", cards: [asset(1)], incomplete: false },
+      { kind: "empty", canReset: true },
+      { kind: "zoomIn", canReset: false },
+      { kind: "error", failure: "network" },
+    ];
+    for (const view of views) {
+      const aside = asideTag(panel(view));
+      expect(classesOf(aside)).toContain("glass");
+      expect(aside).toMatch(/\sdata-results-panel=""/);
+    }
+  });
+
+  it("la altura sale de la variable del panel y la superficie no lleva fondo ni sombra propios", () => {
+    const classes = classesOf(asideTag(panel({ kind: "loading" })));
+    expect(classes).toContain("h-(--panel-height)");
+    for (const old of ["h-[40dvh]", "min-h-60", "bg-sky", "shadow-lg"]) expect(classes).not.toContain(old);
+  });
+
+  it("redondea las esquinas superiores por debajo de 900 px y las derechas desde 900 px", () => {
+    const classes = classesOf(asideTag(panel({ kind: "loading" })));
+    expect(classes).toEqual(expect.arrayContaining(["rounded-t-surface", "min-[900px]:rounded-t-none", "min-[900px]:rounded-r-surface"]));
+  });
+
+  it("ni la lista ni las tarjetas llevan una superficie propia", () => {
+    const html = panel({ kind: "results", cards: [asset(1), asset(2)], incomplete: false });
+    const tags = [...(html.match(/<ul\b[^>]*>/g) ?? []), ...(html.match(/<li\b[^>]*>/g) ?? [])];
+    expect(tags).toHaveLength(3);
+    for (const tag of tags) {
+      for (const name of classesOf(tag)) expect(name).not.toMatch(/^(glass|bg-|backdrop-|shadow-)/);
+    }
+  });
+
+  it("los botones son botones principales", () => {
+    for (const view of [{ kind: "error", failure: "network" }, { kind: "empty", canReset: true }] satisfies ViewState[]) {
+      const buttons = panel(view).match(/<button\b[^>]*>/g) ?? [];
+      expect(buttons.length).toBeGreaterThan(0);
+      for (const button of buttons) expect(classesOf(button)).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
+    }
   });
 });

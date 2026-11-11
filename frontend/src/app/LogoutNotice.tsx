@@ -1,27 +1,36 @@
 import { es } from "../i18n/es";
 import type { LogoutNoticeKind } from "../session/sessionState";
+import { Indicator } from "../ui/Indicator";
 
 type LogoutNoticeProps = {
   notice: LogoutNoticeKind | null;
   onRetry: () => void;
+  onDismiss: () => void;
 };
 
-// La región está siempre montada para que cada fallo se anuncie; superpuesta, no cambia el alto del mapa
-export function LogoutNotice({ notice, onRetry }: LogoutNoticeProps) {
+// La región está siempre montada para que cada fallo se anuncie y solo lleva el mensaje; la tarjeta conserva su contenido al cerrarse para que la salida pueda animarse y su párrafo se oculta para que el mensaje no se lea dos veces
+export function LogoutNotice({ notice, onRetry, onDismiss }: LogoutNoticeProps) {
   return (
-    <div role="status" className="pointer-events-none absolute inset-x-0 top-0 z-20">
-      {notice === "logout_failed" && (
-        <div className="pointer-events-auto m-2 flex flex-wrap items-center justify-between gap-3 rounded-lg bg-lemon px-4 py-2 shadow-lg">
-          <p className="font-semibold">{es.session.logoutFailed}</p>
-          <button
-            type="button"
-            onClick={onRetry}
-            className="inline-flex min-h-11 min-w-11 items-center justify-center rounded-lg bg-accent px-6 font-semibold text-white"
-          >
+    <div className="notice-zone">
+      <div role="status" className="sr-only top-0 left-0">
+        {notice === "logout_failed" && es.session.logoutFailed}
+      </div>
+      <div className="notice-card glass" data-open={notice ? "" : undefined} inert={!notice}>
+        <div className="notice-message">
+          <Indicator className="size-6" />
+          <p aria-hidden="true" className="font-semibold">
+            {es.session.logoutFailed}
+          </p>
+        </div>
+        <div className="notice-actions">
+          <button type="button" onClick={onRetry} className="btn btn-primary">
             {es.session.retry}
           </button>
+          <button type="button" onClick={onDismiss} className="btn btn-secondary">
+            {es.session.dismiss}
+          </button>
         </div>
-      )}
+      </div>
     </div>
   );
 }
