@@ -95,7 +95,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
   - Commit: `feat(frontend): show the RentRadar icon in the top bar and tab`
   - Hecho cuando: los tests fallan primero y luego pasan; vitest, build y eslint en verde; la consola sin errores y el icono cargado desde `/icon.svg`.
 
-- [ ] **T8. Pulido de la página.** Presentación (sin RF)
+- [x] **T8. Pulido de la página.** Presentación (sin RF)
   - Ficheros:
     - Modifica `frontend/index.html`: `theme-color`, `color-scheme` y preconexión a `tiles.openfreemap.org`; la precarga de la fuente solo si la T1 comprobó una ruta estable (si no, se anota en `validation.md`).
     - Modifica `index.css`: `color-scheme: light`.

@@ -1,10 +1,10 @@
 # Validación — 016-visual-system
 Rama: `feature/016-visual-system` · Entorno: frontend en el host (Vite 8.3.5, Vitest 5.0.5, Tailwind 4.3.3, maplibre-gl 6.14.0), Chrome DevTools MCP y stack de Docker Compose para la API pública
 
-Validación en curso: T1 a T7 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
+Validación en curso: T1 a T8 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
 
-## Notas de implementación (T1–T7)
-Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T7) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono), T7 `e2dc7e7`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests; tras la T7, 31 ficheros y 1088 tests. `package.json` y `package-lock.json` no cambian.
+## Notas de implementación (T1–T8)
+Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T8) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono), T7 `e2dc7e7`, T8 `b2de3b0`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests; tras la T7, 31 ficheros y 1088 tests; tras la T8, 31 ficheros y 1092 tests. `package.json` y `package-lock.json` no cambian.
 
 ### Estado del entorno
 | Elemento | Estado |
@@ -197,6 +197,41 @@ Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T7) · Commits: T1 `e252367`, T2 
 - **Gris de las pestañas:** valores supuestos, `#202124` (pestañas inactivas) y `#35363A` (pestaña activa), con Chrome 156 (`Chrome/156.0.0.0`, Linux). No se capturó el sistema, porque saldría el escritorio entero y no solo Chrome.
 - **La pestaña real no se puede capturar con el MCP:** las capturas de página no incluyen la barra de pestañas. Por eso la comprobación es el icono real dibujado en un lienzo, como prevé el plan.
 - **Incidencias de entorno:** la primera medición salió con el esquema «dark» del sistema, sin emular; se repitió con `colorScheme` claro y oscuro explícitos. `emulate` con `isMobile` recarga la página, como en la T5. El servidor MCP no escribe fuera de su raíz de trabajo (ver la T5): los resultados se leyeron en línea.
+
+### T8. Pulido de la página
+- **Commit:** `b2de3b0` (`feat(frontend): polish page head, number units and titles`, con `index.html`, `index.css`, `format.ts`, `format.test.ts`, `AssetCard.tsx`, `ResultsPanel.test.ts`, `RegistrationForm.tsx`, `NotFoundPage.tsx` e `indexHtml.test.ts`).
+- **`theme-color`:** `#FFFFFF`, el fondo de la barra (`bg-white`). Se eligió porque ni la spec ni el plan fijan un valor; solo nombran la etiqueta.
+- **Precarga de la fuente: no se hace.** El build saca las fuentes con hash en el nombre (por ejemplo `bricolage-grotesque-latin-wght-normal-DLoelf7F.woff2`), así que escribir ese nombre a mano en `index.html` se rompería sin avisar al actualizar el paquete. Además es opcional y está fuera de la spec. Es lo que `tasks.md` pide anotar; en las notas de la T1 no consta una comprobación de ruta estable.
+- **Preconexión:** `<link rel="preconnect" href="https://tiles.openfreemap.org" crossorigin>`. Lleva `crossorigin` porque MapLibre pide el estilo y las teselas en modo CORS, y sin ese atributo el navegador no reutiliza la conexión.
+- **Espacio duro:** `formatRadius` usa el escape de U+00A0 dentro del template literal. Las herramientas de edición convierten los escapes `\uXXXX` en el carácter literal (invisible en el diff), así que `format.ts` se escribió con un script de Python fuera del repositorio, con `chr(92)`; después se comprobó con `grep` que ningún fichero tocado contiene el carácter literal. En `AssetCard.tsx` se usa la entidad `&nbsp;`, visible en el diff, como ya hacía la línea.
+- **eslint y U+00A0 literal** (solo comprobación, sin cambiar la configuración; `--print-config` y `--stdin` con `--stdin-filename`): `no-irregular-whitespace` está activa como error en `format.ts` y `AssetCard.tsx` (viene de `js.configs.recommended`) con `skipStrings: true`, `skipTemplates: false`, `skipJSXText: false`, `skipComments: false` y `skipRegExps: false`. Un U+00A0 literal dentro de un template literal (`format.ts`) y en texto JSX (`AssetCard.tsx`) da error (`Irregular whitespace not allowed`); en una cadena entre comillas no da aviso (`skipStrings`), y el escape de U+00A0 en un template tampoco. No cubre CSS ni HTML.
+- **Tests, de rojo a verde:** 7 rojos antes de implementar, cada uno por su razón, de 92 en los tres ficheros afectados:
+
+  | Test | Rojo |
+  |---|---|
+  | `indexHtml`: `theme-color` | `expected [] to deeply equal [ { name: 'theme-color', … } ]` |
+  | `indexHtml`: `color-scheme` | `expected [] to deeply equal [ { name: 'color-scheme', … } ]` |
+  | `indexHtml`: preconexión con `crossorigin` | `expected [] to deeply equal [ { rel: 'preconnect', … } ]` |
+  | `format`: 500 m, 1 km y 2 km (3 tests) | `expected '500 m' to be '500 m'` (el recibido llevaba espacio normal; el espacio duro no se ve en el mensaje) |
+  | `ResultsPanel`: espacios duros alrededor de «/» | falla `toContain` de la cadena con espacio duro antes y después de «/»: la tarjeta traía uno antes y un espacio normal después |
+
+  - **Guarda desde el principio:** el caso de `formatPrice` (`12,50 €` y `30 €` con espacio duro antes de «€») pasó sin implementar, porque `Intl.NumberFormat("es-ES")` ya devuelve U+00A0.
+  - **Después:** los 3 ficheros dan 92 de 92; vitest completo, 31 ficheros y 1092 tests en verde; eslint de los ficheros tocados sin avisos; `npm run build` en verde, con las tres etiquetas en `dist/index.html`. `package.json` y `package-lock.json` sin cambios.
+- **Navegador** (sin sesión; `/map`, `/register` y `/no-existe`, a 375 y 1280 px):
+
+  | Punto | Resultado | Valor medido |
+  |---|---|---|
+  | Etiquetas de la cabecera | OK | `theme-color` `#FFFFFF`, `color-scheme` `light` y `preconnect` a `https://tiles.openfreemap.org` con `crossorigin` (`crossOrigin` = `anonymous`), a 375 y 1280 px |
+  | `color-scheme` calculado en `:root` | OK | `light` |
+  | `text-wrap` de los `h1` | OK | `balance` en «Crear una cuenta» y «Página no encontrada», a 375 y 1280 px |
+  | `touch-action` | OK | `manipulation` en «Registrarse», «Crear cuenta», «Mostrar contraseña» (el ojo), «Ir al mapa», «Reintentar» y «Cerrar aviso» |
+  | Distancias a 375 px | OK | Las 24 tarjetas: un `Range` sobre la cifra y su unidad ocupa una sola línea (`getClientRects`, una sola posición vertical); separador U+00A0 en las 24 |
+  | Importes a 375 px | OK | Las 24: «cifra y €» en una línea con U+00A0 antes de «€», y « / unidad» con U+00A0 a ambos lados; el precio entero cabe en una línea |
+  | Mismo recorrido a 1280 px | OK | 24 de 24, sin cortes |
+  | Consola sin errores propios | OK | Sin mensajes en `/register` y `/no-existe` a 375 y 1280 px; `/map` solo tiene los dos avisos de estilo de MapLibre (`highway-shield-non-us` y `highway-shield-us-interstate`), a 375 y 1280 px |
+
+- **Texto al 200 % (dato informativo):** con `font-size: 200%` en `html` (que no es el ajuste real del navegador), a 375 px, cifra y unidad siguen en una línea en las 24 tarjetas y el precio entero también. La frase «Zona de unos…» sí se parte en varias líneas, como es normal: solo se comprobó que la cifra y su unidad no se separan.
+- **NO VERIFICABLE con el MCP:** que la preconexión reutilice de hecho la conexión del estilo y de las teselas. Solo se ve la etiqueta y su atributo, no el reparto de conexiones.
 
 ### Medición de rendimiento de prueba (no oficial)
 Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× · orden A, B, B, A (T1-A, T2-B, T3-B, T4-A), una pestaña por traza.
