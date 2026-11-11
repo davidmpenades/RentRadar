@@ -5,6 +5,7 @@ import { describe, expect, it } from "vitest";
 import type { components } from "../api/schema.gen";
 import { es } from "../i18n/es";
 import type { ViewState } from "../state/viewState";
+import { classesOf } from "../testing/classesOf";
 import { AssetCard } from "./AssetCard";
 import { ResultsPanel } from "./ResultsPanel";
 
@@ -34,7 +35,6 @@ const NBSP = String.fromCharCode(160);
 const panel = (view: ViewState) => renderToStaticMarkup(createElement(ResultsPanel, { view, onRetry: noop, onReset: noop }));
 const card = (item: PublicAsset) => renderToStaticMarkup(createElement("ul", null, createElement(AssetCard, { asset: item })));
 const imgTags = (html: string) => html.match(/<img\b[^>]*>/g) ?? [];
-const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
 const asideTag = (html: string) => html.match(/<aside\b[^>]*>/)?.[0] ?? "";
 
 describe("AssetCard: el texto del anuncio es texto", () => {

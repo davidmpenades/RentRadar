@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 
 import { es } from "../i18n/es";
 import css from "../styles/notice.css?raw";
+import { classesOf } from "../testing/classesOf";
 import { LogoutNotice } from "./LogoutNotice";
 
 const noop = () => {};
@@ -36,7 +37,6 @@ const declarationsOf = (selector: string) => {
 };
 
 const buttons = (html: string) => html.match(/<button\b[^>]*>.*?<\/button>/g) ?? [];
-const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
 
 describe("LogoutNotice", () => {
   it("sin aviso deja montada la región de estado, vacía", () => {

@@ -3,6 +3,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 
 import { es } from "../i18n/es";
+import { classesOf } from "../testing/classesOf";
 import { RegistrationForm } from "./RegistrationForm";
 import { PASSWORD_MIN_LENGTH } from "./registerForm";
 
@@ -26,7 +27,6 @@ const tag = (html: string, pattern: RegExp) => html.match(pattern)?.[0] ?? "";
 const inputOf = (html: string, id: string) => tag(html, new RegExp(`<input\\b[^>]*\\bid="${id}"[^>]*>`));
 const buttonWith = (html: string, text: string) =>
   tag(html, new RegExp(`<button\\b[^>]*>[^<]*${text}[^<]*</button>`));
-const classesOf = (element: string) => (element.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
 const attr = (element: string, name: string) => element.match(new RegExp(`\\s${name}="([^"]*)"`, "i"))?.[1];
 const eyeOf = (html: string) =>
   tag(html, new RegExp(`<button\\b[^>]*\\baria-label="${es.register.showPassword}"[^>]*>.*?</button>`, "s"));

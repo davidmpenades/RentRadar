@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 
 import { es } from "../i18n/es";
 import type { TopBarAction } from "../session/sessionState";
+import { classesOf } from "../testing/classesOf";
 import { TopBar } from "./TopBar";
 
 const noop = () => {};
@@ -14,7 +15,6 @@ const bar = (action: TopBarAction, logoutPending = false) =>
 
 const links = (html: string) => html.match(/<a\b[^>]*>.*?<\/a>/g) ?? [];
 const buttons = (html: string) => html.match(/<button\b[^>]*>.*?<\/button>/g) ?? [];
-const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
 const attributesOf = (tag: string) =>
   Object.fromEntries([...tag.matchAll(/\s([\w-]+)="([^"]*)"/g)].map((match): [string, string] => [match[1]!, match[2]!]));
 
