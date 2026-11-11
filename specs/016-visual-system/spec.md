@@ -1,5 +1,5 @@
 # Spec 016 — Sistema visual
-Estado: aprobada
+Estado: implementada, con la comprobación de rendimiento pendiente hasta antes del despliegue (Rendimiento)
 Depende de: spec 006 (identidad visual, mapa base, panel de resultados, atribución, movimiento reducido y lista blanca de SVG de las imágenes de categoría) y spec 009 (barra superior, formulario de registro, «Mostrar contraseña» y aviso de fallo de salida, RF-9 a RF-13).
 
 ## Contexto y objetivo

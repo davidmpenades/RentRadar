@@ -1,8 +1,8 @@
 # Notas para la spec 015 — Entrada
 Estado: notas previas. La spec todavía no existe: se escribe con `/feature` cuando la 009 esté implementada.
-Depende de: spec 009 (registro, sesión y salida). Orden: 009 → 015 → 013 → 014 → 011.
+Depende de: spec 009 (registro, sesión y salida). Orden: 016 → 017 → 007 → 015 → /sdd-change de la 005 → 010 → 013 → 014 → 008 → 011.
 
-## Alcance previsto (9 RF, unas 7 tareas)
+## Alcance previsto (10 RF, unas 8 tareas)
 1. Entrada correcta: abre sesión y responde con el email de la cuenta; el email se compara normalizado.
 2. Credenciales incorrectas: un único error, con el mismo código, cuerpo y estado, para email desconocido o mal formado, contraseña errónea y cuenta desactivada.
 3. Límite de entrada por IP: 20 peticiones por minuto, con IPv6 por prefijo /64.
@@ -10,8 +10,9 @@ Depende de: spec 009 (registro, sesión y salida). Orden: 009 → 015 → 013 �
 5. Sesión nueva al entrar, con el mismo mecanismo que el registro.
 6. Forma, tamaño y contenido de la petición de entrada.
 7. «Entrar» en la barra superior.
-8. Formulario de entrada: envío, errores y «Mostrar contraseña».
+8. Formulario de entrada: envío, errores y «Mostrar contraseña». El formulario de entrada usa los campos, el ojo y los botones de la 016.
 9. `/login` con sesión lleva al mapa sin añadir historial.
+10. Fondo de las pantallas de registro y entrada con fotos reales en franjas verticales. Las fotos las busca el desarrollador en bancos libres y las guarda fuera del repo (`~/RentRadar-recursos/fotos-registro/`, con `fuentes.md`: URL, autor y licencia); sin personas reconocibles ni marcas; en móvil, una franja o ninguna.
 
 ## Lo que hereda de la 009
 - Sesión de Django con CSRF de doble envío; el error es `csrf_failed` y el cliente reintenta una vez tras volver a preguntar «quién soy».
