@@ -57,7 +57,7 @@ export function RegistrationForm({
   return (
     <main className="h-full overflow-y-auto px-4 py-8 sm:py-16">
       <div className="mx-auto w-full max-w-sm rounded-xl border border-ink/10 bg-white p-6">
-        <h1 className="text-3xl font-bold">{es.register.title}</h1>
+        <h1 className="text-3xl font-bold text-balance">{es.register.title}</h1>
         <form noValidate method="post" onSubmit={onSubmit} className="mt-6 flex flex-col gap-5">
           <div className="flex flex-col gap-2">
             <label htmlFor="register-email" className="font-semibold">

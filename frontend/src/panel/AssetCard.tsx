@@ -39,7 +39,7 @@ export function AssetCard({ asset }: { asset: PublicAsset }) {
           {es.panel.radius.replace("{radius}", formatRadius(asset.privacy_radius))}
         </p>
         <p className="tabular-nums">
-          <span className="font-bold text-accent">{price.amount}</span>&nbsp;/ {price.unit}
+          <span className="font-bold text-accent">{price.amount}</span>&nbsp;/&nbsp;{price.unit}
         </p>
       </div>
     </li>

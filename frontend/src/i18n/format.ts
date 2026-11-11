@@ -26,8 +26,9 @@ export function formatPrice(price: string, unit: string): { amount: string; unit
   return { amount, unit: unitLabel(unit) };
 }
 
+// Con espacio duro, para que la cifra y la unidad no se partan entre dos líneas
 export function formatRadius(meters: number): string {
-  return meters % 1000 === 0 ? `${meters / 1000} km` : `${meters} m`;
+  return meters % 1000 === 0 ? `${meters / 1000}\u00A0km` : `${meters}\u00A0m`;
 }
 
 export function waitMinutes(seconds: number): number {

@@ -79,10 +79,11 @@ describe("AssetCard: el texto del anuncio es texto", () => {
     expect(html).toContain("semana");
   });
 
-  it("une el importe y la unidad con un espacio duro, para que no se parta antes de la barra", () => {
+  it("une el importe, la barra y la unidad con espacios duros, para que no se parta ni antes ni después de la barra", () => {
     const html = card(asset(1, { price: "12.50", price_unit: "day" }));
-    expect(html).toContain(`</span>${NBSP}/ día`);
+    expect(html).toContain(`</span>${NBSP}/${NBSP}día`);
     expect(html).not.toContain("</span> / día");
+    expect(html).not.toContain(`/ día`);
   });
 
   it("usa la imagen de other si el slug es hostil", () => {

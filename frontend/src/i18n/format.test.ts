@@ -55,6 +55,11 @@ describe("formatPrice", () => {
     expect(formatPrice("30.01", "day").amount).toContain(",01");
   });
 
+  it("separa el importe del símbolo del euro con un espacio duro, para que no se parta", () => {
+    expect(formatPrice("12.50", "day").amount).toBe(`12,50${NBSP}€`);
+    expect(formatPrice("30.00", "week").amount).toBe(`30${NBSP}€`);
+  });
+
   it("no pierde ningún céntimo en una muestra de todo el rango", () => {
     let seed = 12345;
     for (let sample = 0; sample < 2000; sample += 1) {
@@ -76,11 +81,11 @@ describe("formatPrice con una unidad desconocida", () => {
 
 describe("formatRadius", () => {
   it.each([
-    [500, "500 m"],
-    [1000, "1 km"],
-    [2000, "2 km"],
-  ])("%d m se ve como «%s»", (meters, expected) => {
-    expect(formatRadius(meters)).toBe(expected);
+    [500, "500", "m"],
+    [1000, "1", "km"],
+    [2000, "2", "km"],
+  ])("%d m se ve como «%s» y «%s», unidos por un espacio duro", (meters, figure, unit) => {
+    expect(formatRadius(meters)).toBe(`${figure}${NBSP}${unit}`);
   });
 });
 

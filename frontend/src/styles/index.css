@@ -37,6 +37,7 @@
 /* Altura del panel: la comparten el panel y el aviso anclado a él */
 :root {
   --panel-height: max(40dvh, 15rem);
+  color-scheme: light;
 }
 
 body {
