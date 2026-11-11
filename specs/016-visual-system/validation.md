@@ -1,10 +1,10 @@
 # Validación — 016-visual-system
 Rama: `feature/016-visual-system` · Entorno: frontend en el host (Vite 8.3.5, Vitest 5.0.5, Tailwind 4.3.3, maplibre-gl 6.14.0), Chrome DevTools MCP y stack de Docker Compose para la API pública
 
-Validación en curso: T1 a T6 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
+Validación en curso: T1 a T7 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
 
-## Notas de implementación (T1–T6)
-Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T6) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono). Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests. `package.json` y `package-lock.json` no cambian.
+## Notas de implementación (T1–T7)
+Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T7) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono), T7 `e2dc7e7`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests; tras la T7, 31 ficheros y 1088 tests. `package.json` y `package-lock.json` no cambian.
 
 ### Estado del entorno
 | Elemento | Estado |
@@ -145,6 +145,59 @@ Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T6) · Commits: T1 `e252367`, T2 
 - **Verificación:** vitest, 30 ficheros y 1082 tests; eslint de `icon.test.ts` sin avisos; `npm run build` en verde, con `dist/icon.svg` idéntico a `public/icon.svg`. `package.json` y `package-lock.json` sin cambios.
 - **Incidencia de entorno:** la primera sesión de la T6 arrancó en segundo plano y su guardián obligó a trabajar en un worktree aparte. El refactor se hizo y se commiteó allí y llegó a la rama con un avance rápido, con el mismo hash (`f8cc84c`). Al cerrar Claude Code puede quedar vivo un proceso `claude daemon run --origin transient`.
 
+### T7. Marca en la barra e icono de la pestaña
+- **Commit:** `e2dc7e7` (`feat(frontend): show the RentRadar icon in the top bar and tab`, con `TopBar.tsx`, `TopBar.test.ts`, `indexHtml.test.ts` e `index.html`).
+- **Decisiones:**
+  - **Utilidades en vez de clase de componente:** el enlace de la marca lleva `min-h-11 min-w-11` y `hover:bg-ink/6` como utilidades, porque el plan solo crea clases de componente para botones, campos, superficies y aviso (D1). `min-w-11` hace falta porque por debajo de 900 px el enlace solo contiene el icono, de 36 px.
+  - **`rounded-lg`:** esquinas de 8 px para que el fondo del hover y el anillo tengan esquinas redondeadas.
+  - **`px-1`:** la captura a 1280 px con el puntero sobre la marca mostraba la «r» de «RentRadar» pegada al borde del fondo del hover (0 px). Con `px-1` quedan 4 px a cada lado y a 375 px el enlace sigue midiendo 44 × 44 (36 + 8). El test no cambia.
+  - **Nombre oculto con `sr-only`**, no con `hidden`, para que siga siendo el nombre accesible; se muestra desde 900 px con `min-[900px]:not-sr-only`, la misma forma que usa el panel.
+- **Tests:** 6 rojos antes de implementar, cada uno por su aserción, y los 13 de `TopBar.test.ts` que ya existían siguen en verde (en total 19 en los dos ficheros):
+
+  | Test | Rojo |
+  |---|---|
+  | La marca mide 44 px de ancho (`min-h-11` y `min-w-11`) | `expected [ 'inline-flex', 'min-h-11', …(3) ] to deeply equal ArrayContaining` |
+  | Icono decorativo de 36 × 36 | `expected {} to deeply equal { src: '/icon.svg', alt: '', … }` |
+  | Nombre en un `span` con `translate="no"` | `expected undefined to be 'no'` |
+  | Nombre con `sr-only` por debajo de 900 px y visible desde 900 px, sin `hidden` | `expected [ '' ] to deeply equal ArrayContaining` |
+  | `index.html` declara un solo icono, `/icon.svg` | `expected [ { rel: 'icon', href: 'data:,' } ] to deeply equal [ { rel: 'icon', href: '/icon.svg', type: 'image/svg+xml' } ]` |
+  | `index.html` ya no declara `data:,` | `expected '<!doctype html>…' not to contain 'data:,'` |
+
+  Después, vitest completo: 31 ficheros y 1088 tests en verde; eslint de los tres ficheros sin avisos; `npm run build` en verde, con `dist/index.html` apuntando a `/icon.svg` y `dist/icon.svg` presente. `package.json` y `package-lock.json` sin cambios.
+- **`?raw` lee `index.html`:** `import html from "../../index.html?raw"` funciona sin cambiar la configuración ni añadir dependencias. Con esto se cierra lo que la T6 dejó pendiente para esta tarea.
+- **Recorrido en el navegador** (sin sesión; Chrome 156; `/map`, `/register` y `/no-existe`, a 375 y 1280 px; el hover y el anillo con teclado, también a 899 y 900 px):
+
+  | Punto | Resultado | Valor medido |
+  |---|---|---|
+  | Nombre oculto a 375 px | OK | `sr-only`: 1 × 1 px, `clip-path: inset(50%)`, en las tres páginas |
+  | Nombre visible a 1280 px | OK | 104 × 28 px, `position: static`, en las tres páginas |
+  | Nombre accesible «RentRadar» | OK | Árbol de accesibilidad: `link "RentRadar"` a 375, 899 y 1280 px; el `<img alt="">` no se anuncia |
+  | Enlace de al menos 44 × 44 | OK | Con `px-1`: 44 × 44 a 375 y 899 px; 156,1 × 44 a 900 y 1280 px (148,1 × 44 antes de `px-1`) |
+  | Barra sin desbordar con «Registrarse» | OK | `scrollWidth` igual a `clientWidth` en la barra y en el documento a 375, 899, 900 y 1280 px; «Registrarse» termina en x = 359 a 375 px; la barra mide 56 px |
+  | Cruce de 899 a 900 px, sin recarga | OK | A 899 px el nombre es `absolute` (1 × 1) y a 900 px `static` (104 px); la marca puesta en `window` se conserva; el nombre accesible no cambia |
+  | Anillo del enlace, con teclado | OK | `outline` 2 px sólido `rgb(22, 71, 184)` con separación de 2 px, medido a 375, 899, 900 y 1280 px; el contorno ocupa de x = 12 y de y = 1,5 a 53,5, dentro de la barra, con `overflow: visible`; visible en la captura |
+  | Hover del enlace | OK | Fondo de tinta al 6 % (`oklab(0.208 … / 0.06)`), radio de 8 px; con `px-1`, 4 px de aire a cada lado de la imagen y del nombre |
+  | `/icon.svg` | OK | `fetch` sin caché: 200, `image/svg+xml`, 502 bytes; `link rel=icon` e `<img>` apuntan a `http://localhost:5173/icon.svg`. La petición del favicon no aparece en la red de la página; la del `<img>` salió con 304 por la caché |
+  | Consola sin errores | OK | Sin mensajes en `/register` y `/no-existe`; `/map` solo tiene dos avisos de estilo de MapLibre (`highway-shield-non-us` y `highway-shield-us-interstate`), los mismos de la T5 |
+
+  El recorrido de las tres páginas se hizo antes de añadir `px-1`; tras añadirlo se volvieron a medir el enlace, la barra y el anillo en `/register`, a 375, 899, 900 y 1280 px, porque el cambio es solo de relleno del mismo componente.
+- **Icono a 16 y 32 px:** el `/icon.svg` real, con `width` y `height` sustituidos por el tamaño y dibujado en un lienzo del mismo tamaño a `devicePixelRatio` 1. Solo se cuentan píxeles interiores (alfa 255 sobre lienzo transparente), no los de borde. Con `colorScheme` claro y oscuro el resultado es idéntico (mismo hash): el lienzo no depende del tema.
+
+  | Medida (criterio) | 16 × 16 | 32 × 32 | Umbral |
+  |---|---|---|---|
+  | Píxeles puros de la base `#4A82EE` | 26 | 165 | informativo |
+  | Sombra (el píxel interior más oscuro) frente a la base | 3,84 (`#0F2763`, píxel 11,8) | 3,84 (píxel 23,13) | 1,5 |
+  | Brillo (el mejor píxel interior de los 3 × 3 alrededor del centro del brillo, sin contar los de la esfera) frente a la base | 2,58 (`#C6D9FC`, píxel 4,3; ninguno llega a `#D3E2FD`) | 2,81 (`#D3E2FD`, píxel 9,6) | 1,5 |
+  | Silueta (píxel puro de la base) contra `#FFFFFF` | 3,67 | 3,67 | 3 |
+  | Silueta contra `#202124` | 4,38 | 4,38 | 3 |
+  | Silueta contra `#35363A` | 3,29 | 3,29 | 3 |
+  | Centroide de la sombra frente al de la esfera | (10; 9) frente a (7; 6,25) | (20,72; 17,72) frente a (15,18; 12,87) | abajo y a la derecha |
+
+  A 16 px el brillo mide unos 2 px y el suavizado lo mezcla con la base: queda por encima del 1,5:1 con 2,58, sin llegar al 2,81 del icono a tamaño completo. Los píxeles de borde (42 de 133 a 16 px y 91 a 32 px) se mezclan con el fondo y bajan hasta 1:1: no son un criterio de la spec y no se cuentan.
+- **Gris de las pestañas:** valores supuestos, `#202124` (pestañas inactivas) y `#35363A` (pestaña activa), con Chrome 156 (`Chrome/156.0.0.0`, Linux). No se capturó el sistema, porque saldría el escritorio entero y no solo Chrome.
+- **La pestaña real no se puede capturar con el MCP:** las capturas de página no incluyen la barra de pestañas. Por eso la comprobación es el icono real dibujado en un lienzo, como prevé el plan.
+- **Incidencias de entorno:** la primera medición salió con el esquema «dark» del sistema, sin emular; se repitió con `colorScheme` claro y oscuro explícitos. `emulate` con `isMobile` recarga la página, como en la T5. El servidor MCP no escribe fuera de su raíz de trabajo (ver la T5): los resultados se leyeron en línea.
+
 ### Medición de rendimiento de prueba (no oficial)
 Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× · orden A, B, B, A (T1-A, T2-B, T3-B, T4-A), una pestaña por traza.
 - **Conclusión:** procedimiento validado: dos compilaciones servidas, gesto reproducible, recuento por fotograma y perfil de CPU. La GPU solo se ve de forma indirecta. La métrica de la spec está saturada en este portátil, con unos 60 fps y casi 0 % de perdidos en las dos versiones, y no distingue A de B. Sin veredicto sobre los 22 px.
@@ -169,5 +222,6 @@ Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× ·
 - Comparación de los colores de «positron» con una descarga nueva del estilo.
 - Texto al 200 % con el ajuste real del navegador y transparencia reducida del sistema: no se pueden emular con las herramientas (ver la T5).
 - Dos `csrf_failed` seguidos en la salida: cubiertos solo por vitest; no se ha reproducido en el navegador.
+- Gris real de las pestañas de Chrome: `#202124` y `#35363A` son valores supuestos (ver la T7); si la validación puede medirlos, manda la medición.
 - Ninguna sesión abierta: `/sdd-validate` pedirá una cuenta nueva, con autorización expresa, si repite alguna comprobación con «Salir».
 - Para el `/sdd-change` de la medición oficial: la T5 comprobó que el aviso sigue abierto mientras se arrastra el mapa, así que se cumple la condición para que la escena con panel y aviso entre en ella.

@@ -84,7 +84,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
     2. `feat(frontend): add RentRadar icon`, con `icon.svg` e `icon.test.ts`.
   - Hecho cuando: tras el primer commit, `categorySvg.test.ts` da los mismos resultados con las 11 imágenes y su diff solo mueve reglas; tras el segundo, los tests de `icon.test.ts` fallan primero y luego pasan; en los dos, vitest, build y eslint en verde.
 
-- [ ] **T7. Marca en la barra e icono de la pestaña.** RF-11, RF-12, RF-15
+- [x] **T7. Marca en la barra e icono de la pestaña.** RF-11, RF-12, RF-15
   - Ficheros:
     - Modifica `TopBar.tsx`: dentro del enlace de la marca, `<img src="/icon.svg" alt="" width="36" height="36">` y el nombre en un `<span translate="no">` que se oculta a la vista por debajo de 900 px y se muestra desde 900 px; hover del enlace; el enlace mide al menos 44 × 44 px.
     - Modifica `frontend/index.html`: `<link rel="icon" href="/icon.svg" type="image/svg+xml">` en lugar del icono vacío.
