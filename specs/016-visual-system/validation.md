@@ -1,10 +1,10 @@
 # Validación — 016-visual-system
 Rama: `feature/016-visual-system` · Entorno: frontend en el host (Vite 8.3.5, Vitest 5.0.5, Tailwind 4.3.3, maplibre-gl 6.14.0), Chrome DevTools MCP y stack de Docker Compose para la API pública
 
-Validación en curso: T1 a T5 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
+Validación en curso: T1 a T6 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
 
-## Notas de implementación (T1–T5)
-Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 y T5) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests). Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests. `package.json` y `package-lock.json` no cambian.
+## Notas de implementación (T1–T6)
+Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T6) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono). Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests. `package.json` y `package-lock.json` no cambian.
 
 ### Estado del entorno
 | Elemento | Estado |
@@ -112,6 +112,38 @@ Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 y T5) · Commits: T1 `e252367`, T2 
   - A los 600 ms y a los 1500 ms: lo mismo con la tarjeta en `display: none`.
   - Peticiones de salida: `POST /logout/` cortada (`net::ERR_INTERNET_DISCONNECTED`) y, tras devolver la red, `POST /logout/` 204. Consola: dos avisos de estilo de MapLibre y el `ERR_INTERNET_DISCONNECTED` del corte.
 - **Dos `csrf_failed` seguidos en la salida:** lo cubre `frontend/src/api/session.test.ts`, en `describe("logout")`, el test «si el segundo intento vuelve a dar csrf_failed, es el error general y no hay un tercer envío». Simula `csrfFailed`, quién soy, `csrfFailed` y comprueba el resultado `{ kind: "failed", reason: "csrf" }` y las peticiones salida, sesión, salida, sin tercera. El caso con un solo fallo y éxito en el reintento es «ante csrf_failed pregunta quién soy y reintenta una vez, releyendo el token». No se ha reproducido en el navegador.
+
+### T6. Lista blanca compartida e icono
+- **Commits:** `f8cc84c` (`refactor(frontend): share svg whitelist rules`, con `svgWhitelist.ts` y `categorySvg.test.ts`) y `322318c` (`feat(frontend): add RentRadar icon`, con `icon.svg` e `icon.test.ts`).
+- **Refactor:** los 45 `it` de `categorySvg.test.ts` (4 por cada una de las 11 imágenes y el de la lista de la semilla) son idénticos antes y después. El diff se revisó con `--color-moved` y `allow-indentation-change`: solo mueve reglas. Mutación de comprobación: añadir `<linearGradient/>` a `pool.svg` hace fallar el test de etiquetas con el módulo compartido. `TAG` y `ATTRIBUTE` se exportan; las listas de etiquetas y atributos siguen privadas.
+- **`?raw` desde `public/`:** `import icon from "../../public/icon.svg?raw"` funciona sin cambiar la configuración de Vite ni de vitest ni añadir dependencias. Con esto queda comprobada la afirmación del plan sobre el icono; la de `index.html` sigue pendiente de la T7.
+- **`icon.test.ts`, rojo y verde:** con un `icon.svg` provisional (solo el `path` del pin, válido para la lista blanca) fallaban 3 de 26, por su aserción:
+  - «al menos tres rellenos distintos»: `expected 1 to be greater than or equal to 3`.
+  - «la sombra es más oscura que la base y el brillo más claro»: `capa 1 del dibujo: expected undefined to be defined`.
+  - «1,5:1 entre base, sombra y brillo»: `capa 1 del dibujo: expected undefined to be defined`.
+
+  Los otros 23 pasaban ya con el provisional: las 4 reglas de la lista blanca, «sin limón» y «silueta 3:1» (la base ya era `#4A82EE`) y las 17 guardas (la referencia y los 16 casos negativos). Con el icono del plan, 26 de 26 en verde; el fichero es idéntico al SVG de `plan.md`.
+- **Casos negativos** (cada uno parte de un icono válido y cambia un solo rasgo; el test exige que falle exactamente esa lista de reglas y que las demás no fallen):
+
+  | SVG de prueba | Reglas que fallan |
+  |---|---|
+  | Degradado (`<linearGradient>`, `id`, `fill="url(#g)"`) | etiquetas, atributos y referencias |
+  | `scale(2)` en `transform` | atributos |
+  | Color de tres cifras (`#48E`) | atributos |
+  | Etiqueta `<g>` | etiquetas |
+
+- **Mutaciones sobre `icon.svg`** (una cada vez, con copia fuera del repositorio; tras cada una, `cmp` y sha256 iguales al original). Cada una hizo fallar solo su test, por su aserción, y los otros 25 siguieron en verde. Colores comprobados antes fuera del repositorio:
+
+  | Mutación | Test que falla | Aserción |
+  |---|---|---|
+  | Punto (capa 5) a `#F5D547` | ninguna capa usa el limón | `expected '#F5D547' not to be '#F5D547'` |
+  | Base (capa 0) a `#8FB3F5` (2,11:1 contra blanco; mantiene el orden de luminancias, 6,66:1 con la sombra y 1,62:1 con el brillo) | la silueta se distingue del blanco al menos 3:1 | `expected 2.1138… to be greater than or equal to 3` |
+  | Brillo y sombra intercambiados | la sombra es más oscura que la base y el brillo más claro | `expected 0.7533… to be less than 0.2359…` |
+  | Brillo (capa 1) a `#5A8EF0` (más claro que la base, 1,15:1) | 1,5:1 entre la base y la sombra y el brillo | `expected 1.1474… to be greater than or equal to 1.5` |
+
+- **Contrastes calculados en el test** (WCAG 2.x), iguales a los del plan: base `#4A82EE` contra sombra `#0F2763` 3,84; contra brillo `#D3E2FD` 2,81; contra blanco 3,67. Luminancias: sombra 0,0245 < base 0,2359 < brillo 0,7533.
+- **Verificación:** vitest, 30 ficheros y 1082 tests; eslint de `icon.test.ts` sin avisos; `npm run build` en verde, con `dist/icon.svg` idéntico a `public/icon.svg`. `package.json` y `package-lock.json` sin cambios.
+- **Incidencia de entorno:** la primera sesión de la T6 arrancó en segundo plano y su guardián obligó a trabajar en un worktree aparte. El refactor se hizo y se commiteó allí y llegó a la rama con un avance rápido, con el mismo hash (`f8cc84c`). Al cerrar Claude Code puede quedar vivo un proceso `claude daemon run --origin transient`.
 
 ### Medición de rendimiento de prueba (no oficial)
 Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× · orden A, B, B, A (T1-A, T2-B, T3-B, T4-A), una pestaña por traza.

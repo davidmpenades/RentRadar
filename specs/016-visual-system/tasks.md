@@ -72,7 +72,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
   - Commit: `feat(frontend): anchor the logout notice to the free map zone`
   - Hecho cuando: los tests fallan primero y luego pasan; vitest, build y eslint en verde; los límites en pantalla registrados para `validation.md`.
 
-- [ ] **T6. Lista blanca compartida e icono.** RF-13, RF-14 (una tarea, dos commits)
+- [x] **T6. Lista blanca compartida e icono.** RF-13, RF-14 (una tarea, dos commits)
   - Ficheros:
     - Crea `frontend/src/testing/svgWhitelist.ts`: las reglas de la 006 movidas sin cambios (`TAG`, `ATTRIBUTE` y las cuatro comprobaciones).
     - Modifica `frontend/src/panel/categorySvg.test.ts`: usa el módulo; sus cuatro `it` conservan nombre y lo que comprueban.
