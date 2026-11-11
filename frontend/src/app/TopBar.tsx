@@ -22,8 +22,15 @@ export function TopBar({ action, logoutPending, onNavigate, onLogout, registerRe
 
   return (
     <header className="flex h-14 shrink-0 items-center justify-between gap-3 border-b border-ink/10 bg-white px-4">
-      <a href="/map" onClick={followLink("/map")} className="inline-flex min-h-11 items-center text-xl font-bold">
-        {es.topBar.brand}
+      <a
+        href="/map"
+        onClick={followLink("/map")}
+        className="inline-flex min-h-11 min-w-11 items-center justify-center gap-2 rounded-lg px-1 text-xl font-bold hover:bg-ink/6"
+      >
+        <img src="/icon.svg" alt="" width="36" height="36" />
+        <span translate="no" className="sr-only min-[900px]:not-sr-only">
+          {es.topBar.brand}
+        </span>
       </a>
       {action === "register" && (
         <a ref={registerRef} href="/register" onClick={followLink("/register")} className="btn btn-primary">

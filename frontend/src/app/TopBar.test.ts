@@ -15,6 +15,8 @@ const bar = (action: TopBarAction, logoutPending = false) =>
 const links = (html: string) => html.match(/<a\b[^>]*>.*?<\/a>/g) ?? [];
 const buttons = (html: string) => html.match(/<button\b[^>]*>.*?<\/button>/g) ?? [];
 const classesOf = (tag: string) => (tag.match(/class="([^"]*)"/)?.[1] ?? "").split(" ");
+const attributesOf = (tag: string) =>
+  Object.fromEntries([...tag.matchAll(/\s([\w-]+)="([^"]*)"/g)].map((match): [string, string] => [match[1]!, match[2]!]));
 
 describe("TopBar", () => {
   it.each(ACTIONS)("con %s la marca es un enlace a /map de al menos 44 px", (action) => {
@@ -22,6 +24,31 @@ describe("TopBar", () => {
     expect(brand).toBeDefined();
     expect(brand).toMatch(/href="\/map"/);
     expect(classesOf(brand ?? "")).toContain("min-h-11");
+  });
+
+  describe("la marca", () => {
+    const brand = () => links(bar("none")).find((tag) => tag.includes(es.topBar.brand)) ?? "";
+
+    it("también mide 44 px de ancho: el icono solo ocupa 36", () => {
+      expect(classesOf(brand())).toEqual(expect.arrayContaining(["min-h-11", "min-w-11"]));
+    });
+
+    it("lleva el icono del sitio como imagen decorativa de 36 × 36 px", () => {
+      const image = brand().match(/<img\b[^>]*>/)?.[0] ?? "";
+      expect(attributesOf(image)).toEqual({ src: "/icon.svg", alt: "", width: "36", height: "36" });
+    });
+
+    it("lleva el nombre en un span que el traductor no toca, dentro del enlace", () => {
+      const name = brand().match(/<span\b[^>]*>RentRadar<\/span>/)?.[0] ?? "";
+      expect(attributesOf(name).translate).toBe("no");
+    });
+
+    it("oculta el nombre a la vista por debajo de 900 px sin quitarlo del nombre accesible", () => {
+      const name = brand().match(/<span\b[^>]*>RentRadar<\/span>/)?.[0] ?? "";
+      const classes = classesOf(name);
+      expect(classes).toEqual(expect.arrayContaining(["sr-only", "min-[900px]:not-sr-only"]));
+      expect(classes).not.toContain("hidden");
+    });
   });
 
   it.each(ACTIONS)("con %s la barra mide siempre 56 px y no se encoge: aparecer una acción no la mueve", (action) => {
