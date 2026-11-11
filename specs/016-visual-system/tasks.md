@@ -1,14 +1,8 @@
 # Tareas 016 — Sistema visual
 Spec: specs/016-visual-system/spec.md · Plan: specs/016-visual-system/plan.md
-Máximo 10 tareas: hay 8 (la T6 lleva dos commits), en orden lineal de dependencia (T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8). El paso previo y el cierre no son tareas: no producen código de la aplicación.
+Máximo 10 tareas: hay 8 (la T6 lleva dos commits), en orden lineal de dependencia (T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8). El cierre no es una tarea: no produce código de la aplicación.
 
 Cada tarea deja en verde `npx vitest run`, `npm run build` y `npx eslint <ficheros tocados>`, y cambia solo el frontend: no hay API, migraciones ni dependencias nuevas. Los tests de vitest se escriben primero y fallan por la razón esperada; vitest corre sin entorno de navegador, así que la parte visual y la interacción se comprueban en el navegador a 1280 y 375 px con la consola sin errores. Cuenta de pruebas: la T1 ya necesita sesión para comprobar «Salir» y su estado deshabilitado. Se registra una sola cuenta, `t16-a@example.com`, en la primera tarea que la necesite, con la autorización expresa del desarrollador en ese momento, y su sesión se reutiliza en el resto de tareas. Solo se crea otra si la sesión se pierde, otra vez con su OK. Levantar el stack se pregunta antes. Sin pruebas de mecanismo: la spec no toca privacidad ni seguridad.
-
-## Paso previo a la T1 (sin commit)
-Línea base A del rendimiento, con la rama tal como está antes de cualquier tarea:
-- `cd frontend && npm run build` y copia de `dist/` a `~/rentradar-perf/a`, fuera del repositorio.
-- Comprobar que `~/rentradar-perf/a/index.html` y su carpeta `assets/` existen.
-- Anotar el commit del que sale (`git log --oneline -1`) para `validation.md`.
 
 ## Tareas
 
@@ -110,7 +104,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
 
 ## Cierre (sin tarea de código)
 Tras la T8, con `/sdd-validate` y la aprobación del usuario:
-- **Medición de rendimiento:** compilar la versión B a `~/rentradar-perf/b`, servir A y B con `vite preview` en los puertos 4173 y 4174 (con el stack levantado y la autorización del desarrollador), calentamiento de cada versión descartado y seis pasadas A, B, A, B, A, B a 375 px con la CPU 4×, con su tráfico de red, sus medianas y el veredicto del umbral de la spec. Si no aprueba, se ajusta la superficie con el usuario sin bajar del 80 % de opacidad y se repite.
-- **`validation.md`:** cada RF con su verificación; la tabla de contraste recalculada (cristal y sólida, también con el negro puro, y el panel sobre la zona más oscura del mapa); la comparación de los colores de «positron» con una descarga nueva del estilo; los límites en pantalla del aviso; las comprobaciones de respaldo y preferencias (con el límite de las dos que se hacen por variables); la accesibilidad; las capturas de la pestaña en los dos temas con los grises medidos; el resultado de la precarga opcional; `git diff` de `package.json` y `package-lock.json` vacío y ningún uso del limón; recorrido solo con teclado a 1280 y 375 px y la consola sin errores.
+- **Rendimiento (aplazado):** no se mide en el cierre. La comprobación en un Android real (plan, «Comprobación de rendimiento») se hará antes del despliegue (spec 011) y no bloquea el cierre: la 016 se cierra como implementada con ese punto pendiente, visible en `validation.md` («Pendiente para la validación») y en MEMORY.md.
+- **`validation.md`:** cada RF con su verificación; el punto de rendimiento como pendiente, con la ubicación de los scripts de la prueba del 2026-11-10 (`~/rentradar-perf/tools`, sin versionar); la tabla de contraste recalculada (cristal y sólida, también con el negro puro, y el panel sobre la zona más oscura del mapa); la comparación de los colores de «positron» con una descarga nueva del estilo; los límites en pantalla del aviso; las comprobaciones de respaldo y preferencias (con el límite de las dos que se hacen por variables); la accesibilidad; las capturas de la pestaña en los dos temas con los grises medidos; el resultado de la precarga opcional; `git diff` de `package.json` y `package-lock.json` vacío y ningún uso del limón; recorrido solo con teclado a 1280 y 375 px y la consola sin errores.
 - **Commits de cierre:** `docs(spec-016): validation` y, con la spec en «implementada», `docs(memory): close spec 016`.
-- **Ajustes de texto de la spec:** MEMORY.md (spec activa pasa a la 007) y el punto 8 de `specs/015-login/notes.md` («el formulario de entrada usa los campos, el ojo y los botones de la 016»).
+- **Ajustes de texto de la spec:** MEMORY.md (spec activa pasa a la 007; la línea de la 011 recoge la comprobación de rendimiento en un Android real antes del despliegue; la 016 consta como implementada con ese punto pendiente) y el punto 8 de `specs/015-login/notes.md` («el formulario de entrada usa los campos, el ojo y los botones de la 016»).

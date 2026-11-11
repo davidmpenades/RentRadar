@@ -14,13 +14,13 @@ Esta spec fija un sistema visual común y lo aplica a lo que ya existe, para pod
 
 Se aplica a la barra superior, al panel de resultados, al aviso de fallo de salida, al formulario de registro, al error del mapa base y a «Página no encontrada». Ningún comportamiento de la 006 ni de la 009 cambia: solo la presentación, la posición del aviso y la posibilidad de cerrarlo.
 
-El estilo de referencia es un cristal translúcido sobre el mapa, como inspiración y no como copia. Cuatro condiciones son obligatorias: contraste AA medido contra el peor fondo del mapa, superficie sólida si el navegador no admite desenfocar lo que hay detrás, transiciones desactivadas con movimiento reducido y rendimiento medido arrastrando el mapa a 375 px con la CPU ralentizada.
+El estilo de referencia es un cristal translúcido sobre el mapa, como inspiración y no como copia. Cuatro condiciones son obligatorias: contraste AA medido contra el peor fondo del mapa, superficie sólida si el navegador no admite desenfocar lo que hay detrás, transiciones desactivadas con movimiento reducido y rendimiento comprobado arrastrando el mapa en un móvil Android real (esta última se aplaza hasta antes del despliegue y no bloquea el cierre de la spec; Rendimiento).
 
 Antes del plan se preparan dos o tres variantes visuales en `prototypes/016-visual-system/` y el usuario elige una. Cada variante incluye una imagen de categoría con el estilo de ilustración, como referencia para la spec 008. La variante elegida y sus valores (tinte, opacidad, desenfoque, sombras, radios, colores nuevos e icono) se registran en el plan, no en esta spec. La 016 se implementa antes que la 015.
 
 ## Usuarios
 - **Visitante** y **usuario** (los de la 009): ven la interfaz nueva; lo que pueden hacer no cambia, salvo cerrar el aviso de fallo de salida.
-- **Desarrollador del equipo**: reutiliza las piezas en la 015 y siguientes, usa la imagen de referencia en la 008 y mide el contraste y el rendimiento.
+- **Desarrollador del equipo**: reutiliza las piezas en la 015 y siguientes, usa la imagen de referencia en la 008 y mide el contraste y comprueba el rendimiento en un móvil real.
 
 ## Historias de usuario
 - HU-1. Como visitante, quiero que los botones y los campos se reconozcan como tales y respondan al pulsarlos, para saber qué puedo hacer y que mi acción se ha registrado.
@@ -75,8 +75,7 @@ Antes del plan se preparan dos o tres variantes visuales en `prototypes/016-visu
 | Colores de relleno distintos en el icono de RentRadar | al menos 3 (tono base, sombra dura y brillo) |
 | Diferencia entre las capas del icono a 16 px | razón de contraste de al menos 1,5:1 entre el tono base y la sombra, y entre el tono base y el brillo |
 | Contraste de la silueta del icono en la pestaña | al menos 3:1 con un fondo blanco y con el gris oscuro de las pestañas de Chrome en modo oscuro (el plan fija su valor, medido en la versión de Chrome de la verificación) |
-| Ralentización de la CPU en la medición | 4× |
-| Umbral de rendimiento | fotogramas por segundo ≥ 90 % de la línea base; fotogramas perdidos ≤ línea base + 5 puntos porcentuales |
+| Umbral de rendimiento (comprobación en un Android real) | con el desenfoque activo, la mediana de tres lecturas del medidor ≥ 90 % de la mediana de tres lecturas sin desenfoque, en el mismo móvil, la misma visita y el mismo arrastre |
 
 **Por qué el 80 %, y por qué no basta**. Con un tinte del 70 %, el precio azul sobre la línea de un círculo da 4,75:1, sin margen; con el 80 %, 5,70:1. Pero el peor fondo no es esa línea, sino una etiqueta oscura. Contra el negro puro (WCAG 2.x):
 
@@ -150,13 +149,14 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
   - Los botones y el ojo no esperan al doble toque en móvil, y el ojo y el enlace de la marca responden al pasar el puntero.
   - El nombre de la marca no se traduce y los títulos de página reparten sus líneas de forma equilibrada.
   - Verificación: vitest para la distancia, el precio y el marcado de la marca; en el navegador, las etiquetas de la cabecera de la página y los estilos calculados.
-- **Rendimiento (excepción pedida por el usuario para esta spec, no regla general)**:
-  - **Condiciones**: interfaz compilada para producción y servida en local, 375 px de ancho con emulación de móvil, CPU ralentizada 4× en las herramientas del navegador y vista inicial con los bienes de demostración y el panel mostrando sus tarjetas.
-  - **Gesto**: un arrastre continuo del mapa de unos 5 s, el mismo en todas las pasadas.
-  - **Versiones**: A es la línea base, la interfaz justo antes de la primera tarea de esta spec; B es la interfaz con la spec terminada. Las dos se miden en la misma sesión, con la misma máquina, el mismo ancho, la misma ralentización, los mismos datos y el mismo gesto.
-  - **Orden**: primero una pasada de calentamiento de cada versión, que se descarta. Después, seis pasadas alternadas: A, B, A, B, A, B. En cada pasada se registra el tráfico de red, para detectar que una versión aproveche teselas que la otra tuvo que descargar.
-  - **Métrica**: fotogramas por segundo durante el arrastre y porcentaje de fotogramas perdidos o presentados a medias, según la pista de fotogramas del navegador. Se toma la mediana de las tres pasadas de cada versión.
-  - **Aprobado**: la mediana de fotogramas por segundo de B es al menos el 90 % de la de A, y los fotogramas perdidos de B no superan los de A en más de 5 puntos porcentuales. Si no se aprueba, la spec no se cierra: se ajusta la superficie con el usuario, sin bajar del 80 % de opacidad, y se repite la medición.
+- **Rendimiento (excepción pedida por el usuario para esta spec, no regla general; comprobación aplazada)**:
+  - **Por qué no es una medición A/B en el portátil**: la prueba del 2026-11-10 (`validation.md`) mostró que la métrica está saturada en ese equipo, con unos 60 fotogramas por segundo y casi ningún fotograma perdido en las dos versiones, y no distingue una versión de otra.
+  - **Por qué se compara con el desenfoque desactivado**: un umbral fijo mezclaría el coste del mapa con el del cristal; comparar en el mismo móvil mide solo lo que añade el desenfoque.
+  - **Condiciones**: interfaz compilada para producción, con la spec terminada, abierta en el Chrome de un móvil Android real conectado por USB con depuración remota; vista inicial con los bienes de demostración y el panel mostrando sus tarjetas, que es la escena obligatoria. El aviso de cristal es opcional: solo se incluye si en ese momento hay una sesión abierta en el móvil; no se crea una cuenta ni se corta la red solo para esta comprobación.
+  - **Gesto**: el mismo arrastre continuo del mapa, de unos 5 s, en la misma visita.
+  - **Lectura**: el medidor de las herramientas de desarrollo remotas durante el arrastre, con el desenfoque de las superficies de cristal activo y con el desenfoque desactivado desde la consola remota. Tres lecturas de cada, alternando, y se toma la mediana de cada serie. Vale tanto si el medidor da fotogramas por segundo como si da el porcentaje de fotogramas presentados.
+  - **Aprobado**: la mediana con el desenfoque activo es al menos el 90 % de la mediana sin desenfoque (Valores). Si va a tirones y no se aprueba, se ajusta la superficie con el usuario, sin bajar del 80 % de opacidad, y se repite la comprobación.
+  - **Cuándo**: antes del despliegue (spec 011). No bloquea el cierre de esta spec: se cierra como implementada con este punto pendiente, visible en `validation.md` («Pendiente para la validación») y en MEMORY.md.
 - **Accesibilidad y móvil (constitución, punto 7)**:
   - Se diseña a 375 px y se amplía a 1280 px, sin desbordamiento horizontal.
   - Todos los controles miden al menos 44 × 44 px: botones, campos, el ojo, «Cerrar aviso» y el enlace de la marca.
@@ -212,6 +212,8 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - Exigir un contraste de 3:1 al borde del botón secundario: lo identifica su texto.
 - Modo oscuro y recolorear el mapa base (como en la 006).
 - Medir el rendimiento en navegadores distintos de Chromium.
+- Una medición formal del rendimiento en el portátil que compare la interfaz anterior con la nueva (A/B, con calentamiento y pasadas alternadas): la métrica se satura en ese equipo.
+- Bloquear el cierre de esta spec por la comprobación de rendimiento en el móvil: se hace antes del despliegue (spec 011).
 - Un icono de pestaña de respaldo en formato de mapa de bits.
 - Catálogo visual o documentación interactiva de los componentes, y animaciones que no sean transiciones de estado.
 
@@ -223,6 +225,7 @@ No hace falta `/sdd-change`:
 - **006, lista blanca de SVG de las imágenes de categoría**: no cambia la lista ni lo que comprueba su test. El plan puede mover sus reglas a un módulo que usen ese test y el del icono.
 - **006, controles del mapa**: conservan su anillo de foco; el de esta spec solo se usa en sus superficies (RF-15).
 - **009, RF-9**: la marca sigue siendo un enlace a la página del mapa; por debajo de 900 px solo se ve el icono, con el mismo nombre accesible (RF-11).
+- **011, despliegue** (todavía sin spec): recoge la comprobación de rendimiento de esta spec en un Android real, que se hace antes de desplegar (Rendimiento). Es una nota en MEMORY.md, no un cambio de otra spec.
 
 Ajustes de texto al cerrar la spec:
 - MEMORY.md:
@@ -230,12 +233,14 @@ Ajustes de texto al cerrar la spec:
   - desaparece el punto «Spec visual nueva»;
   - la línea de la 015 pasa de «rediseñar el formulario de registro…» a «el formulario de entrada usa los campos, el ojo y los botones de la 016»;
   - la línea de la 008 cita la imagen de categoría de referencia de la 016 como punto de partida para rehacer las once imágenes, dentro de la lista blanca de la 006 sin cambiarla;
+  - la línea de la 011 recoge la comprobación de rendimiento de la 016 en un Android real antes del despliegue, y la 016 consta como implementada con ese punto pendiente;
   - la línea de la 007 recoge que, al cambiar la altura del panel, el aviso flotante tiene que seguir anclado a él.
 - Notas de la 015, punto 8: el formulario de entrada usa los campos, el ojo y los botones de la 016.
 
 ## Riesgos aceptados
 - **Mapa base de un tercero**: el estilo «positron» se descarga en cada carga. Si cambia sus colores, el contraste medido puede caducar sin que cambie el código, y nada lo detecta automáticamente.
-- **Rendimiento medido solo en Chromium**, con la CPU emulada: Safari en iOS y Firefox no quedan medidos.
+- **Rendimiento sin comprobar al cerrar la spec**: hasta que se haga la comprobación en un Android real, antes del despliegue, no se sabe si el cristal va fluido en un móvil de gama media. Si va a tirones, se ajusta entonces la superficie, sin bajar del 80 % de opacidad.
+- **Rendimiento solo en Chromium**: la comprobación usa el Chrome de Android; Safari en iOS y Firefox no quedan medidos.
 - **Altura del panel**: la 007 la cambia (plegado, medio y desplegado), y el aviso tendrá que seguir anclado a ella sin tapar el zoom ni la atribución.
 - **Icono de la pestaña**: un navegador que no admita un icono vectorial en la pestaña muestra su icono por defecto; no hay respaldo en mapa de bits.
 - **Secundario sin contraste de borde**: sobre un cristal claro, el borde del secundario casi desaparece y el botón depende de su texto, su relleno y su sombra. El usuario lo aceptó al elegir el borde claro.
@@ -281,7 +286,7 @@ Ajustes de texto al cerrar la spec:
   - orden de tabulación, con el ojo justo después del campo de contraseña;
   - la sombra de los botones no oculta el anillo de foco;
   - sin desbordamiento horizontal a 375 px.
-- **Rendimiento**: las dos pasadas de calentamiento descartadas y las seis pasadas alternadas (A, B, A, B, A, B), con su tráfico de red, sus medianas y su veredicto, registradas en `validation.md`.
+- **Rendimiento**: no bloquea el cierre. La comprobación en un Android real queda pendiente hasta antes del despliegue (spec 011) y consta como pendiente en `validation.md` («Pendiente para la validación») y en MEMORY.md. La spec se cierra como implementada con este punto pendiente.
 - **Navegador**, a 1280 y 375 px, con la consola sin errores propios de la aplicación y un recorrido solo con teclado: marca, «Registrarse» y «Salir», el aviso con «Reintentar» y «Cerrar aviso» (la salida fallida se simula cortando la petición desde las herramientas del navegador), el panel con «Reintentar» y «Volver a la zona inicial», el formulario de registro (email, contraseña, ojo y «Crear cuenta»), «Ir al mapa» y el error del mapa base.
   - Para ver «Salir» y el aviso hace falta una sesión: se crea una cuenta `@example.com` en la base de datos de desarrollo con autorización expresa del desarrollador en ese momento, como en la 009.
 - **Pruebas de mecanismo**: ninguna, porque la spec no toca privacidad ni seguridad.
@@ -292,7 +297,7 @@ Ajustes de texto al cerrar la spec:
 - Ninguna sobre el comportamiento.
 - **Notas para el plan (no cambian la spec)**:
   - **Secundario y foco**: el plan fija el relleno, el borde claro y la sombra del secundario (los prototipos usan blanco al 70 % con borde blanco al 90 %), cómo se dibuja el anillo separado 2 px sin que lo recorte un contenedor con desbordamiento oculto, y si los controles de la 006 que hoy usan otro anillo se quedan como están.
-  - **Medición de rendimiento**: cómo se reproduce el mismo gesto de arrastre en todas las pasadas, cómo se sirven las dos compilaciones (A y B) en la misma sesión y cómo se obtienen de la traza los fotogramas por segundo y los perdidos.
+  - **Comprobación de rendimiento**: cómo se sirve la compilación al móvil, cómo se desactiva el desenfoque desde la consola remota y cómo se obtiene el aviso si hay sesión abierta.
   - **Respaldo**: cómo se desactiva el desenfoque. Qué emulaciones admite la herramienta del navegador (transparencia reducida, contraste alto y colores forzados; la 006 solo documenta el movimiento reducido) y, para cada una que no admita, qué estilo calculado se comprueba en su lugar.
   - **Contraste**: de dónde salen los colores de los fondos de referencia del estilo «positron».
   - **Marcado accesible**: «deshabilitado» es `aria-disabled`, como en la 009. El rol de estado va solo en el mensaje del aviso, en un elemento siempre montado para que cada fallo se anuncie. «Cerrar aviso» y «Reintentar» quedan fuera de ese elemento.

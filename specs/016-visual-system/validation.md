@@ -1,7 +1,7 @@
 # Validación — 016-visual-system
 Rama: `feature/016-visual-system` · Entorno: frontend en el host (Vite 8.3.5, Vitest 5.0.5, Tailwind 4.3.3, maplibre-gl 6.14.0), Chrome DevTools MCP y stack de Docker Compose para la API pública
 
-Validación en curso: T1 a T8 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
+Validación en curso: T1 a T8 hechas. La validación completa (cada RF, contraste, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`; la comprobación de rendimiento en un Android real queda pendiente hasta antes del despliegue y no bloquea el cierre (ver «Cambio de requisitos: comprobación de rendimiento»). Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
 
 ## Notas de implementación (T1–T8)
 Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T8) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`, T5 `7692688` (hook) y `1493758` (aviso), más `d6912d1` (movimiento de los tests), T6 `f8cc84c` (refactor) y `322318c` (icono), T7 `e2dc7e7`, T8 `b2de3b0`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests; tras la T5, 29 ficheros y 1056 tests; tras la T6, 30 ficheros y 1082 tests; tras la T7, 31 ficheros y 1088 tests; tras la T8, 31 ficheros y 1092 tests. `package.json` y `package-lock.json` no cambian.
@@ -9,7 +9,7 @@ Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T8) · Commits: T1 `e252367`, T2 
 ### Estado del entorno
 | Elemento | Estado |
 |---|---|
-| Línea base A del rendimiento | `~/rentradar-perf/a`, compilada del commit `d458e30` (`docs(spec-016): tasks`), antes de la T1. `index.html` y `assets/` comprobados; idéntica a `frontend/dist` en el momento de la copia. |
+| Línea base A del rendimiento (sin uso desde el cambio de la medición) | `~/rentradar-perf/a`, compilada del commit `d458e30` (`docs(spec-016): tasks`), antes de la T1. `index.html` y `assets/` comprobados; idéntica a `frontend/dist` en el momento de la copia. Solo sirvió para la prueba del 2026-11-10. |
 | Vite de desarrollo | Puerto 5173, en la terminal del desarrollador. No se lanza, para ni relanza desde la sesión. |
 | Stack de Docker Compose | `backend` y `db` arriba y sanos. La T3 solo lee la API pública. Al empezar la T4 estaba parado (el proxy de Vite devolvía 502) y se levantó antes de repetir el registro. |
 | Cuentas de prueba | `t16-a@example.com`, creada en la T1 en la BD de desarrollo desde el formulario de registro: su sesión se cerró por un clic accidental (`POST /api/v1/auth/logout/` 204 a las 08:11:37 UTC). `t16-b@example.com`, creada en la T4 con autorización expresa, también desde el formulario: su sesión se cerró en la T5 (ver el recorrido final). `t16-c@example.com`, creada en la T5 con autorización expresa, desde el formulario: su sesión se cerró con el reintento de la salida. Las contraseñas se generaron en la página y no se guardaron. Ninguna sesión queda abierta. |
@@ -234,6 +234,8 @@ Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4 a T8) · Commits: T1 `e252367`, T2 
 - **NO VERIFICABLE con el MCP:** que la preconexión reutilice de hecho la conexión del estilo y de las teselas. Solo se ve la etiqueta y su atributo, no el reparto de conexiones.
 
 ### Medición de rendimiento de prueba (no oficial)
+Es el antecedente del cambio de requisitos de la sección siguiente.
+
 Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× · orden A, B, B, A (T1-A, T2-B, T3-B, T4-A), una pestaña por traza.
 - **Conclusión:** procedimiento validado: dos compilaciones servidas, gesto reproducible, recuento por fotograma y perfil de CPU. La GPU solo se ve de forma indirecta. La métrica de la spec está saturada en este portátil, con unos 60 fps y casi 0 % de perdidos en las dos versiones, y no distingue A de B. Sin veredicto sobre los 22 px.
 - **Fotogramas** (fps; perdidos): T1-A 59,82; 0 %. T2-B 59,87; 0,33 %. T3-B 59,54; 0,33 %. T4-A 59,67; 0 %.
@@ -250,13 +252,23 @@ Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× ·
   - `VizCompositorThread` +42 % (A 216 y 234 ms; B 323 y 314 ms): pista encontrada a posteriori, mirando varios hilos con las trazas ya grabadas. Sin probabilidad.
   - T4-A tiene `CrGpuMain` anómalo (3784 ms, 232 tareas de unos 13 ms): causa desconocida y sin efecto en los fotogramas.
 - **Límites:** GPU integrada del portátil (AMD Lucienne), no la de un móvil; el 4× solo frena la CPU; dos trazas por versión, con una diferencia entre las dos de la misma versión del 5 % al 7 % en el hilo principal y de hasta el 11 % en la GPU; escena solo con el panel, porque el aviso de cristal aún no existe; solo Chromium.
-- **Herramientas y trazas** (fuera del repositorio): `~/rentradar-perf/tools` (scripts del gesto y del análisis, con `LEEME.txt`) y `~/rentradar-perf/prueba-2026-11-10` (seis trazas: calentamiento y las cuatro de arriba).
+- **Herramientas y trazas** (fuera del repositorio y sin versionar): `~/rentradar-perf/tools` (scripts del gesto y del análisis, con `LEEME.txt`) y `~/rentradar-perf/prueba-2026-11-10` (seis trazas: calentamiento y las cuatro de arriba). `~/rentradar-perf/a` y `~/rentradar-perf/b` son las compilaciones de esa prueba (B es del commit `0ad08b7`, no la versión final).
+
+### Cambio de requisitos: comprobación de rendimiento
+Fecha: 2026-11-11 · `/sdd-change` sobre la spec, el plan, las tareas y este fichero.
+- **Se elimina** la medición oficial A/B en el portátil (calentamiento y seis pasadas alternadas con la CPU a 4×). La prueba del 2026-11-10 mostró que la métrica está saturada en ese equipo (unos 60 fotogramas por segundo y casi un 0 % de fotogramas perdidos en A y en B) y no distingue las versiones.
+- **Se sustituye** por una comprobación manual en un Android real conectado por USB: la compilación con la spec terminada servida con `vite preview`, el Chrome del móvil con depuración remota (`chrome://inspect` y reenvío de puerto), el panel con sus tarjetas abierto (el aviso, solo si ya hay una sesión abierta en el móvil), un arrastre del mapa de unos 5 s y la lectura del medidor de las herramientas remotas con el desenfoque activo y con el desenfoque desactivado desde la consola remota: tres lecturas de cada, alternando, y la mediana. Si va a tirones, se aplican las palancas del plan, sin bajar del 80 % de opacidad.
+- **Se aplaza** hasta antes del despliegue (spec 011) y no bloquea el cierre de la 016: se cierra como implementada con este punto pendiente (ver «Pendiente para la validación» y MEMORY.md).
+- **Desaparecen** el orden de las pasadas, la definición de «presentados a medias», lo de «misma sesión» y la compilación A como paso previo.
+- **Umbral:** con el desenfoque activo, la mediana de tres lecturas es al menos el 90 % de la mediana de tres lecturas sin desenfoque, en el mismo móvil, la misma visita y el mismo arrastre. Se descartó un valor fijo o ligado a la frecuencia de refresco, porque mezclaría el coste de MapLibre con el del cristal.
+- **Desenfoque:** se desactiva fijando `--glass-filter` en línea en cada `.glass` desde la consola remota (en `:root` no basta). Comprobado en el navegador de escritorio (`blur(22px)` pasa a `none` en los dos elementos); pendiente de comprobar en el móvil.
+- **Scripts de la prueba del 2026-11-10:** no se versionan; están en `~/rentradar-perf/tools` (con `LEEME.txt`).
 
 ### Pendiente para la validación
-- Medición de rendimiento A/B con la CPU a 4×, calentamiento y seis pasadas alternadas.
+- Comprobación de rendimiento en un Android real conectado por USB (spec, «Rendimiento»; plan, «Comprobación de rendimiento»): aplazada hasta antes del despliegue (spec 011); no bloquea el cierre de la 016.
 - Comparación de los colores de «positron» con una descarga nueva del estilo.
 - Texto al 200 % con el ajuste real del navegador y transparencia reducida del sistema: no se pueden emular con las herramientas (ver la T5).
 - Dos `csrf_failed` seguidos en la salida: cubiertos solo por vitest; no se ha reproducido en el navegador.
 - Gris real de las pestañas de Chrome: `#202124` y `#35363A` son valores supuestos (ver la T7); si la validación puede medirlos, manda la medición.
 - Ninguna sesión abierta: `/sdd-validate` pedirá una cuenta nueva, con autorización expresa, si repite alguna comprobación con «Salir».
-- Para el `/sdd-change` de la medición oficial: la T5 comprobó que el aviso sigue abierto mientras se arrastra el mapa, así que se cumple la condición para que la escena con panel y aviso entre en ella.
+- La T5 comprobó que el aviso sigue abierto mientras se arrastra el mapa, así que la escena de la comprobación de rendimiento puede incluir el aviso, que es opcional: solo si ya hay una sesión abierta en el móvil.
