@@ -71,6 +71,11 @@ export function logoutResult(outcome: SettledLogout): LogoutResult {
   return { status: "authenticated", announcement: null, focus: "logout", notice: "logout_failed" };
 }
 
+// Cerrar el aviso no cambia la sesión ni lo que se anuncia: solo lo retira y devuelve el foco a Salir
+export function dismissResult(): { notice: null; focus: "logout" } {
+  return { notice: null, focus: "logout" };
+}
+
 export function registrationResult(): { status: SessionStatus; announcement: string } {
   return { status: "authenticated", announcement: es.session.registered };
 }

@@ -2,6 +2,7 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { SessionClient } from "../api/session";
 import {
+  dismissResult,
   loadSessionStatus,
   logoutResult,
   registrationResult,
@@ -21,6 +22,7 @@ export type SessionContextValue = {
   // Un objeto nuevo por petición, para que el mismo destino vuelva a enfocarse
   focusRequest: FocusRequest | null;
   logout: () => void;
+  dismissNotice: () => void;
   markRegistered: () => void;
 };
 
@@ -67,6 +69,12 @@ export function SessionProvider({ client, logError, children }: SessionProviderP
     });
   }, [client, logError]);
 
+  const dismissNotice = useCallback(() => {
+    const result = dismissResult();
+    setNotice(result.notice);
+    setFocusRequest({ target: result.focus });
+  }, []);
+
   const markRegistered = useCallback(() => {
     const result = registrationResult();
     setStatus(result.status);
@@ -75,8 +83,8 @@ export function SessionProvider({ client, logError, children }: SessionProviderP
   }, []);
 
   const value = useMemo(
-    () => ({ status, announcement, notice, logoutPending, focusRequest, logout, markRegistered }),
-    [status, announcement, notice, logoutPending, focusRequest, logout, markRegistered],
+    () => ({ status, announcement, notice, logoutPending, focusRequest, logout, dismissNotice, markRegistered }),
+    [status, announcement, notice, logoutPending, focusRequest, logout, dismissNotice, markRegistered],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
