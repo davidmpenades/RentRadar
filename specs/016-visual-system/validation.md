@@ -1,19 +1,19 @@
 # Validación — 016-visual-system
 Rama: `feature/016-visual-system` · Entorno: frontend en el host (Vite 8.3.5, Vitest 5.0.5, Tailwind 4.3.3, maplibre-gl 6.14.0), Chrome DevTools MCP y stack de Docker Compose para la API pública
 
-Validación en curso: T1 a T3 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
+Validación en curso: T1 a T4 hechas. La validación completa (cada RF, contraste, rendimiento, accesibilidad, recorrido con teclado) se escribe al cierre con `/sdd-validate`. Hasta entonces este fichero recoge las notas de implementación, para que no se pierdan.
 
-## Notas de implementación (T1–T3)
-Fecha: 2026-11-10 · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests. `package.json` y `package-lock.json` no cambian.
+## Notas de implementación (T1–T4)
+Fecha: 2026-11-10 (T1–T3) y 2026-11-11 (T4) · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`, T4 `6453e26`. Cada tarea cierra con vitest, eslint de los ficheros tocados y `npm run build` en verde: tras la T3, 27 ficheros y 1038 tests; tras la T4, 27 ficheros y 1043 tests. `package.json` y `package-lock.json` no cambian.
 
 ### Estado del entorno
 | Elemento | Estado |
 |---|---|
 | Línea base A del rendimiento | `~/rentradar-perf/a`, compilada del commit `d458e30` (`docs(spec-016): tasks`), antes de la T1. `index.html` y `assets/` comprobados; idéntica a `frontend/dist` en el momento de la copia. |
 | Vite de desarrollo | Puerto 5173, en la terminal del desarrollador. No se lanza, para ni relanza desde la sesión. |
-| Stack de Docker Compose | `backend` y `db` arriba y sanos. La T3 solo lee la API pública. |
-| Cuenta de prueba | `t16-a@example.com`, creada en la T1 en la BD de desarrollo desde el formulario de registro. Su sesión se cerró por un clic accidental (`POST /api/v1/auth/logout/` 204 a las 08:11:37 UTC). La T4 necesita una cuenta nueva, con autorización expresa del desarrollador en ese momento. La contraseña se generó en la página y no se guardó. |
-| Navegador | Pestaña 3 abierta, sin sesión. Las pestañas de prueba aisladas se cierran al terminar. El perfil de Chrome DevTools MCP solo admite un navegador: con otro servidor `chrome-devtools-mcp` activo, `new_page` falla con «already running». |
+| Stack de Docker Compose | `backend` y `db` arriba y sanos. La T3 solo lee la API pública. Al empezar la T4 estaba parado (el proxy de Vite devolvía 502) y se levantó antes de repetir el registro. |
+| Cuentas de prueba | `t16-a@example.com`, creada en la T1 en la BD de desarrollo desde el formulario de registro: su sesión se cerró por un clic accidental (`POST /api/v1/auth/logout/` 204 a las 08:11:37 UTC). `t16-b@example.com`, creada en la T4 con autorización expresa, también desde el formulario, con la sesión abierta para la T5. Las contraseñas se generaron en la página y no se guardaron. |
+| Navegador | Una pestaña abierta, con la sesión de `t16-b@example.com`. Las pestañas de prueba aisladas se cierran al terminar. El perfil de Chrome DevTools MCP solo admite un navegador: con otro servidor `chrome-devtools-mcp` activo, `new_page` falla con «already running». |
 
 ### T1. Botones y anillo de foco
 - **Estado pulsado de RF-1:** leído de la hoja de estilos (la herramienta no mantiene `:active`), no medido. Las reglas `.btn-primary:active` y `.btn-secondary:active` y los valores resueltos de `--shadow-btn-primary-pressed` y `--shadow-btn-secondary-pressed` constan en esta nota: 12/24 px pasa a 3/8 px en el principal y 6/16 px a 2/6 px en el secundario, con `scale(.97)`.
@@ -50,6 +50,31 @@ Fecha: 2026-11-10 · Commits: T1 `e252367`, T2 `9355bdb`, T3 `4ea4c34`. Cada tar
   - `surfaces.test.ts` se añade a los tests previstos.
 - **Capturas** del panel (1280 y 375 px, sobre el peor fondo y en colores forzados) en `prototypes/016-visual-system/capturas/`, que no se versiona.
 
+### T4. Cerrar aviso
+- **Marcado A (provisional):** el contenedor sigue superpuesto (`absolute inset-x-0 top-0 z-20`, sin eventos de puntero), en el mismo sitio y con el mismo limón. Dentro hay una tarjeta siempre montada, con fondo, margen y relleno solo cuando hay aviso: sin aviso mide 0 px de alto y no tapa el mapa. La región `role="status"` va dentro de la tarjeta y contiene solo el mensaje; «Reintentar» (`btn-primary`) y «Cerrar aviso» (`btn-secondary`) van fuera de la región, para que el anuncio no incluya el nombre de los botones. La T5 sustituye este marcado por la zona anclada y la tarjeta de cristal.
+- **Estado:** `dismissResult()` devuelve el aviso a ninguno y el foco a «Salir», sin anuncio. `dismissNotice` solo toca el aviso y la petición de foco: ni el estado de sesión ni el anuncio.
+- **Tests adelantados de la T5:** «la región solo contiene el mensaje de la 009» y «ningún botón queda dentro de la región». Viven por ahora en `TopBar.test.ts`, con los demás del aviso, y la T5 los mueve a `LogoutNotice.test.ts`.
+- **Test de cableado:** comprueba que «Reintentar» llama solo a `onRetry` y «Cerrar aviso» solo a `onDismiss`. `renderToStaticMarkup` no muestra a qué función va cada `onClick`, así que el test llama al componente y recorre su árbol de elementos. Se comprobó con mutación: se intercambiaron los dos `onClick` de `LogoutNotice.tsx` y falló solo ese test, con `expected "vi.fn()" to be called 1 times, but got 0 times` en `onRetry`; los otros 18 de `TopBar.test.ts` pasaron. sha256 antes y después `f05500868897c1eb49b74195b109ffe9a890c80191b15510065ab4393689822d`, y `cmp` idéntico a la copia.
+- **Tests escritos primero:** cinco fallaron antes de implementar, cada uno por su razón: `dismissResult is not a function`; `es.session.dismiss` sin definir en lugar de «Cerrar aviso»; el segundo botón ausente (`expected undefined to be defined`); la región con «Reintentar» dentro (recibido `No se ha podido salir. Inténtalo de nuevo.Reintentar`); y un `<button` dentro de la región.
+- **Desviación:** el reintento con éxito y el reintento ante `csrf_failed` pasan al final de la T5. Una salida con éxito cierra la sesión de `t16-b@example.com`, que la T5 necesita, y no hay pantalla de entrada hasta la 015, así que perderla obligaría a registrar otra cuenta.
+- **Cuenta:** `t16-b@example.com` registrada desde `/register`, con la contraseña generada en la página y asignada al campo no controlado (24 caracteres alfanuméricos de `crypto.getRandomValues`), sin salir de ahí. La sesión queda abierta para la T5. Un primer intento, con el stack parado, no llegó al backend (502 de Vite); su contraseña se descartó.
+- **Recorrido en el navegador**, un ancho cada vez, con el ancho aplicado con `emulate` antes de cortar la red (la página no se recargó) y la red en `Offline` para la salida fallida:
+
+| Paso | 1280 × 800 | 375 × 812 (móvil, táctil) |
+|---|---|---|
+| Sin aviso | Tarjeta de 0 px de alto; en el borde superior de la zona, bajo la barra, está el `canvas` del mapa | Igual |
+| Salida fallida | Mensaje y dos botones; tarjeta de 60 px (y 64 a 124); «Reintentar» 135,5 × 44 y «Cerrar aviso» 147,9 × 44; foco en «Salir» | Tarjeta de 96 px (y 64 a 160), en dos filas; botones iguales; foco en «Salir»; sin scroll horizontal |
+| Regiones de estado | Aviso: «No se ha podido salir. Inténtalo de nuevo.»; global: vacía | Igual |
+| «Cerrar aviso» con clic | Tarjeta a 0 px, región del aviso vacía, foco en «Salir», barra en «Salir», región global sin cambios (vacía) | Igual |
+| «Salir» otra vez | El aviso reaparece con el mensaje | Igual (96 px) |
+| «Reintentar» | Se retira al empezar (región vacía, 0 px) y reaparece 45 ms después; foco en «Salir» | Igual, a los 33 ms |
+| Teclado | Dos Tab desde «Salir» hasta «Cerrar aviso»; Enter y Espacio lo cierran y el foco acaba en «Salir»; anillo sólido de 2 px `rgb(22, 71, 184)` | Igual con Enter y con Espacio |
+
+- **Consola:** sin errores de la aplicación. Solo `net::ERR_INTERNET_DISCONNECTED` de las peticiones cortadas (5 a 1280 y 4 a 375), un 502 del primer intento con el stack parado y dos avisos de estilo de MapLibre sobre `highway-shield-*`.
+- **Red:** quitada una sola vez al final, con el viewport a 1280 × 800 y sin completar la salida; comprobada con `GET /api/v1/auth/session/` (200), la barra en «Salir» y `navigator.onLine`. No se midió por separado a 375. Entre los dos anchos se quitó la limitación para aplicar el ancho antes de volver a cortar.
+- **Incidencia de entorno:** el servidor MCP solo lee scripts dentro de su raíz de trabajo, así que los de medida se pasaron en línea.
+- **No comprobado en la T4:** el reintento con éxito y el de `csrf_failed` (ver la desviación).
+
 ### Medición de rendimiento de prueba (no oficial)
 Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× · orden A, B, B, A (T1-A, T2-B, T3-B, T4-A), una pestaña por traza.
 - **Conclusión:** procedimiento validado: dos compilaciones servidas, gesto reproducible, recuento por fotograma y perfil de CPU. La GPU solo se ve de forma indirecta. La métrica de la spec está saturada en este portátil, con unos 60 fps y casi 0 % de perdidos en las dos versiones, y no distingue A de B. Sin veredicto sobre los 22 px.
@@ -72,4 +97,5 @@ Fecha: 2026-11-10 · A: `d458e30` · B: `0ad08b7` · 375 px, táctil, CPU 4× ·
 ### Pendiente para la validación
 - Medición de rendimiento A/B con la CPU a 4×, calentamiento y seis pasadas alternadas.
 - Comparación de los colores de «positron» con una descarga nueva del estilo.
-- Estados de la T4 y la T5 con una cuenta nueva.
+- Estados de la T5 con la sesión de `t16-b@example.com`, abierta. Si se pierde, cuenta nueva con autorización expresa.
+- Al final de la T5: el reintento ante `csrf_failed` y el reintento con éxito, que cierra la sesión y por eso va el último.

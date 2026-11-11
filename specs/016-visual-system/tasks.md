@@ -47,7 +47,7 @@ Línea base A del rendimiento, con la rama tal como está antes de cualquier tar
   - Commit: `feat(frontend): add glass surfaces and restyle the results panel`
   - Hecho cuando: los tests fallan primero y luego pasan; vitest, build y eslint en verde; el panel idéntico en altura y comportamiento a 1280 y 375 px, y legible sobre el peor fondo.
 
-- [ ] **T4. «Cerrar aviso».** RF-6, RF-7
+- [x] **T4. «Cerrar aviso».** RF-6, RF-7
   - Ficheros:
     - Modifica `frontend/src/session/sessionState.ts`: `dismissResult()` devuelve el aviso a ninguno y el foco a «Salir», sin anuncio.
     - Modifica `SessionProvider.tsx`: `dismissNotice` en el contexto; no toca el estado de sesión ni el anuncio.
