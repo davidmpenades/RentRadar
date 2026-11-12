@@ -37,6 +37,11 @@ CATEGORY_SLUGS = [
     "canoe",
     "other",
 ]
+SKI = "ski"
+# Posiciones de la demostración, contando desde 0
+SKI_POSITION = 23
+SECOND_OF_THE_PAIR_POSITION = 11
+PAUSED_POSITION = 24
 PRIVACY_RADII = {500, 1000, 2000}
 SHARED_PAIR = ((39.4579, -0.3803), (39.4581, -0.3801))
 SHARED_PAIR_RADIUS = 1000
@@ -147,8 +152,49 @@ def test_the_first_eleven_demo_assets_cover_each_seed_category_in_order():
     assert [entry.category_slug for entry in DEMO_ASSETS[:11]] == CATEGORY_SLUGS
 
 
-def test_every_demo_category_belongs_to_the_seed():
-    assert {entry.category_slug for entry in DEMO_ASSETS} == set(CATEGORY_SLUGS)
+def test_every_demo_category_is_one_of_the_seed_or_ski():
+    assert {entry.category_slug for entry in DEMO_ASSETS} == set(CATEGORY_SLUGS) | {SKI}
+
+
+def test_the_ski_asset_is_the_one_that_was_the_third_van():
+    entry = DEMO_ASSETS[SKI_POSITION]
+
+    assert entry.category_slug == SKI
+    assert entry.title == "Equipo de esquí de pista completo"
+    assert entry.description == (
+        "Esquís con fijaciones, botas y bastones en varias tallas de adulto, "
+        "revisados y listos para la temporada."
+    )
+    assert (entry.price, entry.price_unit, entry.privacy_radius) == (
+        "49.90",
+        "day",
+        1000,
+    )
+    assert (entry.latitude, entry.longitude) == (39.4605, -0.3760)
+    assert entry.active
+
+
+def test_only_two_vans_are_left_in_the_demo_data():
+    categories = [entry.category_slug for entry in DEMO_ASSETS]
+
+    assert [i for i, slug in enumerate(categories) if slug == "van"] == [3, 14]
+    assert categories.count(SKI) == 1
+
+
+def test_the_pair_member_and_the_paused_asset_keep_their_place_and_data():
+    pair_member = DEMO_ASSETS[SECOND_OF_THE_PAIR_POSITION]
+    paused = DEMO_ASSETS[PAUSED_POSITION]
+
+    assert (pair_member.title, pair_member.category_slug) == (
+        "Bicicleta eléctrica plegable",
+        "ebike",
+    )
+    assert (pair_member.latitude, pair_member.longitude) == SHARED_PAIR[1]
+    assert (paused.title, paused.category_slug, paused.active) == (
+        "Piscina infantil con toldo",
+        "pool",
+        False,
+    )
 
 
 def test_the_demo_assets_use_exactly_the_three_privacy_radii():
@@ -294,8 +340,17 @@ def test_the_demo_assets_cover_every_category_and_the_three_radii(fixed_inputs):
     run_command()
 
     assets = Asset.objects.filter(owner=demo_owner()).select_related("category")
-    assert {asset.category.slug for asset in assets} == set(CATEGORY_SLUGS)
+    assert {asset.category.slug for asset in assets} == set(CATEGORY_SLUGS) | {SKI}
     assert {asset.privacy_radius for asset in assets} == PRIVACY_RADII
+
+
+@pytest.mark.django_db
+def test_the_command_creates_one_active_ski_asset(fixed_inputs):
+    run_command()
+
+    ski_asset = Asset.objects.get(owner=demo_owner(), category__slug=SKI)
+    assert ski_asset.title == DEMO_ASSETS[SKI_POSITION].title
+    assert ski_asset.status == "active"
 
 
 @pytest.mark.django_db

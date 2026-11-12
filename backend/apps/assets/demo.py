@@ -297,10 +297,10 @@ DEMO_ASSETS = (
         True,
     ),
     DemoAsset(
-        "Furgoneta frigorífica pequeña",
-        "Furgoneta con cámara frigorífica para transportar alimentos o "
-        "productos frescos en trayectos urbanos.",
-        "van",
+        "Equipo de esquí de pista completo",
+        "Esquís con fijaciones, botas y bastones en varias tallas de adulto, "
+        "revisados y listos para la temporada.",
+        "ski",
         "49.90",
         "day",
         1000,
