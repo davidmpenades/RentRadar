@@ -212,7 +212,7 @@ Va en la T9, después de todos los commits de código, y nunca la hace un implem
 - **Los ejecuta la sesión principal, con la orden del desarrollador en ese momento:** los pasos 0, 4, 5 y 6.
 
 **Qué se pierde:** todo el contenido de la BD de desarrollo:
-- las cuentas `t9-a`, `t9-b`, `t9-d` y `t9-e@example.com`, las de validaciones anteriores (por ejemplo, las de la 016) y `demo@example.com` con sus 25 bienes;
+- las cuentas de prueba `t9-a`, `t9-b`, `t9-d`, `t9-e` y `t16-a` (todas `@example.com`), cualquier otra de validaciones anteriores y `demo@example.com` con sus 25 bienes;
 - las sesiones;
 - cualquier dato que haya metido el desarrollador.
 
