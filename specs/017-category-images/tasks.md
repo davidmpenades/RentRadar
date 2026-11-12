@@ -111,7 +111,7 @@ Reglas comunes de todas las tareas:
 
     Cada una hace fallar al menos un test.
 
-- [ ] **T6. Validador WebP: dimensiones y transparencia.** RF-11, RF-12
+- [x] **T6. Validador WebP: dimensiones y transparencia.** RF-11, RF-12
   - Ficheros:
     - Modifica `frontend/src/testing/webp.ts`: pasos 8 a 11 de la sección Lógica del plan, con lecturas limitadas a la carga del bloque.
     - Modifica `categoryWebp.test.ts`.
