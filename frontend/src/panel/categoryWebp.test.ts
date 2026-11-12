@@ -50,20 +50,25 @@ function withAscii(bytes: Uint8Array, offset: number, text: string): Uint8Array 
   return out;
 }
 
-function vp8x(flags: number, payloadSize = 10): Uint8Array {
-  return chunk("VP8X", fit([flags, 0, 0, 0, ...u24(SIZE - 1), ...u24(SIZE - 1)], payloadSize));
+// El lienzo se guarda como ancho menos uno y alto menos uno, 24 bits cada uno
+function vp8x(flags: number, payloadSize = 10, [width, height] = [SIZE, SIZE]): Uint8Array {
+  return chunk("VP8X", fit([flags, 0, 0, 0, ...u24(width - 1), ...u24(height - 1)], payloadSize));
 }
 
-// Fotograma clave con la firma 9D 01 2A y el tamaño en 14 bits
-function vp8(payloadSize = 10): Uint8Array {
-  const header = [0x10, 0, 0, 0x9d, 0x01, 0x2a, SIZE & 0xff, (SIZE >>> 8) & 0x3f, SIZE & 0xff, (SIZE >>> 8) & 0x3f];
+type Vp8Options = { width?: number; height?: number; tag?: number; signature?: number[] };
+
+// Fotograma clave (bit 0 de la etiqueta a 0) con la firma 9D 01 2A y el tamaño en 14 bits
+function vp8(payloadSize = 10, { width = SIZE, height = SIZE, tag = 0x10, signature = [0x9d, 0x01, 0x2a] }: Vp8Options = {}) {
+  const header = [tag, 0, 0, ...signature, width & 0xff, (width >>> 8) & 0x3f, height & 0xff, (height >>> 8) & 0x3f];
   return chunk("VP8 ", fit(header, payloadSize));
 }
 
-// 0x2F, tamaño en 14 bits menos uno, indicador de alfa y versión 0
-function vp8l(alpha = true): Uint8Array {
-  const bits = ((SIZE - 1) | ((SIZE - 1) << 14) | (alpha ? 1 << 28 : 0)) >>> 0;
-  return chunk("VP8L", [0x2f, ...u32(bits)]);
+type Vp8lOptions = { width?: number; height?: number; payloadSize?: number; signature?: number; version?: number };
+
+// 0x2F, tamaño en 14 bits menos uno, indicador de alfa y versión en los 3 bits altos
+function vp8l(alpha = true, { width = SIZE, height = SIZE, payloadSize = 5, signature = 0x2f, version = 0 }: Vp8lOptions = {}) {
+  const bits = ((width - 1) | ((height - 1) << 14) | (alpha ? 1 << 28 : 0) | (version << 29)) >>> 0;
+  return chunk("VP8L", fit([signature, ...u32(bits)], payloadSize));
 }
 
 function alph(payloadSize = 2): Uint8Array {
@@ -85,6 +90,7 @@ describe("validateCategoryWebp: lo que se acepta", () => {
     ["VP8X + VP8L", lossless()],
     ["el límite de peso exacto (16 384 bytes)", sizedTo(MAX_BYTES)],
     ["un ALPH de tamaño impar con su relleno", webp([vp8x(ALPHA), alph(3), vp8()])],
+    ["VP8L sin VP8X y con indicador de alfa", webp([vp8l()])],
   ])("%s", (_name, bytes) => {
     expect(validateCategoryWebp(bytes)).toEqual({ ok: true });
   });
@@ -161,5 +167,63 @@ describe("validateCategoryWebp: lo que se rechaza, cada caso por su causa", () =
     for (let length = 0; length < valid.length; length += 1) {
       expect(validateCategoryWebp(valid.slice(0, length)).ok).toBe(false);
     }
+  });
+});
+
+const WRONG_SIZES = [
+  [144, 143],
+  [143, 144],
+  [145, 144],
+  [145, 145],
+  [288, 288],
+  [1024, 1024],
+] as const;
+
+// El lienzo de VP8X cuenta la misma mentira que la imagen, para que falle solo la imagen
+const BAD_DIMENSIONS = WRONG_SIZES.flatMap(([width, height]): [WebpRejection, string, Uint8Array][] => [
+  ["dimensions", `VP8 de ${width} × ${height}`, webp([vp8x(ALPHA, 10, [width, height]), alph(), vp8(10, { width, height })])],
+  ["dimensions", `VP8L de ${width} × ${height}`, webp([vp8x(ALPHA, 10, [width, height]), vp8l(true, { width, height })])],
+]);
+
+// La imagen mide 144 × 144; lo que falla es el lienzo
+const BAD_CANVAS: [WebpRejection, string, Uint8Array][] = [
+  ["canvas", "VP8 con lienzo de 288 × 288", webp([vp8x(ALPHA, 10, [288, 288]), alph(), vp8()])],
+  ["canvas", "VP8 con lienzo de 145 × 144", webp([vp8x(ALPHA, 10, [145, 144]), alph(), vp8()])],
+  ["canvas", "VP8 con lienzo de 144 × 145", webp([vp8x(ALPHA, 10, [144, 145]), alph(), vp8()])],
+  ["canvas", "VP8 con lienzo de 1 × 1", webp([vp8x(ALPHA, 10, [1, 1]), alph(), vp8()])],
+  ["canvas", "VP8 con el lienzo máximo de 24 bits", webp([vp8x(ALPHA, 10, [2 ** 24, 2 ** 24]), alph(), vp8()])],
+  ["canvas", "VP8L con lienzo de 288 × 288", webp([vp8x(ALPHA, 10, [288, 288]), vp8l()])],
+  ["canvas", "VP8L con lienzo de 144 × 145", webp([vp8x(ALPHA, 10, [144, 145]), vp8l()])],
+];
+
+// Las cabeceras cortas vigilan que las lecturas no salgan de la carga del bloque
+const BAD_HEADERS: [WebpRejection, string, Uint8Array][] = [
+  ["image_header", "VP8 de 0 bytes", webp([vp8x(ALPHA), alph(), vp8(0)])],
+  ["image_header", "VP8 de 9 bytes", webp([vp8x(ALPHA), alph(), vp8(9)])],
+  ["image_header", "VP8 que no es un fotograma clave", webp([vp8x(ALPHA), alph(), vp8(10, { tag: 0x11 })])],
+  ["image_header", "VP8 con el primer byte de la firma mal", webp([vp8x(ALPHA), alph(), vp8(10, { signature: [0x9c, 0x01, 0x2a] })])],
+  ["image_header", "VP8 con el segundo byte de la firma mal", webp([vp8x(ALPHA), alph(), vp8(10, { signature: [0x9d, 0x00, 0x2a] })])],
+  ["image_header", "VP8 con el tercer byte de la firma mal", webp([vp8x(ALPHA), alph(), vp8(10, { signature: [0x9d, 0x01, 0x2b] })])],
+  ["image_header", "VP8L de 0 bytes", webp([vp8x(ALPHA), vp8l(true, { payloadSize: 0 })])],
+  ["image_header", "VP8L de 4 bytes", webp([vp8x(ALPHA), vp8l(true, { payloadSize: 4 })])],
+  ["image_header", "VP8L sin el byte 0x2F", webp([vp8x(ALPHA), vp8l(true, { signature: 0x2e })])],
+  ["image_header", "VP8L de versión 1", webp([vp8x(ALPHA), vp8l(true, { version: 1 })])],
+  ["image_header", "VP8L de versión 7", webp([vp8x(ALPHA), vp8l(true, { version: 7 })])],
+];
+
+const NO_ALPHA: [WebpRejection, string, Uint8Array][] = [
+  ["no_alpha", "VP8 simple", webp([vp8()])],
+  ["no_alpha", "VP8X sin bandera de alfa, con ALPH y VP8", webp([vp8x(0), alph(), vp8()])],
+  ["no_alpha", "VP8X sin bandera de alfa y solo VP8", webp([vp8x(0), vp8()])],
+  ["no_alpha", "VP8X sin bandera de alfa y VP8L con alfa", webp([vp8x(0), vp8l()])],
+  ["no_alpha", "bandera de alfa sin ALPH", webp([vp8x(ALPHA), vp8()])],
+  ["no_alpha", "ALPH de 1 byte", webp([vp8x(ALPHA), alph(1), vp8()])],
+  ["no_alpha", "ALPH de 0 bytes", webp([vp8x(ALPHA), alph(0), vp8()])],
+  ["no_alpha", "VP8L simple sin indicador de alfa", webp([vp8l(false)])],
+];
+
+describe("validateCategoryWebp: la imagen y su transparencia, cada caso por su causa", () => {
+  it.each([...BAD_DIMENSIONS, ...BAD_CANVAS, ...BAD_HEADERS, ...NO_ALPHA])("%s: %s", (code, _name, bytes) => {
+    expect(validateCategoryWebp(bytes)).toEqual({ ok: false, code });
   });
 });
