@@ -9,6 +9,8 @@ from apps.categories.models import Category
 from apps.users.models import User
 
 SEED_SIZE = 11
+CATALOGUE_SIZE = 12
+SKI_MIGRATION = ("categories", "0003_add_ski_category")
 REFERENCES = {
     "owner": (
         User,
@@ -26,6 +28,10 @@ REFERENCES = {
 def seed_state():
     applied = MigrationRecorder(connection).applied_migrations()
     return Category.objects.count(), ("categories", "0002_seed_categories") in applied
+
+
+def ski_migration_applied():
+    return SKI_MIGRATION in MigrationRecorder(connection).applied_migrations()
 
 
 @pytest.mark.parametrize(
@@ -50,14 +56,21 @@ def test_deleting_a_referenced_row_by_sql_violates_the_foreign_key(
     assert Asset.objects.filter(pk=stored_asset.pk).exists()
 
 
-def test_reverting_the_seed_with_an_asset_is_rejected_and_deletes_nothing(stored_asset):
+def test_reverting_the_seed_with_an_asset_is_rejected_and_keeps_the_seed(stored_asset):
+    assert seed_state() == (CATALOGUE_SIZE, True)
+    assert ski_migration_applied()
+
     with transaction.atomic():
         with pytest.raises(ProtectedError):
             call_command("migrate", "categories", "0001_initial", verbosity=0)
+        # La reversión de Esquí ya se confirmó antes de que falle la de la semilla
+        assert not Category.objects.filter(slug="ski").exists()
         assert seed_state() == (SEED_SIZE, True)
+        assert not ski_migration_applied()
         assert Asset.objects.filter(pk=stored_asset.pk).exists()
-        # Si la reversión llegara a ejecutarse, esto la deshace para los demás tests
+        # Esto deshace también la reversión de Esquí para los demás tests
         transaction.set_rollback(True)
 
-    assert seed_state() == (SEED_SIZE, True)
+    assert seed_state() == (CATALOGUE_SIZE, True)
+    assert ski_migration_applied()
     assert Asset.objects.filter(pk=stored_asset.pk).exists()

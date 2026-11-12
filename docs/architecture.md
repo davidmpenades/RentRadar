@@ -41,7 +41,7 @@ backend/
     ├── categories/        # Lista cerrada de categorías
     │   ├── models.py      # Category y la normalización de su nombre
     │   ├── services.py    # save_category: valida, normaliza y guarda
-    │   └── migrations/    # 0002 siembra las once categorías
+    │   └── migrations/    # 0002 siembra las once categorías; 0003 añade Esquí
     ├── assets/            # Bienes en alquiler y privacidad de su ubicación
     │   ├── location.py    # Función de aproximación (pura): centro de la celda de la cuadrícula
     │   ├── rules.py       # Reglas de los campos (puras): texto, precio, radio, estado, coordenadas
@@ -84,7 +84,7 @@ Los servicios no devuelven los errores de Django tal cual: los traducen a `Domai
 - `approximate_location` proyecta la coordenada a EPSG:3035, localiza la celda cuadrada de lado igual al radio (los bordes inferior e izquierdo pertenecen a la celda) y devuelve su centro en latitud y longitud, a 6 decimales. No consulta la BD ni la red, y crea las referencias espaciales en cada llamada porque GDAL no es seguro entre hilos. Cambiar la proyección o el origen movería todas las celdas ya publicadas.
 - `create_asset` y `update_asset` son las únicas funciones que escriben bienes, y solo `services.py` obtiene `Asset` y `approximate_location` (lo vigila un test por AST). No admiten una ubicación pública ni un propietario nuevo: fallan con un `TypeError`. La hora entra como parámetro. Fuera de `apps/assets`, el servicio solo se usa importando por nombre esas dos funciones y nadie llega a la app por `get_app_config("assets")`; otro test por AST lo vigila.
 - `update_asset` bloquea la fila con `select_for_update` como primera lectura del bien, compara con el estado guardado y escribe solo las columnas que cambian. Con el bien activo no deja cambiar la ubicación exacta ni el radio.
-- Las FK de `owner` y `category` son `PROTECT` y sin `related_name`: borrar un usuario o una categoría con bienes se rechaza, también al revertir la semilla de categorías.
+- Las FK de `owner` y `category` son `PROTECT` y sin `related_name`: borrar un usuario o una categoría con bienes se rechaza, también al revertir la semilla de categorías o la migración de Esquí.
 - Ni los errores, ni `str()` ni `repr()` ni los logs contienen coordenadas. `test_leaks.py` lo comprueba con coordenadas centinela en 22 formas.
 
 ## API pública
