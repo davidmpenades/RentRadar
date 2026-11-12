@@ -30,7 +30,7 @@ Reglas comunes de todas las tareas:
 
 ## Tareas
 
-- [ ] **T1. Migración de Esquí.** RF-1, RF-2, RF-3, RF-4 (sin bienes)
+- [x] **T1. Migración de Esquí.** RF-1, RF-2, RF-3, RF-4 (sin bienes)
   - Ficheros:
     - Crea `backend/apps/categories/migrations/0003_add_ski_category.py` con `apply_ski`, `reverse_ski`, `_comparable` (NFC + `casefold`) y `SkiNameTakenError`; `dependencies = [("categories", "0002_seed_categories")]`. Se crea a mano o con `makemigrations --empty categories -n add_ski_category` en la forma de AGENTS.md (`-e DB_HOST=db-inexistente.invalid -u "$(id -u)"`), nunca contra la BD de desarrollo.
     - Crea `backend/apps/categories/tests/test_ski.py`.
@@ -50,7 +50,7 @@ Reglas comunes de todas las tareas:
   - Hecho cuando: los tests fallan primero y luego pasan; `pytest -q --create-db`, el `pytest -q` completo, `config/tests/test_migrations.py` y ruff en verde; `test_seed.py` no cambia.
   - Puerta: espera el OK del desarrollador antes de escribir la migración.
 
-- [ ] **T2. Reversión de Esquí con un bien: rechazo y fugas.** RF-4 (con bienes)
+- [x] **T2. Reversión de Esquí con un bien: rechazo y fugas.** RF-4 (con bienes)
   - Ficheros:
     - Modifica `backend/apps/assets/tests/conftest.py`: fixture `ski_category`.
     - Modifica `test_deletion.py`:
@@ -62,7 +62,7 @@ Reglas comunes de todas las tareas:
   - Commit: `test(assets): reject reverting ski with an asset without leaks`
   - Hecho cuando: los tests nuevos pasan con `pytest -q --create-db`; el `pytest -q` completo y ruff en verde.
 
-- [ ] **T3. Bien de Esquí en la demostración.** RF-5
+- [x] **T3. Bien de Esquí en la demostración.** RF-5
   - Ficheros:
     - Modifica `backend/apps/assets/demo.py`: la posición 23 pasa a `ski`, con el título y la descripción de D14 del plan, confirmados por el desarrollador, y con 49.90, `day`, 1000 y (39.4605, −0.3760), activa.
     - Modifica `test_demo_command.py`:
@@ -74,7 +74,7 @@ Reglas comunes de todas las tareas:
   - Commit: `feat(assets): add a ski asset to the demo data`
   - Hecho cuando: los tests fallan primero y luego pasan; `DEMO_ASSETS[:11] == CATEGORY_SLUGS` sigue valiendo; `pytest -q` y ruff en verde.
 
-- [ ] **T4. Guarda contra la incrustación.** RF-8
+- [x] **T4. Guarda contra la incrustación.** RF-8
   - Antes de empezar: un test mínimo con `import { build } from "vite"` y `npm run build` (`tsc -b`). Si no compila sin `@types/node`, se para y se decide. Después, comprobar que la compilación de la interfaz entera funciona dentro de vitest y tarda menos de 30 s: si falla o pasa de 30 s, se para y se decide.
   - Ficheros:
     - Crea `frontend/src/panel/categoryImageBuild.test.ts`, con dos compilaciones en `beforeAll(…, 30_000)`:
