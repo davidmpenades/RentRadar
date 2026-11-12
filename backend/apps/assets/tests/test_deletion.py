@@ -63,7 +63,7 @@ def test_reverting_the_seed_with_an_asset_is_rejected_and_keeps_the_seed(stored_
     with transaction.atomic():
         with pytest.raises(ProtectedError):
             call_command("migrate", "categories", "0001_initial", verbosity=0)
-        # La reversión de Esquí ya se confirmó antes de que falle la de la semilla
+        # La reversión de Esquí ya se completó antes de que falle la de la semilla
         assert not Category.objects.filter(slug="ski").exists()
         assert seed_state() == (SEED_SIZE, True)
         assert not ski_migration_applied()
@@ -74,3 +74,19 @@ def test_reverting_the_seed_with_an_asset_is_rejected_and_keeps_the_seed(stored_
     assert seed_state() == (CATALOGUE_SIZE, True)
     assert ski_migration_applied()
     assert Asset.objects.filter(pk=stored_asset.pk).exists()
+
+
+@pytest.mark.parametrize("target", ["0002_seed_categories", "0001_initial"])
+def test_reverting_ski_with_an_asset_is_rejected_and_deletes_nothing(ski_asset, target):
+    with transaction.atomic():
+        with pytest.raises(ProtectedError):
+            call_command("migrate", "categories", target, verbosity=0)
+        assert seed_state() == (CATALOGUE_SIZE, True)
+        assert ski_migration_applied()
+        assert Asset.objects.filter(pk=ski_asset.pk).exists()
+        # Si la reversión llegara a ejecutarse, esto la deshace para los demás tests
+        transaction.set_rollback(True)
+
+    assert seed_state() == (CATALOGUE_SIZE, True)
+    assert ski_migration_applied()
+    assert Asset.objects.filter(pk=ski_asset.pk).exists()
