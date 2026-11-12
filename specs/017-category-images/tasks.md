@@ -194,7 +194,7 @@ Reglas comunes de todas las tareas:
       - la línea de procedencia (sin prompt ni rutas absolutas);
       - las versiones de Pillow y libwebp;
       - los sha256 de los originales antes y después;
-      - las pruebas de mecanismo;
+      - las pruebas de mecanismo, transcritas de los `resultado.md` de `~/rentradar-mutaciones/017/t4/`, `t5/`, `t6/` y `t8/`;
       - la recreación de la BD;
       - el punta a punta;
       - el diff vacío de los manifiestos.
