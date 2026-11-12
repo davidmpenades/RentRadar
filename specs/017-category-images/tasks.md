@@ -90,7 +90,7 @@ Reglas comunes de todas las tareas:
   - Hecho cuando: vitest, build y eslint en verde; el tiempo de las dos compilaciones queda anotado y la de la interfaz entera tarda menos de 30 s; `git status` limpio tras ejecutar el test (no escribe `dist`).
   - Prueba de mecanismo: quitar `query: "?no-inline"` de `categoryImage.ts` hace que las imágenes se incrusten con el umbral alto, dejan de emitirse como fichero y el test falla; se restaura con sha256 igual. Se repite en la T8 con las WebP.
 
-- [ ] **T5. Validador WebP: contenedor y bloques.** RF-9, RF-10
+- [x] **T5. Validador WebP: contenedor y bloques.** RF-9, RF-10
   - Ficheros:
     - Crea `frontend/src/testing/webp.ts`: `validateCategoryWebp(bytes)`, pasos 1 a 7 de la sección Lógica del plan; nunca lanza y devuelve el código de rechazo.
     - Crea `frontend/src/panel/categoryWebp.test.ts`, con constructores fabricados en el propio test (`chunk`, `webp`, `vp8x`, `vp8`, `vp8l`, `alph`) y sin ficheros hostiles versionados.
