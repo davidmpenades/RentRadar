@@ -165,7 +165,7 @@ Reglas comunes de todas las tareas:
 
     El test «doce imágenes = doce claves» no entra aquí.
 
-- [ ] **T8. Cambio a WebP y retirada de las SVG.** RF-6, RF-7, RF-8
+- [x] **T8. Cambio a WebP y retirada de las SVG.** RF-6, RF-7, RF-8
   - Antes de empezar, en un commit propio, `test(frontend): disable vitest module cache`: añade `fsModuleCache: false` a `test` en `frontend/vite.config.ts`. Se comprueba sin ningún flag: tras `npx vitest --clearCache` y `npx vitest run`, `node_modules/.vitest-cache` no existe. Aun así, todas las ejecuciones de vitest de la T8 (rojo, verde y mutaciones) llevan `--fsModuleCache=false`.
   - Ficheros:
     - Modifica `frontend/src/panel/categoryImage.ts`: glob `../assets/categories/*.webp` con `?no-inline`; `slugOf` con `".webp".length`.
@@ -175,13 +175,15 @@ Reglas comunes de todas las tareas:
     - Borra con `git rm -- frontend/src/assets/categories/{barbecue,boat,canoe,caravan,ebike,kayak,motorhome,other,pool,sports-area,van}.svg frontend/src/panel/categorySvg.test.ts`, con rutas exactas: un `*.svg` también tocaría `frontend/public/icon.svg`.
     - Modifica `docs/architecture.md`, línea 125: «Imágenes WebP de las categorías».
   - Tests:
-    - casos fabricados de `categoryFileProblems`: `.oculto`, `ski.png`, `Ski.webp`, `sports_area.webp`, `snow.webp`, `sub/x.webp`, `other.svg`, falta uno y exacto;
+    - casos fabricados de `categoryFileProblems`: `.oculto`, `ski.png`, `Ski.webp`, `sports_area.webp`, `snow.webp`, `sub/x.webp`, `other.svg`, falta uno, ninguna y exacto;
     - la carpeta real, con `import.meta.glob("../assets/categories/**/*", { query: "?url", exhaustive: true })`, contra `CATEGORY_KEYS` en los dos sentidos.
 
     Fallan primero mientras quedan las SVG y `categoryImage.ts` apunta a `.svg`.
+
+    El rojo de `categoryFileProblems` se comprobó con el cuerpo de la función sustituido por `{ missing: [], extra: [] }` en una copia del árbol: fallan 9 de los 10 casos fabricados (solo pasa «exacto») y las dos pruebas de la carpeta real pasan igual, así que lo que protege la función son los casos fabricados.
   - Prueba de mecanismo del glob (D16, decidida): crear `frontend/src/assets/categories/.probe` y `frontend/src/assets/categories/sub/probe.webp`, ejecutar el test y borrarlos va en un solo comando, que borra aunque el test falle y no empieza si alguno de los dos ya existe:
     ```
-    bash -c 'cd frontend && [ ! -e src/assets/categories/.probe ] && [ ! -e src/assets/categories/sub ] || exit 1; trap "rm -rf -- src/assets/categories/.probe src/assets/categories/sub" EXIT; mkdir src/assets/categories/sub && touch src/assets/categories/.probe src/assets/categories/sub/probe.webp; npx vitest run src/panel/categoryFiles.test.ts; echo "salida del test: $?"'
+    bash -c 'cd frontend && [ ! -e src/assets/categories/.probe ] && [ ! -e src/assets/categories/sub ] || exit 1; trap "rm -rf -- src/assets/categories/.probe src/assets/categories/sub" EXIT; mkdir src/assets/categories/sub && touch src/assets/categories/.probe src/assets/categories/sub/probe.webp; npx vitest run --fsModuleCache=false src/panel/categoryFiles.test.ts; echo "salida del test: $?"'
     ```
     La salida del test debe ser distinta de 0 y el fallo debe nombrar `.probe` y `sub/probe.webp` entre los sobrantes (el test compara `extra` con `[]`, para que el mensaje los muestre). Si falla por otra cosa, la prueba no vale; si la salida es 0, el glob es ciego. En los dos casos se para. Después, `git status --porcelain` no muestra ninguno de los dos ficheros.
   - Commit: `feat(frontend): switch category images to webp`
@@ -190,7 +192,7 @@ Reglas comunes de todas las tareas:
     - no queda ninguna `.svg` en `assets/categories`;
     - tras `npm run build`, `grep -rl "data:image/webp" frontend/dist` sale vacío y hay doce `.webp` en `frontend/dist/assets`;
     - `git diff --cached --name-only` muestra solo las rutas de la tarea.
-  - Prueba de mecanismo: se repite la de la T4 con las WebP: quitar `query: "?no-inline"` hace fallar el test de la guarda, aunque las doce pesen más que el umbral por defecto.
+  - Prueba de mecanismo: se repite la de la T4 con las WebP, en una copia del árbol en `~/rentradar-mutaciones/017/t8/` y no sobre `categoryImage.ts` del repo: quitar `query: "?no-inline"` hace fallar el test de la guarda. Tres WebP (`pool`, `other` y `kayak`) pesan menos de 4096 bytes, el umbral de incrustación por defecto de Vite, así que sin la guarda se incrustarían incluso con él. El acta va en `t8/resultado.md`, con el sha256 del repo antes y después.
 
 - [ ] **T9. Validación de punta a punta y cierre.** Todos los RF
   - Puerta: «Recreación de la BD de desarrollo» del plan, pasos 0 a 6. Los pasos 1, 2 y 3 (`docker compose down`, `docker volume rm rentradar_db-data`, `docker compose up -d`) y `npm run dev` los ejecuta el desarrollador en su terminal: la sesión principal le da el comando exacto y comprueba después. Los pasos 0, 4, 5 y 6 los ejecuta la sesión principal, cada uno con la orden expresa del desarrollador en ese momento. Se transcriben el comando y la salida, con rutas `~`.
