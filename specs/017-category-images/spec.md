@@ -6,7 +6,7 @@ Depende de: spec 004 (reglas de las categorías y semilla de once; las categorí
 Hoy cada tarjeta del panel muestra una imagen genérica de su categoría. Son once dibujos vectoriales sencillos que la 006 admitió con una lista blanca de etiquetas y atributos. A 72 px se reconocen mal y no tienen la calidad visual que pide el producto. Además, falta una categoría que se pide mucho en un alquiler entre particulares: el material de esquí.
 
 Esta spec:
-- sustituye las once imágenes vectoriales por doce imágenes WebP con fondo transparente, una por categoría del catálogo. Están generadas con IA (Gemini) y ya vienen sin fondo. Fuera del producto se reducen a 144 × 144 px, se les quitan los metadatos y cada fichero recibe el nombre de su clave;
+- sustituye las once imágenes vectoriales por doce imágenes WebP con fondo transparente, una por categoría del catálogo. Están generadas con IA (Gemini). El fondo se quita fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil. También fuera del producto se reducen a 144 × 144 px, se les quitan los metadatos y cada fichero recibe el nombre de su clave;
 - añade al catálogo la categoría Esquí, con clave `ski`, en una migración de datos propia que no toca la semilla de la 004;
 - incluye un bien de Esquí en los datos de demostración, sin cambiar sus cifras ni sus condiciones;
 - fija criterios comprobables para aceptar cada fichero (estructura, peso, bloques, dimensiones y transparencia) y una aprobación humana, imagen por imagen, de lo que no se puede medir (sin sombra, sin texto ni marcas, se reconoce a su tamaño real);
@@ -62,12 +62,13 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
   - composición con las doce imágenes a 72 y a 144 px CSS, sobre el color de la superficie sólida del panel (016); cada imagen va rotulada con su clave;
   - se genera fuera del repositorio, en `~/RentRadar-recursos/`, y no se versiona;
   - el desarrollador aprueba cada imagen por separado, incluida su asignación a la clave (por ejemplo, que no haya un kayak con la clave de la piragua). La aprobación de cada imagen, con su fecha, queda registrada en la validación;
-  - una imagen que no se aprueba no entra: se vuelve a preparar o a generar fuera del producto y pasa de nuevo por la hoja. Si conserva sombra o halo, se regenera; no se retoca a mano.
-- **Originales**: los doce ficheros de `~/RentRadar-recursos/categorias/`, ya sin fondo. Las versiones con fondo no se conservaron. Sus nombres no tienen por qué coincidir con las claves; el nombre `<clave>.webp` se pone al copiar cada imagen preparada al repositorio. La carpeta `~/RentRadar-recursos/categorias/` no se renombra ni se modifica; la hoja de revisión se genera en `~/RentRadar-recursos/`, fuera de ella, y eso no cuenta como modificarla. Su ficha de fuentes (`fuentes.md`, con la herramienta, el mes y el método, sin el prompt) ya existe allí, fuera del repositorio.
-- **Procedencia**: una línea de la validación que dice:
+  - una imagen que no se aprueba no entra: se vuelve a preparar o a generar fuera del producto y pasa de nuevo por la hoja. Si conserva sombra o halo, se vuelve a preparar o se regenera; no se retoca a mano el fichero final. El contorno de la cola del esquí blanco es un parámetro dentro del script de recorte (`OVERRIDES` de `recortar_fondo.py`), no un retoque del fichero final, y consta en la procedencia.
+- **Originales**: los doce ficheros JPEG, con su fondo, de `~/RentRadar-recursos/categorias-v3-con-fondo/`; su huella está en `~/RentRadar-recursos/herramientas/originales-v3.sha256`. Sus nombres no tienen por qué coincidir con las claves; el nombre `<clave>.webp` se pone al preparar cada imagen. La carpeta no se renombra y sus doce originales no se modifican; los ficheros intermedios y la hoja de revisión se generan fuera de ella. Su ficha de fuentes (`fuentes.md`, con la herramienta, las fechas y el método, sin el prompt) se escribe en esa carpeta, fuera del repositorio. Las carpetas de versiones anteriores (`~/RentRadar-recursos/categorias/` y `categorias-v2/`) no se tocan.
+- **Procedencia**: un apartado de la validación que dice:
   - que las imágenes son generadas con IA, con qué herramienta, en qué fecha o fechas y, si la herramienta la muestra, con qué versión del modelo;
-  - qué retoques se les han hecho: reducidas a 144 × 144 px, sin metadatos y con el nombre de su clave; el fondo ya venía quitado en los originales;
-  - que se ha comprobado que los términos de uso de la herramienta permiten el uso comercial.
+  - qué se les ha hecho: el fondo quitado fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil, con sus versiones y licencias; cualquier parámetro fijado a mano en el recorte; reducidas a 144 × 144 px, sin metadatos y con el nombre de su clave;
+  - la cadena de huellas: originales JPEG → PNG intermedios → WebP;
+  - que se ha comprobado que los términos de uso de la herramienta permiten el uso comercial, con la fecha de esa comprobación.
 
   No incluye el prompt ni rutas absolutas; las rutas se escriben con `~`.
 
@@ -133,7 +134,7 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
   - En el mismo test, un control positivo demuestra que el test puede fallar: una imagen real importada sin la guarda sí sale como `data:`.
 - **Privacidad**:
   - Sin metadatos (RF-10), las imágenes no llevan datos de generación, de cuenta ni de equipo. La validación de bloques y estructura impide que esos datos lleguen al repositorio.
-  - En el repositorio no entran el prompt, los originales, la ficha de fuentes ni la hoja de revisión (Definiciones).
+  - En el repositorio no entran el prompt, los originales, los ficheros intermedios, la ficha de fuentes ni la hoja de revisión (Definiciones).
   - Ni la spec, ni la validación, ni los commits contienen rutas absolutas ni nombres de usuario; las rutas se escriben con `~`.
 - **Permisos (constitución, punto 5)**:
   - No hay operaciones de la API nuevas ni cambiadas, y el contrato publicado no cambia porque la clave de la categoría no está enumerada.
@@ -151,7 +152,7 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
   - Su fondo es transparente y ninguna lleva sombra proyectada.
 - **Dependencias (constitución, punto 1)**:
   - Ninguna nueva.
-  - Las imágenes se preparan fuera del producto: se reducen a 144 × 144 px, se les quitan los metadatos y se les pone el nombre de su clave. El fondo ya viene quitado.
+  - Las imágenes se preparan fuera del producto: el fondo se quita sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil; se reducen a 144 × 144 px, se les quitan los metadatos y se les pone el nombre de su clave. Esas herramientas no son dependencias del producto.
   - En el repositorio no entra ninguna herramienta de preparación, y los manifiestos de dependencias no cambian.
 - **Idioma (constitución, punto 8)**:
   - Los nombres de fichero de las imágenes van en inglés y son iguales a la clave.
@@ -189,7 +190,7 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
 - Un WebP de 144 × 143, de 145 × 145, de 288 × 288 o de 1024 × 1024, o cuyo lienzo no coincide con la imagen codificada: se rechaza (RF-11).
 - Un WebP sin transparencia (por ejemplo, opaco con fondo blanco, o un VP8 simple), o con la bandera de alfa activa pero sin bloque ALPH: se rechaza (RF-12).
 - Un WebP con transparencia pero con las esquinas opacas: no cumple RF-13.
-- Una imagen que conserva sombra o halo: no se aprueba y se regenera, sin retocarla a mano (RF-13).
+- Una imagen que conserva sombra o halo: no se aprueba y se vuelve a preparar o se regenera, sin retocar a mano el fichero final (RF-13).
 - Sobra un fichero (`snow.webp`, `ski.png`, uno oculto o uno en una subcarpeta), falta uno o queda alguna imagen vectorial antigua: falla el test de RF-6.
 - Un fichero se llama `Ski.webp` o `sports_area.webp`: no coincide con la clave y falla el test de RF-6.
 - Un kayak guardado con la clave de la piragua: no se aprueba (RF-15).
@@ -204,12 +205,12 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
 - Versiones por densidad (1×, 3×), elegir la versión según la pantalla, AVIF y otros formatos y tamaños.
 - Reintentar la descarga o mostrar una imagen de respaldo si falla, y texto alternativo: la imagen sigue siendo decorativa.
 - Relieve o sombra de las imágenes. Si se quiere más adelante, se hará con estilos e igual para las doce.
-- Retocar las imágenes a mano.
+- Retocar a mano los ficheros de imagen. Un parámetro fijado a mano en el script de recorte, como el contorno de la cola del esquí, no es un retoque del fichero y consta en la procedencia.
 - Traducir los nombres de categoría.
 - Crear, editar o borrar categorías en ejecución. Elegir categoría al publicar y mostrar al anunciante el criterio de Esquí (spec 010).
 - Otras categorías nuevas (raquetas, trineos, motos de nieve, una categoría «Nieve» genérica).
 - Herramientas o scripts de preparación de imágenes dentro del repositorio.
-- Renombrar o modificar `~/RentRadar-recursos/categorias/`, sus originales o su ficha de fuentes.
+- Renombrar o modificar las carpetas de originales (`~/RentRadar-recursos/categorias/`, `categorias-v2/` y `categorias-v3-con-fondo/`), sus originales o sus fichas de fuentes ya escritas.
 - Cambiar las reglas de la lista blanca de SVG o el test del icono de la 016.
 - Que el comando de demostración rehaga o complete una demostración que ya existe.
 - Recrear la base de datos de desarrollo o aplicarle migraciones sin la orden expresa del desarrollador en ese momento, o cambiar sus datos por SQL o por consola.
@@ -272,7 +273,7 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
 - **Pruebas de mecanismo**: solo para lo que toca seguridad o privacidad. Cada mutación se hace sobre una copia y después se restaura.
   - RF-8: quitar la guarda contra la incrustación hace fallar su test, también con todas las imágenes por encima del umbral por defecto;
   - RF-9 y RF-10: sacar EXIF, XMP o el perfil de color de lo que se rechaza, admitir bloques desconocidos, admitir ALPH junto a VP8L e ignorar los datos detrás del contenedor hacen fallar sus tests.
-- **Procedencia**: una línea en la validación (Definiciones). Los originales, su ficha de fuentes y la hoja de revisión no están en el repositorio.
+- **Procedencia**: un apartado en la validación (Definiciones). Los originales, los ficheros intermedios, su ficha de fuentes, los scripts de preparación y la hoja de revisión no están en el repositorio.
 - **Sin restos**:
   - no queda ninguna imagen de categoría vectorial ni ningún test que aplique la lista blanca de SVG a las imágenes de categoría;
   - las reglas de la lista blanca solo las usa el test del icono, que sigue en verde;
@@ -285,7 +286,7 @@ Parte del trabajo no necesita las imágenes: el catálogo, la demostración, la 
   - las imágenes se piden al propio origen como ficheros y ninguna es `data:`;
   - con la petición de una imagen bloqueada, no aparece el icono de imagen rota y la tarjeta no se desplaza;
   - sin desbordamiento horizontal.
-- **Cierre**: las doce imágenes están en el producto, aprobadas una a una. Sin las doce aprobadas, la spec no se cierra. Antes del cierre, el desarrollador ha comprobado que los términos de uso de la herramienta permiten el uso comercial (Procedencia).
+- **Cierre**: las doce imágenes están en el producto, aprobadas una a una. Sin las doce aprobadas, la spec no se cierra. Antes del cierre, el desarrollador ha comprobado que los términos de uso de la herramienta permiten el uso comercial, y la fecha de esa comprobación consta en la validación (Procedencia).
 - pytest, ruff, vitest, build y eslint de los ficheros tocados, en verde.
 - Al cerrar: la 016 tiene la nota de una línea de «Cambios en otras specs», y MEMORY.md está actualizado, incluida la línea de la 008 en la hoja de ruta.
 

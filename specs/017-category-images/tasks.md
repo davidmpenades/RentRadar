@@ -1,12 +1,13 @@
 # Tareas 017 — Imágenes de categoría y categoría «Esquí»
 Spec: specs/017-category-images/spec.md · Plan: specs/017-category-images/plan.md
 
-Máximo 10 tareas: hay 9 (la T9 lleva dos commits), en orden de dependencia:
+Máximo 10 tareas: hay 10 (la T10 lleva dos commits), en orden de dependencia:
 - T1 → T2 → T3;
 - T4 no depende de ninguna;
 - T5 → T6 → T7;
 - T8 necesita T4 y T7;
-- T9 va tras todas.
+- T9 necesita T8;
+- T10 va tras todas.
 
 Lo que no necesita las imágenes va primero (T1 a T6). Ninguna imagen de `~/RentRadar-recursos/` se abre, lee, copia ni modifica antes de la T7.
 
@@ -14,13 +15,13 @@ Reglas comunes de todas las tareas:
 - **Puertas verdes.** Cada tarea deja en verde lo que toca. Backend, siempre dentro del contenedor: `docker compose exec backend pytest -q` y `docker compose exec backend sh -c "ruff check . && ruff format --check ."`; las tareas con migraciones, además con `pytest -q --create-db`. Frontend: `npx vitest run`, `npm run build` y `npx eslint <ficheros tocados>`.
 - **Tests primero.** El test se escribe primero y falla por la razón esperada; las excepciones se dicen en su tarea.
 - **Sin dependencias nuevas.** `package.json`, `package-lock.json` y `requirements` no cambian.
-- **Stack.** Levantar, parar o reiniciar el stack y `npm run dev` los ejecuta el desarrollador en su terminal, en cualquier tarea, como en la T9; si hace falta, la sesión principal se lo pide.
-- **Lecturas fuera del repo.** Ningún agente lee fuera de este repo, salvo sus temporales, `~/rentradar-mutaciones/` y, en la T7, `~/RentRadar-recursos/`. El código de una librería se lee en el contenedor o con Context7.
+- **Stack.** Levantar, parar o reiniciar el stack y `npm run dev` los ejecuta el desarrollador en su terminal, en cualquier tarea, como en la T10; si hace falta, la sesión principal se lo pide.
+- **Lecturas fuera del repo.** Ningún agente lee fuera de este repo, salvo sus temporales, `~/rentradar-mutaciones/`, en la T7, `~/RentRadar-recursos/`, y en la T9, solo lo que nombra su tarea. El código de una librería se lee en el contenedor o con Context7.
 - **Commits.**
   - Antes de proponer un commit: `git diff --cached --name-only` (solo las rutas de la tarea) y `git diff --cached | grep -nE "/home/|$(id -un)"`, que no debe dar resultados.
   - Se añade con `git add -- <rutas exactas>` y se hace commit solo con el OK del desarrollador, con el diff a la vista.
   - Después del commit, `git log --oneline -3`.
-- **Pruebas de mecanismo**, solo en la T4, la T5, la T6 y la T8:
+- **Pruebas de mecanismo**, solo en la T4, la T5, la T6, la T8 y la T9:
   - copia de seguridad del fichero en `~/rentradar-mutaciones/017/` y su `sha256sum`;
   - mutación en el fichero de la tarea y ejecución del test, que debe fallar;
   - restauración con `cp` desde la copia y `sha256sum` igual al de antes;
@@ -127,6 +128,7 @@ Reglas comunes de todas las tareas:
   - Prueba de mecanismo, en `webp.ts`: no comprobar el lienzo de VP8X, no exigir ALPH con VP8 y no comprobar el ancho; cada una hace fallar al menos un test.
 
 - [x] **T7. Preparación, revisión y entrada de las doce WebP.** RF-9 a RF-15 (imágenes reales)
+  - Sustituida por la T9: las doce WebP de esta tarea (v1 y v2) salen del repo en la T9 y las sustituye la v3. Lo que sigue es el registro de la T7.
   - Pasos: los de «Preparación de las imágenes» del plan, en orden. Es la primera tarea que toca `~/RentRadar-recursos/`.
   - Puerta: confirma la tabla de originales; la columna «Confirmado por el desarrollador» del plan se rellena y entra en este commit.
   - Puerta: el script se escribe en `~/RentRadar-recursos/herramientas/`, se enseña al desarrollador y solo se ejecuta con su OK en ese momento, con `python3 -I` (Pillow 10.2.0 del sistema; nada se instala).
@@ -192,27 +194,60 @@ Reglas comunes de todas las tareas:
     - no queda ninguna `.svg` en `assets/categories`;
     - tras `npm run build`, `grep -rl "data:image/webp" frontend/dist` sale vacío y hay doce `.webp` en `frontend/dist/assets`;
     - `git diff --cached --name-only` muestra solo las rutas de la tarea.
-  - Prueba de mecanismo: se repite la de la T4 con las WebP, en una copia del árbol en `~/rentradar-mutaciones/017/t8/` y no sobre `categoryImage.ts` del repo: quitar `query: "?no-inline"` hace fallar el test de la guarda. Tres WebP (`pool`, `other` y `kayak`) pesan menos de 4096 bytes, el umbral de incrustación por defecto de Vite, así que sin la guarda se incrustarían incluso con él. El acta va en `t8/resultado.md`, con el sha256 del repo antes y después.
+  - Prueba de mecanismo: se repite la de la T4 con las WebP, en una copia del árbol en `~/rentradar-mutaciones/017/t8/` y no sobre `categoryImage.ts` del repo: quitar `query: "?no-inline"` hace fallar el test de la guarda. Tres WebP (`pool`, `other` y `kayak`) pesan menos de 4096 bytes, el umbral de incrustación por defecto de Vite, así que sin la guarda se incrustarían incluso con él. Con la v3 de la T9 son dos (`pool` y `other`), y la prueba se repite en la T9. El acta va en `t8/resultado.md`, con el sha256 del repo antes y después.
 
-- [ ] **T9. Validación de punta a punta y cierre.** Todos los RF
+- [ ] **T9. Sustitución de las doce WebP por la v3.** RF-9 a RF-15 (imágenes reales)
+  - Motivo: el fondo de las doce de la T7 se quitó con remove.bg en su versión gratuita, que es solo para uso no comercial. La v3 parte, según el desarrollador, de las mismas imágenes de Gemini, con el fondo quitado fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil. Detalle y cadena de huellas en «Imágenes v3» del plan.
+  - Lecturas fuera del repo, solo estas: `~/RentRadar-recursos/paquete-webp-v3/`, `~/RentRadar-recursos/categorias-v3-con-fondo/`, `~/RentRadar-recursos/recorte-local-v3/` y `~/RentRadar-recursos/herramientas/originales-v3.sha256`. Ninguna otra carpeta de originales ni de preparadas.
+  - Puerta: el texto de `~/RentRadar-recursos/categorias-v3-con-fondo/fuentes.md` se enseña al desarrollador antes de escribirlo. Se crea sin sobrescribir nada y los doce JPEG no se tocan.
+  - Aprobación imagen por imagen de la v3: el 13-11-2026, con una hoja con las doce a 144 y 72 px sobre claro, cristal y oscuro `#1E2230`. Cada una cumple RF-13 (a ojo), RF-14 y RF-15, y su asignación a la clave es la correcta:
+    - `barbecue`: 13-11-2026.
+    - `boat`: 13-11-2026.
+    - `canoe`: 13-11-2026.
+    - `caravan`: 13-11-2026.
+    - `ebike`: 13-11-2026.
+    - `kayak`: 13-11-2026.
+    - `motorhome`: 13-11-2026.
+    - `other`: 13-11-2026.
+    - `pool`: 13-11-2026.
+    - `ski`: 13-11-2026.
+    - `sports-area`: 13-11-2026.
+    - `van`: 13-11-2026.
+
+    El halo sobre `#0B1220` se comprueba en el navegador en la T10.
+  - Ficheros:
+    - Modifica `frontend/src/assets/categories/<clave>.webp` (las doce), copiadas con `cp --` y nombres exactos desde `~/RentRadar-recursos/paquete-webp-v3/preparadas-3/`. Antes de copiar, el sha256 de las doce actuales va al acta.
+    - Ningún test ni código cambia.
+  - Tests: no hay RF ni test nuevos, así que no hay rojo previo. Las puertas son los tests existentes: el validador, las doce distintas, la carpeta contra las claves y la guarda.
+  - Comprobaciones, cada una con su código de salida:
+    - `sha256sum -c ~/RentRadar-recursos/herramientas/originales-v3.sha256` en `categorias-v3-con-fondo/`, antes y después: doce «OK»;
+    - `sha256sum -c ../SHA256SUMS` en `~/RentRadar-recursos/recorte-local-v3/categorias-v3/`: doce «OK»;
+    - `sha256sum -c ~/RentRadar-recursos/paquete-webp-v3/SHA256SUMS` en la carpeta del repo, tras copiar: doce «OK»;
+    - `grep -a -l -E "EXIF|XMP |ICCP|c2pa|jumb|Gemini|/home" -- *.webp` no imprime nada.
+  - Commit: `feat(frontend): replace category images with v3 cutouts`
+  - Hecho cuando: las comprobaciones dan doce «OK»; vitest (con `--fsModuleCache=false`) y build en verde; tras `npm run build`, `grep -rl "data:image/webp" frontend/dist` sale vacío y hay doce `.webp` en `frontend/dist/assets`; `git diff --cached --name-only` muestra solo las doce rutas.
+  - Prueba de mecanismo: se repite la de la T8 con las WebP v3, en una copia del árbol en `~/rentradar-mutaciones/017/t9/`: quitar `query: "?no-inline"` hace fallar el test de la guarda. El acta va en `t9/resultado.md`, con el sha256 del repo antes y después.
+
+- [ ] **T10. Validación de punta a punta y cierre.** Todos los RF
   - Puerta: «Recreación de la BD de desarrollo» del plan, pasos 0 a 6. Los pasos 1, 2 y 3 (`docker compose down`, `docker volume rm rentradar_db-data`, `docker compose up -d`) y `npm run dev` los ejecuta el desarrollador en su terminal: la sesión principal le da el comando exacto y comprueba después. Los pasos 0, 4, 5 y 6 los ejecuta la sesión principal, cada uno con la orden expresa del desarrollador en ese momento. Se transcriben el comando y la salida, con rutas `~`.
   - Navegador (con `npm run dev` en marcha en la terminal del desarrollador, `http://localhost:5173/map`), a 375 y a 1280 px, con la consola sin errores propios:
     - tarjetas de las doce categorías, la de Esquí con «Esquí» y su imagen;
     - 72 × 72 CSS, tamaño natural 144 × 144 y sin deformar;
     - fondo transparente sobre el cristal y sobre la superficie sólida (`prefersContrast: "more"`);
+    - las doce sobre fondo `#0B1220`, sin halo (la hoja de la v3 usó `#1E2230`);
     - en Network, peticiones de tipo webp al propio origen y ninguna `data:`;
     - las esquinas de 8 × 8 px de las doce, leídas con `getImageData`;
     - una imagen bloqueada (D18) no muestra el icono roto y la tarjeta no se desplaza;
     - sin desbordamiento horizontal y recorrido con teclado sin cambios.
-  - Puerta: el desarrollador aporta los datos de la procedencia (herramienta, fechas y versión del modelo, si la muestra) y confirma que los términos de uso permiten el uso comercial.
+  - Puerta de cierre: el desarrollador comprueba que los términos de uso de Gemini permiten el uso comercial y anota la fecha de la comprobación. Hasta entonces la spec no se cierra.
   - Ficheros:
     - Crea `specs/017-category-images/validation.md`:
       - cada RF con su verificación;
-      - la aprobación de cada imagen con su fecha;
-      - la línea de procedencia (sin prompt ni rutas absolutas);
-      - las versiones de Pillow y libwebp;
-      - los sha256 de los originales antes y después;
-      - las pruebas de mecanismo, transcritas de los `resultado.md` de `~/rentradar-mutaciones/017/t4/`, `t5/`, `t6/` y `t8/`;
+      - la aprobación de cada imagen de la v3 con su fecha (T9);
+      - el apartado de procedencia (sin prompt ni rutas absolutas), con la cadena de huellas JPEG → PNG → WebP y el motivo de sustituir la v1 y la v2 (su fondo se quitó con remove.bg en su versión gratuita, de uso no comercial);
+      - las versiones de `versiones.txt` y el sha256 de los pesos del modelo;
+      - los sha256 de los originales, los PNG intermedios y las WebP de la v3, con las comprobaciones antes y después;
+      - las pruebas de mecanismo, transcritas de los `resultado.md` de `~/rentradar-mutaciones/017/t4/`, `t5/`, `t6/`, `t8/` y `t9/`;
       - la recreación de la BD;
       - el punta a punta;
       - el diff vacío de los manifiestos.
@@ -220,4 +255,4 @@ Reglas comunes de todas las tareas:
   - Commits, en este orden:
     1. `docs(spec-017): validation`
     2. `docs(spec-016): note category whitelist superseded by 017`
-  - Hecho cuando: todos los RF tienen su evidencia; las doce están aprobadas; pytest, ruff, vitest, build y eslint en verde; la spec pasa a «implementada». Al cerrar, MEMORY.md se actualiza, incluida la línea de la 008 en la hoja de ruta.
+  - Hecho cuando: todos los RF tienen su evidencia; las doce están aprobadas; pytest, ruff, vitest, build y eslint en verde; la comprobación de los términos de uso está anotada con su fecha; la spec pasa a «implementada». Al cerrar, MEMORY.md se actualiza, incluida la línea de la 008 en la hoja de ruta.

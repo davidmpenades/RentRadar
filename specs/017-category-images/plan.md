@@ -13,8 +13,8 @@ La spec toca el backend, el frontend y algo de documentación. No hay dependenci
     - una comparación pura entre los ficheros de la carpeta y las claves;
     - la lista de doce claves escrita a mano.
   - Un test de la guarda contra la incrustación compila la interfaz entera con la configuración real (`vite.config.ts`) y un umbral muy alto, y comprueba que cada imagen de categoría sale como fichero emitido; lleva su control positivo con un módulo mínimo.
-- **Preparación de las imágenes.** Se hace fuera del repositorio, con el Pillow del sistema (`python3 -I`, 10.2.0). Hay una hoja de revisión HTML estática y la aprobación es imagen por imagen.
-- **Orden.** Primero va todo lo que no necesita las imágenes (T1 a T6). Las imágenes entran en dos commits verdes: T7 añade las WebP y T8 cambia a WebP y retira las SVG.
+- **Preparación de las imágenes.** Se hace fuera del repositorio y la aprobación es imagen por imagen. Las de la T7 se prepararon con el Pillow del sistema (`python3 -I`, 10.2.0) y una hoja de revisión HTML estática. En la T9 las sustituye la v3, con el fondo quitado fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil (sección «Imágenes v3»).
+- **Orden.** Primero va todo lo que no necesita las imágenes (T1 a T6). Las imágenes entran en dos commits verdes: T7 añade las WebP y T8 cambia a WebP y retira las SVG. T9 sustituye las doce por la v3 y T10 valida y cierra.
 
 ## Archivos y responsabilidades
 | Archivo | Crea/Modifica | Responsabilidad | RF |
@@ -42,7 +42,7 @@ La spec toca el backend, el frontend y algo de documentación. No hay dependenci
 | `frontend/vite.config.ts` | Modifica | `test.fsModuleCache: false`: la caché en disco de vitest congela el listado de un `import.meta.glob` y da resultados falsos cuando cambia la carpeta | RF-6 a RF-8 |
 | `docs/architecture.md` | Modifica | Línea 44: la 0003 añade Esquí. Línea 87: protección también al revertir Esquí. Línea 125: «Imágenes WebP de las categorías» | Sin restos |
 | `specs/016-visual-system/spec.md` | Modifica (al cerrar) | Nota de una línea, «sustituido por la 017», en «Fuera de alcance» | Cierre |
-| `specs/017-category-images/validation.md` | Crea (T9) | Evidencias, aprobaciones, procedencia y recreación de la BD | Todos |
+| `specs/017-category-images/validation.md` | Crea (T10) | Evidencias, aprobaciones, procedencia y recreación de la BD | Todos |
 
 No cambian: `AssetCard.tsx`, `svgWhitelist.ts` (`icon.test.ts` usa sus seis exportaciones), `icon.test.ts`, `test_seed.py`, `backend/openapi.json`, `schema.gen.ts`, `package.json`, `package-lock.json` ni `requirements`.
 
@@ -131,10 +131,14 @@ Se verifica primero a 375 px y después a 1280 px.
 | D22. Objeto que ocupa poco lienzo (decidida por el desarrollador) | A) el script informa de la caja del alfa en porcentaje y, si alguno ocupa poco, el desarrollador decide entonces entre regenerar y recortar el margen transparente a las doce por igual, como paso automático anotado en la procedencia; B) regenerar siempre; C) recortar siempre | A | Imágenes diminutas a 72 px sin que nadie lo haya visto | El script lleva ya escrita la opción de recorte, apagada por defecto |
 | D23. Quién ejecuta los pasos de la BD (decidida por el desarrollador) | A) el desarrollador ejecuta en su terminal los pasos 1, 2 y 3 y `npm run dev`, y la sesión principal le da el comando exacto y comprueba después; los pasos 0, 4, 5 y 6 los hace la sesión principal con su orden en ese momento; B) todo lo hace la sesión principal | A | Que la sesión principal pare o levante el stack | Un relevo manual |
 
+D4, D5, D7, D8, D20, D21 y D22 se aplicaron solo a la preparación de la T7. La v3 de la T9 se preparó con otras herramientas, descritas en «Imágenes v3»; D6 (calidad 85, `method=6`) se mantiene, y sus originales miden 1024 × 1024, así que la reducción directa a 144 × 144 no deforma.
+
 ## Preparación de las imágenes
+Esta sección es el registro de la preparación de la T7. Sus doce WebP se sustituyen en la T9 por la v3 (sección «Imágenes v3»).
+
 Ninguna imagen se abre, copia ni modifica antes de la T7. Nada se instala: se usa el Pillow del sistema, cargado con `python3 -I`. El script, su salida y la hoja de revisión viven fuera del repositorio, y este plan describe el script sin incluir su código, porque la spec no deja entrar en el repo herramientas de preparación. Las rutas se escriben siempre con `~`.
 
-**Lecturas fuera del repo.** Ningún agente lee fuera de este repo, salvo sus temporales, `~/rentradar-mutaciones/` y, en la T7, `~/RentRadar-recursos/`. El código de una librería se lee en el contenedor o con Context7, nunca en el entorno de otro proyecto.
+**Lecturas fuera del repo.** Ningún agente lee fuera de este repo, salvo sus temporales, `~/rentradar-mutaciones/`, en la T7, `~/RentRadar-recursos/`, y en la T9, solo lo que nombra «Imágenes v3». El código de una librería se lee en el contenedor o con Context7, nunca en el entorno de otro proyecto.
 
 1. **Confirmar la tabla** (Puerta). El desarrollador confirma o corrige la tabla de originales y claves. La columna de confirmación se rellena entonces y entra en el commit de la T7.
 2. **Huella de los originales, antes de nada.**
@@ -187,6 +191,8 @@ Ninguna imagen se abre, copia ni modifica antes de la T7. Nada se instala: se us
 - La tarea escribe el script fuera del repo, lo ejecuta con ese OK, transcribe el informe con rutas `~`, copia y comprueba.
 
 ## Tabla de originales y claves
+Tabla de la T7 (v1 y v2). La de la v3 está en «Imágenes v3».
+
 Correspondencia supuesta solo por el nombre del fichero: no se ha abierto ninguna imagen. Nada se copia al repositorio hasta que el desarrollador confirme esta tabla. Después, la hoja de revisión, rotulada con la clave, confirma la asignación a ojo; `kanoa` y `kayak` son la pareja confundible.
 
 | Original (`~/RentRadar-recursos/categorias/`) | Bytes | Clave | Nombre en el catálogo | Confirmado por el desarrollador |
@@ -207,8 +213,49 @@ Correspondencia supuesta solo por el nombre del fichero: no se ha abierto ningun
 
 Si se regeneran imágenes (D21), `~/RentRadar-recursos/categorias-v2/` lleva las doce con los mismos nombres de fichero y su `fuentes.md` propio; esta tabla vale igual para ella y `categorias/` no se toca.
 
+## Imágenes v3 (T9)
+Sustituyen a las doce de la T7, cuyo fondo se quitó con remove.bg en su versión gratuita, que es solo para uso no comercial. Según el desarrollador, son las mismas imágenes generadas que dieron la v1 y la v2; no se puede comprobar con huellas porque la v1 y la v2 se guardaron sin fondo; solo cambia cómo se quitó el fondo.
+
+**Generación y descarga.**
+- Once imágenes (todas menos `kayak`): generadas con Gemini entre el 11-11-2026 y el 12-11-2026; no consta qué imagen es de qué día.
+- `kayak`: generada con Gemini el 13-11-2026; es el mismo kayak de la v2.
+- Las doce, con fondo, se volvieron a descargar desde esas mismas conversaciones de Gemini el 13-11-2026.
+- Versión del modelo y términos de uso de Gemini: no registrado.
+
+**Cadena de huellas.**
+1. Originales JPEG con fondo, 1024 × 1024, RGB, sin perfil ICC, EXIF ni XMP: `~/RentRadar-recursos/categorias-v3-con-fondo/`, huella `~/RentRadar-recursos/herramientas/originales-v3.sha256`.
+2. PNG intermedios de 1024 px con alfa: `~/RentRadar-recursos/recorte-local-v3/categorias-v3/`, huella `~/RentRadar-recursos/recorte-local-v3/SHA256SUMS`.
+3. WebP de 144 px: `~/RentRadar-recursos/paquete-webp-v3/preparadas-3/`, huella `~/RentRadar-recursos/paquete-webp-v3/SHA256SUMS`.
+
+**Cómo se prepararon.** Versiones en `~/RentRadar-recursos/paquete-webp-v3/herramientas/versiones.txt`, junto a los dos scripts.
+- Fondo quitado fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil: `recortar_fondo.py`, modelo de segmentación ISNet (`isnet-general-use`) por medio de rembg y matting, con los pesos descargados de GitHub. Las entradas del recorte tienen el mismo sha256 que `originales-v3.sha256` en las doce.
+- Las sombras de las imágenes originales están eliminadas.
+- En la imagen del esquí, el contorno de la cola del esquí blanco está dibujado a mano, porque el blanco es casi igual que el fondo. Es un parámetro dentro de `recortar_fondo.py` (`OVERRIDES`), no un retoque del fichero final.
+- `a_webp.py` pasa los PNG a WebP de 144 px con Pillow 12.3.0 y libwebp 1.6.0, calidad 85, `method=6`, sin metadatos. No son las versiones del script de la T7. Ejecutado de nuevo en el mismo entorno, reproduce byte a byte las doce WebP.
+- Licencias: rembg, MIT; pesos `isnet-general-use`, Apache-2.0 según el repositorio de DIS, no verificada.
+
+**Revisión.** El 13-11-2026, con una hoja con las doce a 144 y 72 px sobre claro, cristal y oscuro `#1E2230` (no `#0B1220`); aprobadas las doce. El halo sobre `#0B1220` se comprueba en el navegador en la T10.
+
+**Originales y claves de la v3**, confirmados en esa revisión:
+- `autocaravana.jpeg` → `motorhome`
+- `barbacoa.jpeg` → `barbecue`
+- `barco.jpeg` → `boat`
+- `caravana.jpeg` → `caravan`
+- `ebike.jpeg` → `ebike`
+- `furgoneta.jpeg` → `van`
+- `kanoa.jpeg` → `canoe`
+- `kayak.jpeg` → `kayak`
+- `otros.jpeg` → `other`
+- `piscina.jpeg` → `pool`
+- `ski.jpeg` → `ski`
+- `zonaDeportiva.jpeg` → `sports-area`
+
+**Lecturas fuera del repo en la T9**, solo estas: `~/RentRadar-recursos/paquete-webp-v3/`, `~/RentRadar-recursos/categorias-v3-con-fondo/`, `~/RentRadar-recursos/recorte-local-v3/` y `~/RentRadar-recursos/herramientas/originales-v3.sha256`. Ninguna otra carpeta de originales ni de preparadas.
+
+**Escritura fuera del repo en la T9**: solo `~/RentRadar-recursos/categorias-v3-con-fondo/fuentes.md`, nuevo, con el texto aprobado por el desarrollador. Los doce JPEG no se tocan.
+
 ## Recreación de la BD de desarrollo
-Va en la T9, después de todos los commits de código, y nunca la hace un implementer. Cada paso **espera la orden expresa del desarrollador en ese momento**, y nunca se hace por SQL ni por consola. Reparto (D23):
+Va en la T10, después de todos los commits de código, y nunca la hace un implementer. Cada paso **espera la orden expresa del desarrollador en ese momento**, y nunca se hace por SQL ni por consola. Reparto (D23):
 - **Los ejecuta el desarrollador en su terminal:** los pasos 1, 2 y 3 y `npm run dev`. La sesión principal le da el comando exacto y comprueba el resultado después.
 - **Los ejecuta la sesión principal, con la orden del desarrollador en ese momento:** los pasos 0, 4, 5 y 6.
 
@@ -242,7 +289,8 @@ Nota: `docker volume rm` no estaba en `ask` ni en `deny` de `.claude/settings.js
 | T1 a T6 | No se toca: ni se abre, ni se lee, ni se copia ninguna imagen | Solo las once SVG de siempre (lectura en tests) | No se toca |
 | T7 | Huella sha256 de los originales; el script los lee con Pillow y escribe solo en `preparadas/` (si se regeneran imágenes, lee `categorias-v2/`, que prepara el desarrollador, y escribe en `preparadas-2/`); la hoja la abre el desarrollador | Entran las doce WebP aprobadas | No se toca |
 | T8 | No se toca | Salen las once SVG; quedan las doce WebP | No se toca |
-| T9 | No se toca (la procedencia la aporta el desarrollador) | No cambia | Recreación por pasos, con orden expresa |
+| T9 | Solo lo que nombra «Imágenes v3»: huellas y lectura; se crea `categorias-v3-con-fondo/fuentes.md` | Se sustituyen las doce WebP por la v3 | No se toca |
+| T10 | No se toca | No cambia | Recreación por pasos, con orden expresa |
 
 ## Blast radius
 - **Backend.**
@@ -262,7 +310,7 @@ Nota: `docker volume rm` no estaba en `ask` ni en `deny` de `.claude/settings.js
   - CI: el job `frontend-quality` ejecuta las dos compilaciones del test de la guarda (tiempo no medido).
 - **Docs**: `docs/architecture.md`, líneas 44, 87 y 125. No se tocan la 006 ni `prototypes/`. Al cerrar, una nota de una línea en la 016.
 - **Contratos**: ninguno. `openapi.json` y `schema.gen.ts`, sin cambios.
-- **BD de desarrollo**: recreada en la T9. Se pierde su contenido.
+- **BD de desarrollo**: recreada en la T10. Se pierde su contenido.
 
 ## Riesgos
 | Riesgo | Mitigación |
@@ -330,7 +378,7 @@ Pendientes:
 - Que `exhaustive: true` lista ocultos y subcarpetas (D16, T8).
 - Que Pillow 10.2.0 admite `Image.open(…, formats=["WEBP"])`, `ImageOps.contain` y `save(…, quality, method)` con `alpha_quality` 100 por defecto, y que RGBA con pérdida da VP8X + ALPH + VP8 sin metadatos. Lo confirman el informe y el listado de bloques (T7).
 - Las dimensiones, el modo, el alfa y el ICC de los originales, y si son cuadrados: no se han abierto.
-- Que `curl` a `localhost:8000` pasa `ALLOWED_HOSTS` en desarrollo (T9).
+- Que `curl` a `localhost:8000` pasa `ALLOWED_HOSTS` en desarrollo (T10).
 - Que el MCP de Chrome DevTools puede bloquear una petición por URL (D18).
 - Que la etiqueta del volumen es `rentradar db-data` (paso 0).
 - El tiempo de las dos compilaciones del test de la guarda.
@@ -338,7 +386,7 @@ Pendientes:
 - Qué parte del lienzo ocupa cada objeto: no se ha medido; lo informa el script (D22).
 
 ## Cambios de entorno fuera de las tareas
-Cada uno va en su propio commit, con el OK del desarrollador, y no pertenece a la T1 a la T9:
+Cada uno va en su propio commit, con el OK del desarrollador, y no pertenece a la T1 a la T10:
 - `AGENTS.md`, sección «Límites»: una línea nueva: ningún agente lee fuera de este repo, salvo sus temporales, `~/rentradar-mutaciones/` y la carpeta que la tarea nombre expresamente.
 - `.claude/settings.json`: añade `Bash(docker volume rm:*)`, `Bash(docker volume prune:*)` y `Bash(docker system prune:*)` a `permissions.ask`, porque hasta ahora solo `docker compose down` pedía confirmación y la recreación de la BD borra un volumen (`docker system prune` con `--volumes` también los borra).
 
