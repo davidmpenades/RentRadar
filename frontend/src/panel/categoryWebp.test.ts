@@ -227,3 +227,23 @@ describe("validateCategoryWebp: la imagen y su transparencia, cada caso por su c
     expect(validateCategoryWebp(bytes)).toEqual({ ok: false, code });
   });
 });
+
+const images = import.meta.glob<string>("../assets/categories/*.webp", { eager: true, query: "?inline", import: "default" });
+
+const DATA_URI_PREFIX = "data:image/webp;base64,";
+
+const CATEGORY_KEYS = ["barbecue", "boat", "canoe", "caravan", "ebike", "kayak", "motorhome", "other", "pool", "ski", "sports-area", "van"];
+
+const bytesOf = (dataUri: string) => Uint8Array.from(atob(dataUri.slice(DATA_URI_PREFIX.length)), (char) => char.charCodeAt(0));
+
+describe("las WebP reales de las categorías", () => {
+  it("hay una por categoría, con el nombre exacto de su clave", () => {
+    const names = Object.keys(images).map((path) => path.slice(path.lastIndexOf("/") + 1, -".webp".length));
+    expect(names.sort()).toEqual(CATEGORY_KEYS);
+  });
+
+  it.each(Object.entries(images))("%s es un data URI de WebP y pasa el validador", (_path, dataUri) => {
+    expect(dataUri.startsWith(DATA_URI_PREFIX)).toBe(true);
+    expect(validateCategoryWebp(bytesOf(dataUri))).toEqual({ ok: true });
+  });
+});
