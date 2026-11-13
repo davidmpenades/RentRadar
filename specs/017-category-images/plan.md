@@ -39,6 +39,7 @@ La spec toca el backend, el frontend y algo de documentación. No hay dependenci
 | `frontend/src/testing/categoryKeys.ts` | Crea | `CATEGORY_KEYS`: las doce claves escritas a mano. La usan los tests de RF-6, RF-7 y RF-8 | RF-6 a RF-8 |
 | `frontend/src/testing/categoryFiles.ts` | Crea | `categoryFileProblems(names, keys)`: función pura que devuelve `{ missing, extra }` | RF-6 |
 | `frontend/src/panel/categoryFiles.test.ts` | Crea | Casos fabricados de la función y comparación con el contenido real de la carpeta | RF-6 |
+| `frontend/vite.config.ts` | Modifica | `test.fsModuleCache: false`: la caché en disco de vitest congela el listado de un `import.meta.glob` y da resultados falsos cuando cambia la carpeta | RF-6 a RF-8 |
 | `docs/architecture.md` | Modifica | Línea 44: la 0003 añade Esquí. Línea 87: protección también al revertir Esquí. Línea 125: «Imágenes WebP de las categorías» | Sin restos |
 | `specs/016-visual-system/spec.md` | Modifica (al cerrar) | Nota de una línea, «sustituido por la 017», en «Fuera de alcance» | Cierre |
 | `specs/017-category-images/validation.md` | Crea (T9) | Evidencias, aprobaciones, procedencia y recreación de la BD | Todos |

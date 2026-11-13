@@ -166,6 +166,7 @@ Reglas comunes de todas las tareas:
     El test «doce imágenes = doce claves» no entra aquí.
 
 - [ ] **T8. Cambio a WebP y retirada de las SVG.** RF-6, RF-7, RF-8
+  - Antes de empezar, en un commit propio, `test(frontend): disable vitest module cache`: añade `fsModuleCache: false` a `test` en `frontend/vite.config.ts`. Se comprueba sin ningún flag: tras `npx vitest --clearCache` y `npx vitest run`, `node_modules/.vitest-cache` no existe. Aun así, todas las ejecuciones de vitest de la T8 (rojo, verde y mutaciones) llevan `--fsModuleCache=false`.
   - Ficheros:
     - Modifica `frontend/src/panel/categoryImage.ts`: glob `../assets/categories/*.webp` con `?no-inline`; `slugOf` con `".webp".length`.
     - Crea `frontend/src/testing/categoryKeys.ts` (`CATEGORY_KEYS`, las doce escritas a mano), `frontend/src/testing/categoryFiles.ts` (`categoryFileProblems`) y `frontend/src/panel/categoryFiles.test.ts`.
