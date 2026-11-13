@@ -190,18 +190,18 @@ Correspondencia supuesta solo por el nombre del fichero: no se ha abierto ningun
 
 | Original (`~/RentRadar-recursos/categorias/`) | Bytes | Clave | Nombre en el catálogo | Confirmado por el desarrollador |
 |---|---|---|---|---|
-| `autocaravana.webp` | 18 696 | `motorhome` | Autocaravana | |
-| `barbacoa.webp` | 16 170 | `barbecue` | Barbacoa | |
-| `barco.webp` | 12 560 | `boat` | Barco | |
-| `caravana.webp` | 16 718 | `caravan` | Caravana | |
-| `ebike.webp` | 43 598 | `ebike` | Bicicleta eléctrica | |
-| `furgoneta.webp` | 16 448 | `van` | Furgoneta | |
-| `kanoa.webp` | 15 390 | `canoe` | Piragua | |
-| `kayak.webp` | 14 168 | `kayak` | Kayak | |
-| `otros.webp` | 8 536 | `other` | Otros | |
-| `piscina.webp` | 8 908 | `pool` | Piscina | |
-| `ski.webp` | 22 008 | `ski` | Esquí | |
-| `zonaDeportiva.webp` | 16 448 | `sports-area` | Zona deportiva | |
+| `autocaravana.webp` | 18 696 | `motorhome` | Autocaravana | 12-11-2026 |
+| `barbacoa.webp` | 16 170 | `barbecue` | Barbacoa | 12-11-2026 |
+| `barco.webp` | 12 560 | `boat` | Barco | 12-11-2026 |
+| `caravana.webp` | 16 718 | `caravan` | Caravana | 12-11-2026 |
+| `ebike.webp` | 43 598 | `ebike` | Bicicleta eléctrica | 12-11-2026 |
+| `furgoneta.webp` | 16 448 | `van` | Furgoneta | 12-11-2026 |
+| `kanoa.webp` | 15 390 | `canoe` | Piragua | 12-11-2026 |
+| `kayak.webp` | 10 190 (v2; el de la v1, de 14 168, se rechazó) | `kayak` | Kayak | 13-11-2026 |
+| `otros.webp` | 8 536 | `other` | Otros | 12-11-2026 |
+| `piscina.webp` | 8 908 | `pool` | Piscina | 12-11-2026 |
+| `ski.webp` | 22 008 | `ski` | Esquí | 12-11-2026 |
+| `zonaDeportiva.webp` | 16 448 | `sports-area` | Zona deportiva | 12-11-2026 |
 | `fuentes.md` | 311 | — (no se copia ni se lee) | — | |
 
 Si se regeneran imágenes (D21), `~/RentRadar-recursos/categorias-v2/` lleva las doce con los mismos nombres de fichero y su `fuentes.md` propio; esta tabla vale igual para ella y `categorias/` no se toca.

@@ -126,7 +126,7 @@ Reglas comunes de todas las tareas:
   - Hecho cuando: los tests fallan primero y luego pasan; vitest, build y eslint en verde.
   - Prueba de mecanismo, en `webp.ts`: no comprobar el lienzo de VP8X, no exigir ALPH con VP8 y no comprobar el ancho; cada una hace fallar al menos un test.
 
-- [ ] **T7. Preparación, revisión y entrada de las doce WebP.** RF-9 a RF-15 (imágenes reales)
+- [x] **T7. Preparación, revisión y entrada de las doce WebP.** RF-9 a RF-15 (imágenes reales)
   - Pasos: los de «Preparación de las imágenes» del plan, en orden. Es la primera tarea que toca `~/RentRadar-recursos/`.
   - Puerta: confirma la tabla de originales; la columna «Confirmado por el desarrollador» del plan se rellena y entra en este commit.
   - Puerta: el script se escribe en `~/RentRadar-recursos/herramientas/`, se enseña al desarrollador y solo se ejecuta con su OK en ese momento, con `python3 -I` (Pillow 10.2.0 del sistema; nada se instala).
@@ -135,6 +135,21 @@ Reglas comunes de todas las tareas:
     - `sha256sum -c` de los originales y de `fuentes.md` antes y después (trece «OK»);
     - el informe del script, transcrito con rutas `~`: versiones de Pillow y libwebp, perfil ICC de cada original, caja del alfa en porcentaje, bloques `VP8X` + `ALPH` + `VP8 `, pesos de 16 384 bytes o menos y esquinas a 0.
   - Puerta: aprobación imagen por imagen en `~/RentRadar-recursos/preparadas/hoja-revision.html` (incluida la fila de las doce a 144 px sobre fondo oscuro): RF-13 a ojo, RF-14, RF-15 y la asignación a la clave, con fecha. Las fechas se anotan aquí, bajo la T7. Si una imagen no se aprueba, la tarea se para: el desarrollador la regenera y las regeneradas van a `~/RentRadar-recursos/categorias-v2/`, con las doce completas (las que no cambian, copiadas de `categorias/`) y su propio `fuentes.md`, que él escribe diciendo cuáles se regeneraron; el script se ejecuta sobre esa carpeta, con salida en `preparadas-2/`, y `categorias/` no se toca.
+  - Aprobación imagen por imagen: las once el 12-11-2026 en `~/RentRadar-recursos/preparadas/hoja-revision.html` y el kayak el 13-11-2026 en `~/RentRadar-recursos/preparadas-2/hoja-revision.html`, una línea por imagen. Cada una cumple RF-13 (a ojo, sin recuadro, sombra, halo ni restos), RF-14 y RF-15, y su asignación a la clave es la correcta:
+    - `barbecue`: 12-11-2026.
+    - `boat`: 12-11-2026.
+    - `canoe`: 12-11-2026.
+    - `caravan`: 12-11-2026.
+    - `ebike`: 12-11-2026.
+    - `kayak`: 13-11-2026. Regenerado: a 72 px se distingue de `canoe`, sin halo ni restos sobre `#0B1220`, y encaja con las demás. El de la v1 se rechazó el 12-11-2026 porque a 72 px se confundía con `canoe`; consta en `~/RentRadar-recursos/herramientas/incidencias.md`.
+    - `motorhome`: 12-11-2026.
+    - `other`: 12-11-2026.
+    - `pool`: 12-11-2026.
+    - `ski`: 12-11-2026.
+    - `sports-area`: 12-11-2026.
+    - `van`: 12-11-2026.
+  - Las once aprobadas el 12-11-2026 salen idénticas byte a byte en `preparadas-2/`.
+  - La versión aprobada es la v2 (`~/RentRadar-recursos/categorias-v2/`, huella `originales-v2.sha256`, salida y `SHA256SUMS` de `~/RentRadar-recursos/preparadas-2/`), con `cp --update=none` en lugar de `cp -n`.
   - Ficheros:
     - Crea `frontend/src/assets/categories/<clave>.webp` (las doce), copiadas con `cp -n --` y nombres exactos.
     - Modifica `categoryWebp.test.ts`: glob `../assets/categories/*.webp` con `eager` y `query: "?inline"`; hay doce, cada una empieza por `data:image/webp;base64,` y pasa `validateCategoryWebp`.
