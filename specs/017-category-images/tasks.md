@@ -196,7 +196,7 @@ Reglas comunes de todas las tareas:
     - `git diff --cached --name-only` muestra solo las rutas de la tarea.
   - Prueba de mecanismo: se repite la de la T4 con las WebP, en una copia del árbol en `~/rentradar-mutaciones/017/t8/` y no sobre `categoryImage.ts` del repo: quitar `query: "?no-inline"` hace fallar el test de la guarda. Tres WebP (`pool`, `other` y `kayak`) pesan menos de 4096 bytes, el umbral de incrustación por defecto de Vite, así que sin la guarda se incrustarían incluso con él. Con la v3 de la T9 son dos (`pool` y `other`), y la prueba se repite en la T9. El acta va en `t8/resultado.md`, con el sha256 del repo antes y después.
 
-- [ ] **T9. Sustitución de las doce WebP por la v3.** RF-9 a RF-15 (imágenes reales)
+- [x] **T9. Sustitución de las doce WebP por la v3.** RF-9 a RF-15 (imágenes reales)
   - Motivo: el fondo de las doce de la T7 se quitó con remove.bg en su versión gratuita, que es solo para uso no comercial. La v3 parte, según el desarrollador, de las mismas imágenes de Gemini, con el fondo quitado fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil. Detalle y cadena de huellas en «Imágenes v3» del plan.
   - Lecturas fuera del repo, solo estas: `~/RentRadar-recursos/paquete-webp-v3/`, `~/RentRadar-recursos/categorias-v3-con-fondo/`, `~/RentRadar-recursos/recorte-local-v3/` y `~/RentRadar-recursos/herramientas/originales-v3.sha256`. Ninguna otra carpeta de originales ni de preparadas.
   - Puerta: el texto de `~/RentRadar-recursos/categorias-v3-con-fondo/fuentes.md` se enseña al desarrollador antes de escribirlo. Se crea sin sobrescribir nada y los doce JPEG no se tocan.
