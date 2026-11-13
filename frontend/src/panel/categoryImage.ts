@@ -1,12 +1,12 @@
 // ?no-inline hace que salgan como ficheros y no como data:, para poder cerrar img-src a 'self'
-const files = import.meta.glob<string>("../assets/categories/*.svg", {
+const files = import.meta.glob<string>("../assets/categories/*.webp", {
   eager: true,
   query: "?no-inline",
   import: "default",
 });
 
 function slugOf(path: string): string {
-  return path.slice(path.lastIndexOf("/") + 1, -".svg".length);
+  return path.slice(path.lastIndexOf("/") + 1, -".webp".length);
 }
 
 // Un Map y no un objeto: un slug como __proto__ o constructor no debe devolver nada heredado

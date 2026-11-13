@@ -122,7 +122,7 @@ frontend/
     ├── main.tsx        # Monta la aplicación (StrictMode, SessionProvider y AppShell) y normaliza las direcciones con replaceState
     ├── styles/         # index.css: Tailwind, tokens de @theme (también --color-danger), foco global y tipografía autoalojada
     ├── i18n/           # es.ts: catálogo de mensajes en castellano · format.ts: precios, radios y minutos de espera
-    ├── assets/categories/  # Ilustraciones SVG de las categorías
+    ├── assets/categories/  # Imágenes WebP de las categorías
     ├── api/            # Clientes HTTP y validación de lo que llega
     │   ├── schema.gen.ts    # Tipos generados desde backend/openapi.json (no se edita a mano)
     │   ├── validate.ts      # Esquema Zod estricto de la lista pública y validateResponse
