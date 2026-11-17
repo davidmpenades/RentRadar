@@ -201,7 +201,7 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 ## Fuera de alcance
 - Barra de navegación inferior en móvil (spec 008).
 - Rehacer las once imágenes de categoría de la aplicación: llega en la 008. La 016 solo aporta la imagen de categoría de referencia de los prototipos, que no entra en la aplicación.
-- Cambiar la lista blanca de SVG de las imágenes de categoría de la 006 o lo que comprueba su test: se mantienen tal cual. Mover las reglas a un módulo que compartan los dos tests no es un cambio.
+- Cambiar la lista blanca de SVG de las imágenes de categoría de la 006 o lo que comprueba su test: se mantienen tal cual. Mover las reglas a un módulo que compartan los dos tests no es un cambio. — sustituido por la 017
 - Avatar y su menú (spec 014).
 - Filtro y colapso del panel, y la selección que usa el limón (spec 007).
 - Formulario de entrada (spec 015), que reutilizará estas piezas.

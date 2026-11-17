@@ -226,7 +226,7 @@ def test_seed_rollback_inside_a_reverted_atomic_leaves_the_seed_in_place():
         call_command("migrate", "categories", "0001_initial", verbosity=0)
         assert seed_state() == (0, False)
         transaction.set_rollback(True)
-    assert seed_state() == (11, True)
+    assert seed_state() == (12, True)
 
 
 @pytest.mark.django_db

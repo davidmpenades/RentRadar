@@ -1,6 +1,6 @@
 {
   "permissions": {
     "deny": ["Read(./.env)", "Read(./backend/.env)", "Bash(git push:*)"],
-    "ask": ["Bash(git merge:*)", "Bash(docker compose down:*)"]
+    "ask": ["Bash(git merge:*)", "Bash(docker compose down:*)", "Bash(docker volume rm:*)", "Bash(docker volume prune:*)", "Bash(docker system prune:*)"]
   }
 }

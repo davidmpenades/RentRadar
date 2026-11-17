@@ -23,6 +23,7 @@ Depende de: spec 009 (registro, sesión y salida). Orden: 016 → 017 → 007 �
 - Respuestas mínimas (solo el email propio), barra superior sin email, `/login/` normalizado a `/login`, navegación entre páginas con historial.
 - Cuenta desactivada: no entra, y su sesión abierta cuenta como sin sesión.
 - Los intentos rechazados por el propio límite no cuentan. El mensaje de espera redondea a minutos, como mínimo 1.
+- La salida vacía la sesión con `flush()` y no llama a `logout()`, así que no emite `user_logged_out`: a tener en cuenta si algo escucha esa señal.
 
 ## Hallazgos de la clarificación de la 009 que se resuelven aquí
 - **Límite por IP y email**:

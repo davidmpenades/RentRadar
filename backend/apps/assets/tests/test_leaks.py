@@ -267,6 +267,20 @@ def test_reverting_the_seed_with_an_asset_does_not_leak(
     assert_no_leak(raised.value, caplog, EXACT_AND_PUBLIC)
 
 
+def test_reverting_ski_with_an_asset_does_not_leak(
+    monkeypatch, caplog, sentinel_arguments, ski_category
+):
+    create_asset(**{**sentinel_arguments, "category_id": ski_category.pk})
+    watch_logs(monkeypatch, caplog)
+
+    with transaction.atomic():
+        with pytest.raises(ProtectedError) as raised:
+            call_command("migrate", "categories", "0002_seed_categories", verbosity=0)
+        transaction.set_rollback(True)
+
+    assert_no_leak(raised.value, caplog, EXACT_AND_PUBLIC)
+
+
 def test_the_text_of_an_asset_does_not_leak(sentinel_asset):
     stored = Asset.objects.get(pk=sentinel_asset.pk)
 

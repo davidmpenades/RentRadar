@@ -112,6 +112,11 @@ def category(db):
 
 
 @pytest.fixture
+def ski_category(db):
+    return Category.objects.get(slug="ski")
+
+
+@pytest.fixture
 def make_asset(owner, category):
     # Un bien válido sin guardar; cada test sobrescribe solo lo que quiere romper
     def build(**overrides):
@@ -155,3 +160,8 @@ def creation_arguments(owner, category):
 def stored_asset(creation_arguments):
     # Un bien creado por el servicio de alta: pausado, de 1000 m y en Madrid
     return create_asset(**creation_arguments)
+
+
+@pytest.fixture
+def ski_asset(creation_arguments, ski_category):
+    return create_asset(**{**creation_arguments, "category_id": ski_category.pk})

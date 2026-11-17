@@ -1,20 +1,19 @@
 import { describe, expect, it } from "vitest";
 
+import { CATEGORY_KEYS } from "../testing/categoryKeys";
 import { categoryImage } from "./categoryImage";
 
-const SLUGS = ["ebike", "caravan", "motorhome", "van", "pool", "barbecue", "sports-area", "boat", "kayak", "canoe", "other"];
-
 describe("categoryImage", () => {
-  it.each(SLUGS)("la categoría %s resuelve a su propia imagen", (slug) => {
-    // En dev la dirección lleva la consulta ?no-inline; en el build, un hash antes de .svg
-    expect(categoryImage(slug)).toMatch(new RegExp(`/${slug}(-[\\w-]+)?\\.svg(\\?no-inline)?$`));
+  it.each(CATEGORY_KEYS)("la categoría %s resuelve a su propia imagen", (slug) => {
+    // En dev la dirección lleva la consulta ?no-inline; en el build, un hash antes de .webp
+    expect(categoryImage(slug)).toMatch(new RegExp(`/${slug}(-[\\w-]+)?\\.webp(\\?no-inline)?$`));
   });
 
-  it("da una imagen distinta a cada una de las 11 categorías", () => {
-    expect(new Set(SLUGS.map(categoryImage)).size).toBe(SLUGS.length);
+  it("da una imagen distinta a cada una de las 12 categorías", () => {
+    expect(new Set(CATEGORY_KEYS.map(categoryImage)).size).toBe(12);
   });
 
-  it.each(["desconocido", "", "EBIKE", "ebike ", "../ebike", "ebike.svg"])("un slug desconocido (%j) da la imagen de other", (slug) => {
+  it.each(["desconocido", "", "EBIKE", "ebike ", "../ebike", "ebike.webp", "snow", "SKI", "ski ", "ski.webp", "../ski"])("un slug desconocido (%j) da la imagen de other", (slug) => {
     expect(categoryImage(slug)).toBe(categoryImage("other"));
   });
 

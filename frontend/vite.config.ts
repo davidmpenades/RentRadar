@@ -15,6 +15,8 @@ export default defineConfig({
   test: {
     environment: "node",
     include: ["src/**/*.test.ts"],
+    // La caché en disco congela el listado de un import.meta.glob y da resultados falsos si la carpeta cambia
+    fsModuleCache: false,
     // Vitest vacía los CSS importados; los tests que leen una hoja como texto la piden con ?raw
     css: { include: [/\.css\?raw$/] },
   },

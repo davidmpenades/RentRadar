@@ -17,6 +17,13 @@ export function AssetCard({ asset }: { asset: PublicAsset }) {
         height={72}
         loading="lazy"
         decoding="async"
+        // Chrome pinta el icono de imagen rota aunque alt sea "" si la imagen tiene width y height: se oculta sin perder el hueco
+        onError={(event) => {
+          event.currentTarget.style.visibility = "hidden";
+        }}
+        onLoad={(event) => {
+          event.currentTarget.style.visibility = "visible";
+        }}
         className="size-18 shrink-0 rounded-2xl object-cover"
       />
       <div className="grid min-w-0 content-center gap-0.5">
