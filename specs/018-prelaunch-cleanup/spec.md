@@ -1,5 +1,5 @@
 # Spec 018 — Limpieza antes de lanzar
-Estado: aprobada
+Estado: implementada
 Depende de: la revisión de solo lectura previa al lanzamiento (17-11-2026), en sus partes de historial, secretos y licencias, y de la spec 017 (imágenes de categoría), cuyo registro de procedencia se corrige.
 
 ## Contexto y objetivo
