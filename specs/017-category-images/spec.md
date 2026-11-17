@@ -1,5 +1,5 @@
 # Spec 017 — Imágenes de categoría y categoría «Esquí»
-Estado: aprobada
+Estado: implementada
 Depende de: spec 004 (reglas de las categorías y semilla de once; las categorías solo cambian por migración), spec 005 (RF-22: no se borra una categoría con bienes, tampoco al revertir una migración; test de fugas), spec 006 (tarjeta del panel, imagen de «Otros» como respaldo, RF-6 del comando de demostración y decisión de entregar las imágenes como ficheros del propio sitio) y spec 016 (panel de cristal y superficie sólida, y reglas de la lista blanca de SVG que usa el icono de RentRadar).
 
 ## Contexto y objetivo
