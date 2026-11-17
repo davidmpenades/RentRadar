@@ -1,7 +1,7 @@
 # Tareas 017 — Imágenes de categoría y categoría «Esquí»
 Spec: specs/017-category-images/spec.md · Plan: specs/017-category-images/plan.md
 
-Máximo 10 tareas: hay 10 (la T10 lleva dos commits), en orden de dependencia:
+Máximo 10 tareas: hay 10 (la T10 lleva cinco commits), en orden de dependencia:
 - T1 → T2 → T3;
 - T4 no depende de ninguna;
 - T5 → T6 → T7;
@@ -261,4 +261,6 @@ Reglas comunes de todas las tareas:
     1. `fix(frontend): hide broken category image`
     2. `docs(spec-017): validation`
     3. `docs(spec-016): note category whitelist superseded by 017`
+    4. `docs(spec-017): record gemini terms check`
+    5. `docs(spec-017): mark spec implemented`
   - Hecho cuando: todos los RF tienen su evidencia; las doce están aprobadas; pytest, ruff, vitest, build y eslint en verde; la comprobación de los términos de uso está anotada con su fecha; la spec pasa a «implementada». Al cerrar, MEMORY.md se actualiza, incluida la línea de la 008 en la hoja de ruta.

@@ -17,7 +17,7 @@ Registros de la validación, fuera del repositorio:
 - T7 `406b9af` feat(frontend): add webp category images
 - T8 `aa32271` test(frontend): disable vitest module cache, y `2599bc3` feat(frontend): switch category images to webp
 - T9 `21bc6b1` docs(spec-017): switch to v3 category images (cambio de spec, plan y tareas), y `63b98cb` feat(frontend): replace category images with v3 cutouts
-- T10 `53df000` docs(spec-017): note broken image fix in T10, y `566ea24` fix(frontend): hide broken category image
+- T10 `53df000` docs(spec-017): note broken image fix in T10, `566ea24` fix(frontend): hide broken category image, `6e5b21d` docs(spec-017): validation, `6614da3` docs(spec-016): note category whitelist superseded by 017, `cc2d853` docs(spec-017): record gemini terms check y `9feb91e` docs(spec-017): mark spec implemented
 
 Las casillas de la T1 a la T9 se marcaron en commits `docs(spec-017): mark …`: T1 a T4 en `187bbf7`, T5 en `71f11d8`, T6 en `3c28284`, T7 en `390e296`, T8 en `753910d` y T9 en `fab7344`.
 
