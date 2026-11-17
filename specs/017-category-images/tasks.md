@@ -228,7 +228,7 @@ Reglas comunes de todas las tareas:
   - Hecho cuando: las comprobaciones dan doce «OK»; vitest (con `--fsModuleCache=false`) y build en verde; tras `npm run build`, `grep -rl "data:image/webp" frontend/dist` sale vacío y hay doce `.webp` en `frontend/dist/assets`; `git diff --cached --name-only` muestra solo las doce rutas.
   - Prueba de mecanismo: se repite la de la T8 con las WebP v3, en una copia del árbol en `~/rentradar-mutaciones/017/t9/`: quitar `query: "?no-inline"` hace fallar el test de la guarda. El acta va en `t9/resultado.md`, con el sha256 del repo antes y después.
 
-- [ ] **T10. Validación de punta a punta y cierre.** Todos los RF
+- [x] **T10. Validación de punta a punta y cierre.** Todos los RF
   - Puerta: «Recreación de la BD de desarrollo» del plan, pasos 0 a 6. Los pasos 1, 2 y 3 (`docker compose down`, `docker volume rm rentradar_db-data`, `docker compose up -d`) y `npm run dev` los ejecuta el desarrollador en su terminal: la sesión principal le da el comando exacto y comprueba después. Los pasos 0, 4, 5 y 6 los ejecuta la sesión principal, cada uno con la orden expresa del desarrollador en ese momento. Se transcriben el comando y la salida, con rutas `~`.
   - Navegador (con `npm run dev` en marcha en la terminal del desarrollador, `http://localhost:5173/map`), a 375 y a 1280 px, con la consola sin errores propios:
     - tarjetas de las doce categorías, la de Esquí con «Esquí» y su imagen;
