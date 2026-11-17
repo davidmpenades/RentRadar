@@ -136,7 +136,9 @@ Historial: la v1 tenía doce imágenes; once se aprobaron el 12-11-2026 y el kay
 ### Por qué se sustituyeron la v1 y la v2
 Su fondo se quitó con remove.bg en su versión gratuita, que es solo para uso no comercial.
 
-Las WebP de la v1 y la v2 siguen en el historial de la rama (`406b9af` y `2599bc3`), sin metadatos; el producto no las sirve desde `63b98cb`. Se revisa antes del lanzamiento si hay que purgarlas del historial.
+En git solo entró la v2: las doce WebP de `frontend/src/assets/categories/` las añade `406b9af` (`git show --name-status 406b9af`). Según el desarrollador, once son las de la v1 y el kayak es el regenerado; git no guarda ninguna versión anterior con la que compararlas. `2599bc3` no añade ninguna WebP: borra los once SVG y cambia el código y los tests (`git show --name-status 2599bc3`). `63b98cb` sustituye las doce por las de la v3; desde ese commit el árbol no tiene otras WebP, así que el producto no sirve las de la v2 (`git ls-tree -r`).
+
+Las WebP de la v2 siguen, sin metadatos, en el historial publicado en GitHub (alcanzables desde `origin/dev`: `git branch -r --contains 406b9af`). Por decisión del desarrollador del 17-11-2026 no se purgan del historial; queda documentado aquí.
 
 ### Generación
 - Herramienta: Gemini. Versión del modelo: no registrado.
