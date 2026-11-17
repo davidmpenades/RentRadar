@@ -39,7 +39,7 @@ Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
   - Commit: `chore(git): ignore key files and dumps`
   - Hecho cuando: todas las comprobaciones dan lo esperado.
 
-- [ ] **T4. Claude Code pregunta antes de borrar contenedores con volúmenes.** RF-8
+- [x] **T4. Claude Code pregunta antes de borrar contenedores con volúmenes.** RF-8
   - Qué: `.claude/settings.json`, lista `ask`: `"Bash(docker rm -v:*)"` y `"Bash(docker compose rm -v:*)"`. Nada más.
   - Cómo se prueba:
     - `python3 -I -m json.tool .claude/settings.json` sin error.
