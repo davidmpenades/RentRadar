@@ -48,7 +48,7 @@ Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
   - Commit: `chore(claude): ask before removing containers with volumes`
   - Hecho cuando: el JSON carga y la pregunta aparece.
 
-- [ ] **T5. Atribución del mapa conforme a OpenFreeMap.** RF-9
+- [x] **T5. Atribución del mapa conforme a OpenFreeMap.** RF-9
   - Qué:
     - Se repite la descarga de `https://openfreemap.org/` con curl a la carpeta temporal de la sesión; sha256 y `grep -F` de las frases del plan.
     - Se crea `specs/018-prelaunch-cleanup/validation.md` con el apartado de la atribución: cita, fecha, huella y la excepción al punto 8 de la constitución («Data from» queda en inglés, D2 = A).
