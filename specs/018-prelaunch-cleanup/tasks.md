@@ -10,7 +10,7 @@ Antes de proponer cada commit:
 
 Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
 
-- [ ] **T1. Historial real de las WebP de la v2 en la procedencia de la 017.** RF-1, RF-2, RF-3
+- [x] **T1. Historial real de las WebP de la v2 en la procedencia de la 017.** RF-1, RF-2, RF-3
   - Qué: `specs/017-category-images/validation.md`, apartado «Procedencia», párrafo «Las WebP de la v1 y la v2 siguen en el historial…». Se sustituye por el texto del plan («Lógica», RF-1 a RF-3).
   - Cómo se prueba:
     - `git show --name-status 406b9af` y `git show --name-status 2599bc3`.
