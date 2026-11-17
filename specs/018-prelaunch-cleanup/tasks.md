@@ -20,7 +20,7 @@ Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
   - Commit: `docs(spec-017): correct webp history in provenance`
   - Hecho cuando: el párrafo dice solo lo que dan esas órdenes, más lo marcado «según el desarrollador», y ningún hash citado cambia.
 
-- [ ] **T2. Sin rutas personales en lo versionado.** RF-4, RF-5
+- [x] **T2. Sin rutas personales en lo versionado.** RF-4, RF-5
   - Qué:
     - `specs/006-public-map/validation.md`, líneas 545, 642 y 712: la copia temporal se describe sin ruta.
     - `specs/017-category-images/tasks.md:21`: el patrón de su grep pasa a `/hom[e]/` (D1).
