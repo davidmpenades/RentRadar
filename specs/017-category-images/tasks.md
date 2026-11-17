@@ -18,7 +18,7 @@ Reglas comunes de todas las tareas:
 - **Stack.** Levantar, parar o reiniciar el stack y `npm run dev` los ejecuta el desarrollador en su terminal, en cualquier tarea, como en la T10; si hace falta, la sesión principal se lo pide.
 - **Lecturas fuera del repo.** Ningún agente lee fuera de este repo, salvo sus temporales, `~/rentradar-mutaciones/`, en la T7, `~/RentRadar-recursos/`, y en la T9, solo lo que nombra su tarea. El código de una librería se lee en el contenedor o con Context7.
 - **Commits.**
-  - Antes de proponer un commit: `git diff --cached --name-only` (solo las rutas de la tarea) y `git diff --cached | grep -nE "/home/|$(id -un)"`, que no debe dar resultados.
+  - Antes de proponer un commit: `git diff --cached --name-only` (solo las rutas de la tarea) y `git diff --cached | grep -nE "/hom[e]/|$(id -un)"`, que no debe dar resultados.
   - Se añade con `git add -- <rutas exactas>` y se hace commit solo con el OK del desarrollador, con el diff a la vista.
   - Después del commit, `git log --oneline -3`.
 - **Pruebas de mecanismo**, solo en la T4, la T5, la T6, la T8 y la T9:

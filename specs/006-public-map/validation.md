@@ -542,7 +542,7 @@ Chrome DevTools, servidor de desarrollo (`npm run dev`, puerto 5173) y `npm run 
 Durante la verificación salió un único error, `Failed to load resource: 404` de `/favicon.ico`, que `index.html` no declaraba (preexistente de la T7). Se arregló en esta tarea con `<link rel="icon" href="data:,">` y se volvió a comprobar en dev (2026-11-03): sin errores. Hay dos avisos (`warn`) de MapLibre sobre los filtros de las capas `highway-shield-non-us` y `highway-shield-us-interstate` del estilo positron de OpenFreeMap (`layers[…].filter[1]: Expected value to be of type number, but found null instead`): el filtro de esas capas lleva `null` donde se espera un número. No vienen de nuestro código y no se silencian.
 
 ### Pruebas de mecanismo
-Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t9-mutations/`, mutación, `npx vitest run` y restauración desde la copia.
+Copia de cada fichero en una carpeta temporal de la sesión de trabajo, fuera del repositorio (`t9-mutations/`), mutación, `npx vitest run` y restauración desde la copia.
 
 | # | Mutación | Fichero | sha256 antes → mutado → después (completos) | Test que falla |
 |---|---|---|---|---|
@@ -639,7 +639,7 @@ Se mide con `performance.now()` el tiempo entre pulsar «Volver a la zona inicia
 Con `reduce`, `transition-duration` de los botones del panel vale `0s`; con `no-preference` vale `0.15s` (`motion-safe:transition-colors`).
 
 ### Pruebas de mecanismo
-Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t10-mutations/`, mutación, `npx vitest run` completo y restauración desde la copia.
+Copia de cada fichero en una carpeta temporal de la sesión de trabajo, fuera del repositorio (`t10-mutations/`), mutación, `npx vitest run` completo y restauración desde la copia.
 
 | # | Mutación | Fichero | sha256 antes → mutado → después (completos) | Tests que fallan |
 |---|---|---|---|---|
@@ -709,7 +709,7 @@ Antes de implementar, los tests nuevos fallaron por la razón esperada: `startLo
 Con 375×667: el panel mide 267 px y la lista 138 px. La primera tarjeta (115 px) se ve entera y de la segunda (135 px) asoman unos 22 px; es decir, una tarjeta y un resto. Las tarjetas de dos líneas de título miden 135 px.
 
 #### Pruebas de mecanismo
-Copia de cada fichero en `/home/david/.claude/jobs/ce733ec1/tmp/t10-mutations/`, mutación, `npx vitest run` completo y restauración desde la copia.
+Copia de cada fichero en una carpeta temporal de la sesión de trabajo, fuera del repositorio (`t10-mutations/`), mutación, `npx vitest run` completo y restauración desde la copia.
 
 | # | Mutación | Fichero | sha256 antes → mutado → después (completos) | Tests que fallan |
 |---|---|---|---|---|
