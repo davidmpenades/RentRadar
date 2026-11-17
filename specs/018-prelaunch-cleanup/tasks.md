@@ -56,7 +56,7 @@ Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
   - Commit: `docs(spec-018): record map attribution check`
   - Hecho cuando: la cita registrada coincide con la página descargada y `git diff --quiet 7a19d14 HEAD -- frontend` sale con 0.
 
-- [ ] **T6. Memoria del proyecto con lo que deja la revisión.** RF-10
+- [x] **T6. Memoria del proyecto con lo que deja la revisión.** RF-10
   - Qué: `MEMORY.md`, con los cambios del plan («Lógica», RF-10). Incluye:
     - la hoja de ruta reordenada: la 015 antes de la 007, sin fondos con fotos y con el aviso de `user_logged_out`; las fotos de registro y entrada, en una spec pequeña justo antes de la 008, con su licencia anotada;
     - en la línea de la 014, los pendientes de licencias (OFL-1.1 de la fuente y las cuatro skills sin licencia anotada), sin resolverlos.
