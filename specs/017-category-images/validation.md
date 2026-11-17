@@ -143,7 +143,8 @@ Las WebP de la v1 y la v2 siguen en el historial de la rama (`406b9af` y `2599bc
 - Once imágenes (todas menos `kayak`) generadas entre el 11-11-2026 y el 12-11-2026; no consta qué imagen es de qué día. `kayak`, generada el 13-11-2026; es el de la v2.
 - Las doce, con fondo, se volvieron a descargar de esas mismas conversaciones el 13-11-2026. Según el desarrollador, son las mismas imágenes generadas que dieron la v1 y la v2; no se puede comprobar con huellas, porque la v1 y la v2 se guardaron sin fondo.
 - Ficha de fuentes: ~/RentRadar-recursos/categorias-v3-con-fondo/fuentes.md, sha256 e6935135a0146c8f29a9f87e015553b088cc40d6994dd0db155998da8b936e58. El prompt no está en el repositorio.
-- Términos de uso de Gemini sobre el uso comercial de las imágenes generadas: PENDIENTE de comprobar. Sin esa comprobación y su fecha, la spec no se cierra.
+- Términos que rigen las Apps de Gemini, versión para España, consultados el 17-11-2026: Términos del Servicio de Google (en vigor desde el 30-07-2026, policies.google.com/terms) y Política de Usos Prohibidos de la IA Generativa (última modificación: 17-12-2024). Google no reclama la propiedad del contenido original generado («Tu contenido»); ninguno de los dos concede ni restringe expresamente el uso comercial; prohíben usar el contenido generado para desarrollar modelos de aprendizaje automático, infringir la propiedad intelectual de terceros y engañar sobre la procedencia del contenido o hacerlo pasar por hecho por una persona. Conclusión: los términos no restringen el uso comercial del contenido generado. Este fichero declara que las imágenes son de Gemini.
+- Marca de agua visible: ninguna en las esquinas de 192 px de los doce JPEG originales, revisadas con el contraste aumentado el 17-11-2026; el recorte no ha quitado ninguna. SynthID es invisible y no se ha comprobado.
 
 ### Preparación
 - Fondo quitado fuera del producto, sin servicios web de recorte, con herramientas libres ejecutadas en el entorno de trabajo de Claude, no en el portátil: `recortar_fondo.py`, modelo de segmentación ISNet (`isnet-general-use`) por medio de rembg y matting con pymatting.
@@ -451,4 +452,3 @@ Las doce líneas que quedan coinciden; el código 1 lo da solo el kayak perdido,
 ## Veredicto
 - Los RF-1 a RF-15 y el caso límite de la imagen que no llega se cumplen (ver Requisitos funcionales y Navegador).
 - Revisión con tres revisores (calidad, seguridad y documentación) el 17-11-2026: el código y los tests, sin hallazgos bloqueantes; los dos bloqueantes de texto de este fichero (el halo sobre `#0B1220` y las licencias de Procedencia) están corregidos; los opcionales se aplicaron, se aceptaron o se aplazaron fuera de la 017.
-- Pendiente para cerrar la spec: comprobar los términos de uso de Gemini sobre el uso comercial de las imágenes generadas y anotar la fecha.
