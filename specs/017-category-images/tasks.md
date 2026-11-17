@@ -239,6 +239,11 @@ Reglas comunes de todas las tareas:
     - las esquinas de 8 × 8 px de las doce, leídas con `getImageData`;
     - una imagen bloqueada (D18) no muestra el icono roto y la tarjeta no se desplaza;
     - sin desbordamiento horizontal y recorrido con teclado sin cambios.
+  - Arreglo de la imagen rota, en un commit propio. La primera pasada a 375 px mostró que con `alt=""` Chrome sigue pintando el icono de imagen rota cuando la imagen tiene `width` y `height`:
+    - Modifica `frontend/src/panel/AssetCard.tsx`: `onError` pone `visibility: hidden` a la imagen y `onLoad` la vuelve a `visible`, sin estado de React; el hueco de 72 px se conserva.
+    - Crea `frontend/src/panel/AssetCard.test.ts`: tras un evento de error la imagen queda oculta y conserva `width` y `height` de 72; si después cambia el `src` y llega la carga, vuelve a verse. Se escribe primero y falla porque la tarjeta no tiene `onError` ni `onLoad`.
+    - Sin prueba de mecanismo: no toca privacidad ni seguridad.
+    - Hecho cuando: vitest entero, build y eslint de `AssetCard.tsx` y de su test en verde; después se repite entera la pasada del navegador a 375 px.
   - Puerta de cierre: el desarrollador comprueba que los términos de uso de Gemini permiten el uso comercial y anota la fecha de la comprobación. Hasta entonces la spec no se cierra.
   - Ficheros:
     - Crea `specs/017-category-images/validation.md`:
@@ -253,6 +258,7 @@ Reglas comunes de todas las tareas:
       - el diff vacío de los manifiestos.
     - Modifica `specs/016-visual-system/spec.md`: nota de una línea, «sustituido por la 017», en «Fuera de alcance».
   - Commits, en este orden:
-    1. `docs(spec-017): validation`
-    2. `docs(spec-016): note category whitelist superseded by 017`
+    1. `fix(frontend): hide broken category image`
+    2. `docs(spec-017): validation`
+    3. `docs(spec-016): note category whitelist superseded by 017`
   - Hecho cuando: todos los RF tienen su evidencia; las doce están aprobadas; pytest, ruff, vitest, build y eslint en verde; la comprobación de los términos de uso está anotada con su fecha; la spec pasa a «implementada». Al cerrar, MEMORY.md se actualiza, incluida la línea de la 008 en la hoja de ruta.

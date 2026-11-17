@@ -44,7 +44,9 @@ La spec toca el backend, el frontend y algo de documentación. No hay dependenci
 | `specs/016-visual-system/spec.md` | Modifica (al cerrar) | Nota de una línea, «sustituido por la 017», en «Fuera de alcance» | Cierre |
 | `specs/017-category-images/validation.md` | Crea (T10) | Evidencias, aprobaciones, procedencia y recreación de la BD | Todos |
 
-No cambian: `AssetCard.tsx`, `svgWhitelist.ts` (`icon.test.ts` usa sus seis exportaciones), `icon.test.ts`, `test_seed.py`, `backend/openapi.json`, `schema.gen.ts`, `package.json`, `package-lock.json` ni `requirements`.
+`frontend/src/panel/AssetCard.tsx` y su test nuevo, `frontend/src/panel/AssetCard.test.ts`, cambian en la T10: la validación en el navegador mostró que con `alt=""` Chrome sigue pintando el icono de imagen rota cuando la imagen tiene `width` y `height`. La imagen pasa a ocultarse con `visibility: hidden` al fallar (`onError`) y vuelve a verse al cargar (`onLoad`), sin estado de React y sin perder el hueco de 72 px.
+
+No cambian: `svgWhitelist.ts` (`icon.test.ts` usa sus seis exportaciones), `icon.test.ts`, `test_seed.py`, `backend/openapi.json`, `schema.gen.ts`, `package.json`, `package-lock.json` ni `requirements`.
 
 ## Modelo de datos y migraciones
 No hay ningún modelo nuevo. Hay una migración de datos, `categories/0003_add_ski_category.py`:
@@ -93,14 +95,14 @@ No cambia. No hay operaciones nuevas ni cambiadas: `ski` es una fila más de la 
 - **`bytesOfDataUrl(url)`** vive en `categoryWebp.test.ts`. Exige el prefijo `data:image/webp;base64,` y decodifica con `atob`.
 
 ## Interfaz
-No cambia nada visible salvo la imagen. La tarjeta conserva `<img width=72 height=72 alt="" loading="lazy" decoding="async" class="size-18 … rounded-2xl object-cover">`. No hay controles nuevos ni textos nuevos, el foco no cambia y el recorrido con teclado tampoco.
+No cambia nada visible salvo la imagen. La tarjeta conserva `<img width=72 height=72 alt="" loading="lazy" decoding="async" class="size-18 … rounded-2xl object-cover">`, y desde la T10 añade `onError` (oculta la imagen) y `onLoad` (la vuelve a mostrar). No hay controles nuevos ni textos nuevos, el foco no cambia y el recorrido con teclado tampoco.
 
 | Estado | Comportamiento |
 |---|---|
 | Carga | El hueco de 72 px está reservado por `width` y `height`; la imagen no desplaza el contenido |
 | Éxito | WebP de 144 px mostrada a 72 px CSS, sin deformar, con el fondo transparente sobre el cristal o sobre la superficie sólida |
 | Clave sin imagen (`snow`, vacía, `SKI`, `ski `, `__proto__`) | Imagen de «Otros» y el nombre de categoría que trae el bien |
-| Falla la descarga | Hueco de 72 px vacío, sin icono de imagen rota (`alt=""`) y sin desplazamiento; la categoría se lee en el nombre |
+| Falla la descarga | Hueco de 72 px vacío, sin icono de imagen rota (`onError` con `visibility: hidden`; `alt=""` solo no basta en Chrome) y sin desplazamiento; la categoría se lee en el nombre |
 
 Se verifica primero a 375 px y después a 1280 px.
 
@@ -306,7 +308,7 @@ Nota: `docker volume rm` no estaba en `ask` ni en `deny` de `.claude/settings.js
   - `categoryImage.test.ts`: patrón, número y claves hostiles.
   - Se borran `categorySvg.test.ts` y las once SVG.
   - Nuevos: tres módulos en `src/testing/` y tres ficheros de test.
-  - `AssetCard.tsx` no cambia. `svgWhitelist.ts` queda solo para `icon.test.ts`, que usa sus seis exportaciones.
+  - `AssetCard.tsx` cambia en la T10: oculta la imagen que falla (`onError`) y la vuelve a mostrar al cargar (`onLoad`), con su test nuevo. `svgWhitelist.ts` queda solo para `icon.test.ts`, que usa sus seis exportaciones.
   - CI: el job `frontend-quality` ejecuta las dos compilaciones del test de la guarda (tiempo no medido).
 - **Docs**: `docs/architecture.md`, líneas 44, 87 y 125. No se tocan la 006 ni `prototypes/`. Al cerrar, una nota de una línea en la 016.
 - **Contratos**: ninguno. `openapi.json` y `schema.gen.ts`, sin cambios.
