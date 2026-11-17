@@ -28,7 +28,7 @@ Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
   - Commit: `docs(specs): remove home paths from records`
   - Hecho cuando: `git grep -nIE '/hom[e]/'` y `git grep -nIiw "$(id -un)"` salen vacíos (código 1) en todo lo versionado, incluidos los ficheros de la 018.
 
-- [ ] **T3. git ignora claves y volcados.** RF-6, RF-7
+- [x] **T3. git ignora claves y volcados.** RF-6, RF-7
   - Qué: `.gitignore`, seis líneas al final: `*.pem`, `*.key`, `*.p12`, `id_rsa*`, `*.sql`, `*.dump`.
   - Cómo se prueba:
     - `git check-ignore --no-index` sobre las rutas inventadas del plan: todas ignoradas.
