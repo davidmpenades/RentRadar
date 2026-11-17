@@ -64,7 +64,7 @@ Sin push, PR ni merge. Sin migrate ni acceso a la BD de desarrollo.
   - Commit: `docs(memory): note prelaunch review follow-ups`
   - Hecho cuando: están las seis notas del RF-10, la 015 va antes que la 007, las fotos justo antes de la 008, y la memoria no pasa de ~50 líneas.
 
-- [ ] **T7. Validación y cierre.** RF-11
+- [x] **T7. Validación y cierre.** RF-11
   - Qué:
     - `specs/018-prelaunch-cleanup/validation.md`, con RF-1 a RF-10 y la orden y el resultado de cada uno.
     - vitest, build y eslint del frontend, y pytest si el stack ya está levantado; si no lo está, te pido permiso antes de levantarlo.
