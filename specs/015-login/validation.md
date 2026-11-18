@@ -145,3 +145,55 @@ Una sola ejecución sobre el código del commit `881b895`, con las 18 mutaciones
 - **Mutaciones añadidas**: M9 a M16 (la M13 y la M16, a petición de la revisión de la tarea).
 - **Sal**: `LOGIN_PAIR_KEY_SALT = "rentradar.users.login_pair_key"`, con el valor literal en el test de la clave para que forme parte del contrato (M14).
 - **Reloj**: `LoginFailureLimit.timer` es un atributo de clase como el de los throttles; los tests lo sustituyen con un fixture propio (`failure_clock`), porque el `clock` de la T2 solo parchea `LoginIpThrottle`.
+
+## T4. Comprobación de credenciales
+Fecha: 2026-11-18 · Commit: `46595c9` (`feat`, con `apps/users/login.py`, `test_login_credentials.py` y el test de la señal en `test_logout_api.py`). Antes, en la documentación: `ce33b47` (premisa de `DEBUG`), `93963dd` (`CREDENTIALS_INVALID` y los ayudantes de sesión a la T5) y `dd89a6e` (U+00A8 con `chr(0xA8)` en la T4).
+
+### Rojo, antes del código
+- `apps/users/tests/test_login_credentials.py`: `1 error during collection`, `ImportError: cannot import name 'login' from 'apps.users'` (no existía el módulo).
+- `test_logging_out_does_not_send_user_logged_out` (`test_logout_api.py`): `1 passed` al escribirlo. Es de caracterización: la salida no cambia en esta tarea, y su valor lo demuestra la M6.
+
+### Verde, después del código
+- `test_login_credentials.py` y `test_logout_api.py`: `86 passed` (37 nuevos de credenciales, los 48 que ya tenía la salida y el de la señal).
+- Suite entera, con `test_migrations.py`, `test_production.py` y `test_settings.py`: `2324 passed in 47.14s`.
+- `ruff check .`: `All checks passed!`. `ruff format --check .`: `148 files already formatted`. El primer `ruff check` dio un `E501` en un comentario de `login.py`, de 89 columnas; se acortó.
+- Ningún fichero tocado contiene U+00A8 literal ni un nulo literal: comprobado con un script que busca los bytes sin escribir los caracteres. El email con U+00A8 se construye con `chr(0xA8)`.
+- Desfase de `openapi.json`: la orden de la CI de la T2, en un contenedor suelto con `--no-deps -e DB_HOST=db-inexistente.invalid`, termina con `exit=0`, sin ninguna línea de `diff` y sin avisos de validación. La T4 no toca vistas, serializers ni URLs.
+- Frontend, en el host: `npm run api:check` con `exit=0`; `npm test` (vitest) con `34 passed` ficheros y `1174 passed` tests; `npm run build` con `exit=0`. La T4 no toca el frontend.
+- Ningún test mostró que Django se comporte distinto de lo que supone el plan: `MD5PasswordHasher.verify` y `make_password` pasan por `encode`, y el recuento es de un hash en cada caso previsto.
+
+### Pruebas de mecanismo
+Una sola ejecución sobre el código del commit `46595c9`, con las 13 mutaciones. Cada una se hizo sobre `login.py` o `views.py` con copia previa fuera del repo y fuera de `/tmp`, sha256 antes y después y restauración desde la copia; los hashes coincidieron (`login.py` `fdd1e6206faa…`, `views.py` `6e03be3ddda9…`). Se ejecutaron `test_login_credentials.py` y `test_logout_api.py`. Mueren las 13. M1 a M7 son las de la tarea; M8 a M13 se añaden en ella.
+
+| Mutación | Cambio | Tests que la matan |
+|---|---|---|
+| M1 | Sin el tope de 128 puntos de código | `test_uncheckable_passwords_are_rejected_without_queries_hashes_or_signal[129-code-points]` |
+| M2 | La contraseña `""` llega a `authenticate` | `test_uncheckable_passwords_are_rejected_without_queries_hashes_or_signal[empty]` |
+| M3 | Consulta la cuenta antes y no llama a `authenticate` sin ella | `test_each_kind_of_wrong_credentials_computes_exactly_one_hash[unknown_email]`, `test_an_email_without_at_sign_is_looked_up`, `test_the_pair_key_and_the_lookup_receive_the_same_raw_email` (los dos casos), `test_the_error_report_hides_the_email_and_the_password` |
+| M4 | Pasa a `authenticate` el email ya normalizado | `test_the_pair_key_and_the_lookup_receive_the_same_raw_email` (los dos casos), `test_user_login_failed_is_sent_once_with_the_raw_email_and_the_password_hidden` |
+| M5 | Sin el rechazo del sustituto en el email | `test_unqueryable_emails_are_rejected_without_queries_hashes_or_signal[lone-surrogate]`, `test_no_content_of_the_email_or_password_raises[email-lone-surrogate]` |
+| M6 | `django.contrib.auth.logout()` en `LogoutView` | `test_logging_out_does_not_send_user_logged_out` |
+| M7 | Sin `@sensitive_variables` | `test_the_error_report_hides_the_email_and_the_password` |
+| M8 | Sin el rechazo del nulo en el email | `test_unqueryable_emails_are_rejected_without_queries_hashes_or_signal[null-character]`, `test_no_content_of_the_email_or_password_raises[email-null-inside]` |
+| M9 | Rechaza el nulo en la contraseña | `test_a_correct_password_with_a_null_character_returns_the_account`, `test_any_other_password_is_checkable[only-null]` y `[null-inside]` |
+| M10 | Tope con `<` en lugar de `<=` | `test_a_wrong_password_of_128_code_points_computes_one_hash`, `test_any_other_password_is_checkable[128-code-points]` |
+| M11 | Sin `strip` al decidir si el email está vacío | `test_unqueryable_emails_are_rejected_without_queries_hashes_or_signal[blank]` |
+| M12 | Acepta la contraseña con sustituto | `test_uncheckable_passwords_are_rejected_without_queries_hashes_or_signal[lone-surrogate]`, `test_no_content_of_the_email_or_password_raises[password-lone-surrogate]` |
+| M13 | `@sensitive_variables("email")`, sin la contraseña | `test_the_error_report_hides_the_email_and_the_password` |
+
+M3 no mata el test de `user_login_failed`: usa una cuenta que existe, así que el mutante también llama a `authenticate`. Mata el del informe de error porque, sin cuenta para el email con la marca, devuelve `None` antes de llegar al `authenticate` parcheado y no se lanza la excepción.
+
+### Puntos de «Lo que esta lectura no cubre» resueltos en esta tarea
+- `MD5PasswordHasher.verify` calcula el hash con `encode`: confirmado (recuento de hashes).
+- `_clean_credentials` tapa la contraseña en `user_login_failed`: confirmado en la T4 (test de la señal); la T6 lo comprueba de nuevo sobre el endpoint.
+- `flush()` no emite `user_logged_out`: confirmado (test de caracterización y M6). La parte de `user_logged_in` queda para la T5.
+- `sensitive_variables`: tapa las variables solo con `DEBUG=False` (`ce33b47`); con `DEBUG=True`, la página técnica las muestra. Confirmado en `check_credentials`; la T6 lo comprueba en `LoginView.post`.
+
+### Desviaciones y añadidos respecto del plan
+- **Sin el test de declaración de `@sensitive_variables`**: en una función síncrona, Django pone el atributo `sensitive_variables` dentro del wrapper, al llamar a la función, no al decorarla (`django/views/decorators/debug.py`). Un test que lo leyera dependería del orden de los tests. El test del informe de error mata M7 y M13.
+- **Premisa de `DEBUG` corregida (`ce33b47`)**: `SafeExceptionReporterFilter.is_active` devuelve `settings.DEBUG is False`, así que el filtro solo tapa las variables con `DEBUG=False`; con `DEBUG=True`, la página técnica las muestra. El test pone `DEBUG=False` y mira solo el marco de `check_credentials`; los marcos de dentro (el parche, el backend) pueden mostrar los valores, como recoge el plan en Riesgos.
+- **`CREDENTIALS_INVALID` y los ayudantes de sesión a la T5 (`93963dd`)**: la constante la usa `LoginView`, y el tercer uso de `untouchable_session_store`, `stored_sessions` y `cross_origin_headers` llega con los tests del endpoint.
+- **Añadido**: las mutaciones M8 a M13 y los casos de `is_queryable_email` e `is_checkable_password` que las matan (texto sin arroba, de 4000 caracteres o con U+00A8; contraseña con nulo o de 128 puntos de código).
+
+### Nota para la T10
+`user_login_failed` lleva el email crudo en `credentials` (Django solo tapa la contraseña). Hoy ningún receptor del proyecto se conecta a esa señal; ninguno debe registrar `credentials` en el log.
