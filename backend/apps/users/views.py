@@ -4,11 +4,12 @@ from django.core.exceptions import NON_FIELD_ERRORS
 from django.db import transaction
 from django.middleware.csrf import get_token
 from django.utils.cache import patch_cache_control, patch_vary_headers
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed, Throttled
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -27,7 +28,13 @@ from apps.users.serializers import (
     SessionSerializer,
 )
 from apps.users.services import register_user
-from apps.users.throttling import RegistrationThrottle
+from apps.users.throttling import (
+    LoginFailureLimit,
+    LoginIpThrottle,
+    RegistrationThrottle,
+    client_bucket,
+    login_pair_key,
+)
 
 REGISTRATION_MAX_BYTES = 4096
 LOGIN_MAX_BYTES = 4096
@@ -139,6 +146,7 @@ class LoginView(CsrfEnforcedMixin, APIView):
     # Sin autenticación: la entrada sustituye la sesión, nunca la lee
     authentication_classes = []
     permission_classes = [AllowAny]
+    throttle_classes = [LoginIpThrottle]
     http_method_names = ["post"]
 
     @extend_schema(
@@ -155,15 +163,23 @@ class LoginView(CsrfEnforcedMixin, APIView):
             429: ApiErrorSerializer,
         },
     )
+    @sensitive_variables("fields")
     def post(self, request):
         http_request = request._request
         fields = read_text_fields(
             read_json_object(http_request, max_bytes=LOGIN_MAX_BYTES),
             ("email", "password"),
         )
+        failures = LoginFailureLimit()
+        pair_key = login_pair_key(client_bucket(request), fields["email"])
+        wait = failures.wait(pair_key)
+        if wait is not None:
+            raise Throttled(wait)
         user = check_credentials(http_request, **fields)
         # Todas las causas dan la misma respuesta y ninguna toca la sesión
         if user is None:
+            # Solo un fallo de credenciales cuenta; un acierto no reinicia el contador
+            failures.record_failure(pair_key)
             raise ApiError("invalid_fields", {"non_field": [CREDENTIALS_INVALID]})
 
         _open_session(http_request, user)

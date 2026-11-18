@@ -1,4 +1,5 @@
 import json
+import logging
 import re
 from datetime import timedelta
 from unittest import mock
@@ -7,20 +8,31 @@ import pytest
 from django.conf import settings as django_settings
 from django.contrib.auth import SESSION_KEY
 from django.contrib.auth.hashers import make_password
-from django.contrib.auth.signals import user_logged_out
+from django.contrib.auth.signals import user_logged_out, user_login_failed
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
+from django.core.cache import caches
 from django.core.handlers.wsgi import LimitedStream
+from django.db import connection
 from django.test import Client
 from django.utils import timezone
+from django.views.debug import ExceptionReporter
 
 from apps.users import views
 from apps.users.models import User
 from apps.users.tests.helpers import (
+    Clock,
     assert_no_store,
+    assert_throttled,
     cross_origin_headers,
     stored_sessions,
     untouchable_session_store,
+)
+from apps.users.throttling import (
+    LOGIN_CACHE_ALIAS,
+    LoginFailureLimit,
+    LoginIpThrottle,
+    login_pair_key,
 )
 
 pytestmark = pytest.mark.django_db
@@ -48,6 +60,18 @@ CREDENTIALS_REJECTED = {
     "code": "invalid_fields",
     "params": {"non_field": ["credentials_invalid"]},
 }
+WRONG_PASSWORD_BODY = {"email": EMAIL, "password": WRONG_PASSWORD}
+NULL_CHARACTER = chr(0)
+IP_LIMIT = 20
+PAIR_LIMIT = 5
+MINUTE = 60
+PAIR_WAIT = 15 * 60
+# El cliente de pruebas de Django envía desde 127.0.0.1
+LOCAL_BUCKET = "127.0.0.1"
+FOREIGN_ORIGIN = "http://evil.test"
+HIDDEN = "********************"
+# La marca no aparece en ningún identificador: el traceback imprime el código fuente
+MARK = "zq7x"
 
 
 def send(client, body=None, *, token=TOKEN, cookie=TOKEN, method="post", **extra):
@@ -115,11 +139,45 @@ def unknown_session_key(client):
     return KEY_WITHOUT_ROW
 
 
-@pytest.fixture
-def credentials_never_checked(monkeypatch):
+def forbid_credential_checks(monkeypatch):
     check = mock.Mock(side_effect=AssertionError("check_credentials"))
     monkeypatch.setattr(views, "check_credentials", check)
     return check
+
+
+@pytest.fixture
+def credentials_never_checked(monkeypatch):
+    return forbid_credential_checks(monkeypatch)
+
+
+@pytest.fixture(autouse=True)
+def clock(monkeypatch):
+    # Un solo reloj para los dos límites: las esperas no dependen de la hora real
+    fake = Clock()
+    # staticmethod: sin él Python pasaría la instancia como primer argumento
+    monkeypatch.setattr(LoginIpThrottle, "timer", staticmethod(fake))
+    monkeypatch.setattr(LoginFailureLimit, "timer", staticmethod(fake))
+    return fake
+
+
+def fail(client, body=WRONG_PASSWORD_BODY, *, times=PAIR_LIMIT, **extra):
+    for _ in range(times):
+        assert send(client, body, **extra).status_code == 400
+
+
+def reject_by_csrf(client, *, times=IP_LIMIT):
+    for _ in range(times):
+        assert send(client, token=None).status_code == 403
+
+
+def ip_limited_answer(client):
+    reject_by_csrf(client)
+    return send(client)
+
+
+def pair_limited_answer(client):
+    fail(client)
+    return send(client)
 
 
 # --- Entrada correcta ---------------------------------------------------------
@@ -545,6 +603,8 @@ EVERY_ANSWER = {
     "403": (lambda c: send(c, token=None), 403),
     "405": (lambda c: send(c, method="put"), 405),
     "413": (lambda c: send(c, "{" + " " * 5000 + "}"), 413),
+    "429-ip-limit": (ip_limited_answer, 429),
+    "429-pair-limit": (pair_limited_answer, 429),
 }
 
 
@@ -594,8 +654,17 @@ def test_a_preflight_from_another_origin_gets_405_without_cross_origin_headers(
         (lambda c: send(c, "[]"), {"code"}),
         (lambda c: send(c, token=None), {"code"}),
         (lambda c: send(c, method="put"), {"code"}),
+        (ip_limited_answer, {"code", "retry_after"}),
+        (pair_limited_answer, {"code", "retry_after"}),
     ],
-    ids=["invalid-fields", "invalid-request", "csrf-failed", "method-not-allowed"],
+    ids=[
+        "invalid-fields",
+        "invalid-request",
+        "csrf-failed",
+        "method-not-allowed",
+        "ip-throttled",
+        "pair-throttled",
+    ],
 )
 def test_errors_carry_only_their_planned_keys(csrf_client, send_it, keys):
     account()
@@ -605,3 +674,412 @@ def test_errors_carry_only_their_planned_keys(csrf_client, send_it, keys):
 
     assert set(response.json()) == keys
     assert "staff@correo.es" not in response.content.decode()
+
+
+# --- Límite por IP ------------------------------------------------------------
+
+
+def test_the_twenty_first_login_from_one_ip_is_throttled_before_the_credentials(
+    csrf_client, monkeypatch
+):
+    account()
+    for _ in range(IP_LIMIT):
+        assert send(csrf_client).status_code == 200
+    forbid_credential_checks(monkeypatch)
+    before = stored_sessions()
+
+    with untouchable_session_store():
+        response = send(csrf_client)
+
+    assert assert_throttled(response) == MINUTE
+    assert SESSION_COOKIE not in response.cookies
+    assert stored_sessions() == before
+
+
+def test_a_pair_rejection_counts_towards_the_ip_limit(csrf_client):
+    account()
+    account(OTHER_EMAIL)
+    fail(csrf_client)
+    for _ in range(IP_LIMIT - PAIR_LIMIT):
+        assert assert_throttled(send(csrf_client)) == PAIR_WAIT
+
+    response = send(csrf_client, {"email": OTHER_EMAIL, "password": PASSWORD})
+
+    assert assert_throttled(response) == MINUTE
+
+
+@pytest.mark.parametrize(
+    "method", ["get", "put", "patch", "delete", "options", "head", "post"]
+)
+def test_once_the_ip_limit_is_reached_every_method_gets_429(csrf_client, method):
+    reject_by_csrf(csrf_client)
+
+    response = send(csrf_client, method=method, token=None)
+
+    # HEAD no lleva cuerpo: solo el estado y la cabecera
+    if method == "head":
+        assert response.status_code == 429
+        assert response["Retry-After"] == str(MINUTE)
+    else:
+        assert assert_throttled(response) == MINUTE
+
+
+def test_a_different_x_forwarded_for_on_each_request_does_not_avoid_the_ip_limit(
+    csrf_client,
+):
+    account()
+    for index in range(IP_LIMIT):
+        forwarded = f"198.51.100.{index}"
+        assert send(csrf_client, HTTP_X_FORWARDED_FOR=forwarded).status_code == 200
+
+    response = send(csrf_client, HTTP_X_FORWARDED_FOR="198.51.100.200")
+
+    assert assert_throttled(response) == MINUTE
+
+
+# --- Límite del par IP y email ------------------------------------------------
+
+
+def test_five_failures_throttle_the_correct_password_without_checking_it(
+    csrf_client, monkeypatch
+):
+    account()
+    fail(csrf_client)
+    forbid_credential_checks(monkeypatch)
+    before = stored_sessions()
+
+    with untouchable_session_store():
+        response = send(csrf_client)
+
+    assert assert_throttled(response) == PAIR_WAIT
+    assert SESSION_COOKIE not in response.cookies
+    assert stored_sessions() == before
+
+
+def test_the_pair_wait_counts_from_the_fifth_most_recent_failure(csrf_client, clock):
+    account()
+    # Siete fallos, del más reciente al más antiguo: el quinto fue hace 50 s
+    marks = [clock.now - seconds for seconds in range(10, 80, 10)]
+    key = login_pair_key(LOCAL_BUCKET, EMAIL)
+    caches[LOGIN_CACHE_ALIAS].set(key, marks, PAIR_WAIT)
+
+    response = send(csrf_client)
+
+    assert assert_throttled(response) == PAIR_WAIT - 50
+
+
+def test_fifteen_minutes_after_the_first_failure_the_account_can_log_in(
+    csrf_client, clock
+):
+    account()
+    first = clock.now
+    for _ in range(PAIR_LIMIT):
+        fail(csrf_client, times=1)
+        clock.advance(1)
+
+    clock.now = first + PAIR_WAIT - 1
+    assert assert_throttled(send(csrf_client)) == 1
+    clock.now = first + PAIR_WAIT
+    assert send(csrf_client).status_code == 200
+
+
+def test_a_success_does_not_reset_the_failures(csrf_client):
+    account()
+    fail(csrf_client, times=PAIR_LIMIT - 1)
+    assert send(csrf_client).status_code == 200
+    fail(csrf_client, times=1)
+
+    # Séptima petición: la sexta fue el quinto fallo
+    response = send(csrf_client)
+
+    assert assert_throttled(response) == PAIR_WAIT
+
+
+def test_a_success_is_not_counted_as_a_failure(csrf_client):
+    account()
+    fail(csrf_client, times=PAIR_LIMIT - 1)
+
+    assert send(csrf_client).status_code == 200
+    assert send(csrf_client).status_code == 200
+
+
+def test_pair_rejections_are_not_counted_as_failures(csrf_client, clock):
+    account()
+    start = clock.now
+    fail(csrf_client)
+    clock.now = start + 100
+    for _ in range(PAIR_LIMIT):
+        assert assert_throttled(send(csrf_client)) == PAIR_WAIT - 100
+
+    # Si los rechazos contaran, seguiría bloqueada hasta 100 s después
+    clock.now = start + PAIR_WAIT
+    assert send(csrf_client).status_code == 200
+
+
+UNQUERYABLE_EMAILS = {
+    "absent": {"password": WRONG_PASSWORD},
+    "null": {"email": None, "password": WRONG_PASSWORD},
+    "empty": {"email": "", "password": WRONG_PASSWORD},
+    "blank": {"email": "   ", "password": WRONG_PASSWORD},
+    "null-character": {
+        "email": f"ana{NULL_CHARACTER}@correo.es",
+        "password": WRONG_PASSWORD,
+    },
+    "lone-surrogate": {
+        "email": f"ana{SURROGATE}@correo.es",
+        "password": WRONG_PASSWORD,
+    },
+}
+
+
+@pytest.mark.parametrize(
+    "body", UNQUERYABLE_EMAILS.values(), ids=UNQUERYABLE_EMAILS.keys()
+)
+def test_failures_with_an_email_that_cannot_be_queried_count(csrf_client, body):
+    account()
+    fail(csrf_client, body)
+
+    response = send(csrf_client, body)
+
+    assert assert_throttled(response) == PAIR_WAIT
+
+
+@pytest.mark.parametrize(
+    ("failing_address", "other_address"),
+    [
+        ("203.0.113.7", "203.0.113.8"),
+        ("2001:db8:0:1::1", "2001:db8:0:2::1"),
+    ],
+    ids=["ipv4", "ipv6-other-64"],
+)
+def test_the_same_email_from_another_network_can_log_in(
+    csrf_client, failing_address, other_address
+):
+    account()
+    fail(csrf_client, REMOTE_ADDR=failing_address)
+
+    response = send(csrf_client, REMOTE_ADDR=other_address)
+
+    assert response.status_code == 200
+
+
+def test_two_addresses_of_the_same_ipv6_64_share_the_pair_limit(csrf_client):
+    account()
+    fail(csrf_client, REMOTE_ADDR="2001:db8:0:1::1")
+
+    response = send(csrf_client, REMOTE_ADDR="2001:db8:0:1:ffff::1")
+
+    assert assert_throttled(response) == PAIR_WAIT
+
+
+def test_a_different_x_forwarded_for_on_each_request_does_not_avoid_the_pair_limit(
+    csrf_client,
+):
+    account()
+    for index in range(PAIR_LIMIT):
+        fail(csrf_client, times=1, HTTP_X_FORWARDED_FOR=f"198.51.100.{index}")
+
+    response = send(csrf_client, HTTP_X_FORWARDED_FOR="198.51.100.200")
+
+    assert assert_throttled(response) == PAIR_WAIT
+
+
+# --- Orden de comprobaciones --------------------------------------------------
+
+LIMITS = {"ip": (reject_by_csrf, MINUTE), "pair": (fail, PAIR_WAIT)}
+
+
+@pytest.mark.parametrize(
+    "prepare", WELL_FORMED_SESSIONS.values(), ids=WELL_FORMED_SESSIONS.keys()
+)
+@pytest.mark.parametrize(("reach_the_limit", "wait"), LIMITS.values(), ids=LIMITS)
+def test_a_throttled_login_touches_neither_the_session_nor_the_cookies(
+    csrf_client, reach_the_limit, wait, prepare
+):
+    account()
+    key = prepare(csrf_client)
+    reach_the_limit(csrf_client)
+    before = stored_sessions()
+
+    with untouchable_session_store():
+        response = send(csrf_client)
+
+    assert assert_throttled(response) == wait
+    assert not response.cookies
+    assert stored_sessions() == before
+    if key is not None:
+        assert csrf_client.cookies[SESSION_COOKIE].value == key
+
+
+def send_as_text_plain(client, body):
+    client.cookies[CSRF_COOKIE] = TOKEN
+    return client.post(
+        URL,
+        data=json.dumps(body),
+        content_type="text/plain",
+        headers={"X-CSRFToken": TOKEN},
+    )
+
+
+# (envío con el email y la contraseña errónea cuando la forma lo permite, estado)
+REJECTED_BEFORE_THE_CREDENTIALS = {
+    "no-header": (lambda c: send(c, WRONG_PASSWORD_BODY, token=None), 403),
+    "empty-header": (lambda c: send(c, WRONG_PASSWORD_BODY, token=""), 403),
+    "no-cookie": (lambda c: send(c, WRONG_PASSWORD_BODY, cookie=None), 403),
+    "header-differs": (lambda c: send(c, WRONG_PASSWORD_BODY, token=OTHER_TOKEN), 403),
+    "foreign-origin": (
+        lambda c: send(c, WRONG_PASSWORD_BODY, HTTP_ORIGIN=FOREIGN_ORIGIN),
+        403,
+    ),
+    "put": (lambda c: send(c, WRONG_PASSWORD_BODY, method="put"), 405),
+    "patch": (lambda c: send(c, WRONG_PASSWORD_BODY, method="patch"), 405),
+    "delete": (lambda c: send(c, WRONG_PASSWORD_BODY, method="delete"), 405),
+    "text-plain": (lambda c: send_as_text_plain(c, WRONG_PASSWORD_BODY), 400),
+    "email-number": (
+        lambda c: send(c, {"email": 5, "password": WRONG_PASSWORD}),
+        400,
+    ),
+    "too-large-declared": (
+        lambda c: send(c, json.dumps(WRONG_PASSWORD_BODY) + " " * MAX_BYTES),
+        413,
+    ),
+    "chunked": (
+        lambda c: send(c, WRONG_PASSWORD_BODY, HTTP_TRANSFER_ENCODING="chunked"),
+        413,
+    ),
+    "4097-bytes": (lambda c: send(c, padded_body(MAX_BYTES + 1)), 413),
+}
+
+
+def stored_pair_keys():
+    return [key for key in caches[LOGIN_CACHE_ALIAS]._cache if "login_pair:" in key]
+
+
+@pytest.mark.parametrize(
+    ("reject", "status"),
+    REJECTED_BEFORE_THE_CREDENTIALS.values(),
+    ids=REJECTED_BEFORE_THE_CREDENTIALS.keys(),
+)
+def test_no_rejection_before_the_credentials_records_a_failure(
+    csrf_client, reject, status
+):
+    account()
+    for _ in range(PAIR_LIMIT):
+        assert reject(csrf_client).status_code == status
+
+    assert stored_pair_keys() == []
+    assert send(csrf_client).status_code == 200
+
+
+PAIR_BLOCKED_REJECTIONS = {
+    **MALFORMED,
+    "no-csrf-header": (None, {"token": None}, 403, "csrf_failed"),
+    "foreign-origin": (None, {"HTTP_ORIGIN": FOREIGN_ORIGIN}, 403, "csrf_failed"),
+    "put": (None, {"method": "put"}, 405, "method_not_allowed"),
+}
+
+
+@pytest.mark.parametrize(
+    ("body", "extra", "status", "code"),
+    PAIR_BLOCKED_REJECTIONS.values(),
+    ids=PAIR_BLOCKED_REJECTIONS.keys(),
+)
+def test_with_the_pair_blocked_each_earlier_rejection_gets_its_own_error(
+    csrf_client, monkeypatch, body, extra, status, code
+):
+    account()
+    fail(csrf_client)
+    fail(csrf_client, {"password": WRONG_PASSWORD})
+    limit = LoginFailureLimit()
+    assert limit.wait(login_pair_key(LOCAL_BUCKET, EMAIL)) == PAIR_WAIT
+    assert limit.wait(login_pair_key(LOCAL_BUCKET, None)) == PAIR_WAIT
+    forbid_credential_checks(monkeypatch)
+
+    response = send(csrf_client, body, **extra)
+
+    assert response.status_code == status
+    assert response.json() == {"code": code}
+    if status == 405:
+        assert response["Allow"] == "POST"
+
+
+# --- Fugas --------------------------------------------------------------------
+
+
+def test_no_answer_log_or_limit_store_contains_the_email_or_the_password(
+    csrf_client, caplog, monkeypatch
+):
+    # Condición previa: con el SQL en DEBUG la consulta llevaría el email
+    backends = logging.getLogger("django.db.backends")
+    assert backends.getEffectiveLevel() >= logging.INFO
+    assert connection.force_debug_cursor is False
+    caplog.set_level(logging.DEBUG)
+    monkeypatch.setattr(connection, "force_debug_cursor", True)
+    email = f"{MARK}.ana@correo.es"
+    correct = {"email": email, "password": f"{MARK} vela roja en el puerto"}
+    wrong = {"email": email, "password": f"{MARK} vela azul en el puerto"}
+    account(**correct)
+    failed_logins = []
+
+    def receiver(sender, credentials, **kwargs):
+        failed_logins.append(credentials)
+
+    user_login_failed.connect(receiver, weak=False)
+    try:
+        responses = [send(csrf_client, correct)]
+        responses += [send(csrf_client, wrong) for _ in range(PAIR_LIMIT)]
+        # Rechazos del par hasta agotar el límite por IP, y uno más
+        pair_rejections = IP_LIMIT - 1 - PAIR_LIMIT
+        responses += [send(csrf_client, correct) for _ in range(pair_rejections)]
+        responses.append(send(csrf_client, correct))
+    finally:
+        user_login_failed.disconnect(receiver)
+
+    statuses = [response.status_code for response in responses]
+    assert statuses == [200] + [400] * PAIR_LIMIT + [429] * (pair_rejections + 1)
+    assert assert_throttled(responses[PAIR_LIMIT + 1]) == PAIR_WAIT
+    assert assert_throttled(responses[-1]) == MINUTE
+    assert [r for r in caplog.records if r.name == "django.request"]
+    assert MARK not in caplog.text.lower()
+    # El cuerpo del acierto lleva el email por contrato; el de los rechazos, no
+    for response in responses[1:]:
+        assert MARK not in response.content.decode().lower()
+    for response in responses:
+        assert MARK not in repr(dict(response.headers.items())).lower()
+        assert MARK not in response.cookies.output().lower()
+    stored = caches[LOGIN_CACHE_ALIAS]._cache
+    assert stored_pair_keys()
+    for key, value in stored.items():
+        assert MARK not in key.lower()
+        assert MARK.encode() not in value.lower()
+    assert MARK not in repr(django_settings.CACHES).lower()
+    assert len(failed_logins) == PAIR_LIMIT
+    assert all(credentials["password"] == HIDDEN for credentials in failed_logins)
+
+
+def test_the_error_report_hides_the_body_fields_in_the_login_view(
+    csrf_client, settings, monkeypatch
+):
+    # El filtro de Django solo tapa con DEBUG desactivado
+    settings.DEBUG = False
+
+    def explode(*args, **kwargs):
+        raise RuntimeError("credentials check failed")
+
+    monkeypatch.setattr(views, "check_credentials", explode)
+    body = {"email": f"{MARK}.ana@correo.es", "password": f"{MARK} vela roja"}
+
+    with pytest.raises(RuntimeError) as raised:
+        send(csrf_client, body)
+
+    reporter = ExceptionReporter(None, raised.type, raised.value, raised.tb)
+    # El cliente de pruebas también tiene un marco post, y lleva el cuerpo en claro
+    frame = next(
+        frame
+        for frame in reporter.get_traceback_frames()
+        if frame["function"] == "post"
+        and frame["filename"].endswith("apps/users/views.py")
+    )
+    shown = dict(frame["vars"])
+    assert shown["fields"] == HIDDEN
+    assert MARK not in repr(frame["vars"]).lower()
