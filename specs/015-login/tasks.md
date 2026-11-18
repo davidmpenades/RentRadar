@@ -70,7 +70,7 @@ Reglas comunes:
   - Pruebas de mecanismo: quitar el tope de 128; pasar `""` a `authenticate`; consultar la cuenta antes y no llamar a `authenticate` sin ella; pasar el email ya normalizado; quitar el rechazo del sustituto; `django.contrib.auth.logout()` en `LogoutView`; quitar `@sensitive_variables`.
   - OK necesario: al empezar la tarea, para los `exec` de pytest y ruff; orden a orden, levantar el stack si está parado.
   - Commit: `feat(users): add login credential check`
-  - Hecho cuando: los tests fallan primero y luego pasan (el de la señal de salida, anotado como caracterización con su mutación); un script (que busca el punto de código 0xA8 sin escribir el carácter) comprueba que los ficheros de test tocados no contienen U+00A8 literal, que va como escape; los casos existentes de `test_logout_api.py` no cambian; suite, ruff y migraciones en verde.
+  - Hecho cuando: los tests fallan primero y luego pasan (el de la señal de salida, anotado como caracterización con su mutación); un script (que busca el punto de código 0xA8 sin escribir el carácter) comprueba que los ficheros de test tocados no contienen U+00A8 literal, que se construye con `chr(0xA8)`; los casos existentes de `test_logout_api.py` no cambian; suite, ruff y migraciones en verde.
 
 - [ ] **T5. Endpoint de entrada (sin límites).** RF-1, RF-2, RF-5, RF-6, RNF Permisos, Respuestas mínimas, Contrato
   - Ficheros:
