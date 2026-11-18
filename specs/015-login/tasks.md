@@ -11,7 +11,7 @@ Reglas comunes:
 
 ## Tareas
 
-- [ ] **T1. Cambios de texto en las specs 009, 016 y 015.** RF-7, RF-8 (texto), RNF Igualdad de tiempo
+- [x] **T1. Cambios de texto en las specs 009, 016 y 015.** RF-7, RF-8 (texto), RNF Igualdad de tiempo
   - Ficheros:
     - `specs/009-auth/spec.md`: RF-9 (sin sesión, «Entrar» y «Registrarse»), RF-10 (enlace «¿Ya tienes cuenta? Entra») y RF-12 (foco tras salir a «Entrar»); se corrigen las frases obsoletas de las líneas 193 («sin entrada hasta la 015…»), 205 («sin entrada (spec 015) no se puede usar») y 221 (cita a las notas borradas de la 015).
     - `specs/016-visual-system/spec.md`: Definiciones («Botón»: «Entrar» de la barra es secundario y el envío «Entrar» es principal), RF-4 y RF-5 (región de estado de la entrada como la del registro, con «Entrando…»).
