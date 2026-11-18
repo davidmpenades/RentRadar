@@ -1,5 +1,5 @@
 # Validación — 015-login
-Rama: `feature/015-login` · Entorno: backend en Docker Compose (contenedor suelto, sin BD), frontend en el host
+Rama: `feature/015-login` · Entorno: backend en Docker Compose (contenedores sueltos sin BD para las comprobaciones de lectura; stack levantado para los tests), frontend en el host
 
 ## Comprobaciones en el contenedor (2026-11-18)
 Lectura del código de Django y DRF que el plan supone, antes de las tareas de código. Ninguna orden necesita la BD ni el stack levantado: cada una lanza un contenedor suelto con `--no-deps -e DB_HOST=db-inexistente.invalid`.
@@ -56,3 +56,47 @@ Se fija con tests en la tarea indicada; si un test muestra un comportamiento dis
 | Cookies que escriben o borran `SessionMiddleware` y `CsrfViewMiddleware` cuando llegan mal formadas | T5 (respuesta idéntica por estado de cookie) |
 | Cookie `sessionid` con nulos por escape octal | T5 (Desviación 2) |
 | drf-spectacular: `LoginRequest` y `LoginError` pasan `--fail-on-warn` | T5 (regeneración del contrato) |
+
+## T2. Almacén `login` y límite por IP
+Fecha: 2026-11-18 · Commits: `91503e9` (`Clock` a `helpers.py`) y `b9602d3` (`feat`, con el almacén, `wait_seconds`, `client_bucket`, `LoginIpThrottle`, las vistas de test y los dos ficheros de tests nuevos).
+
+### Rojo, antes del código
+- `config/tests/test_cache_settings.py`: `6 failed, 2 passed`. Los seis fallan con `InvalidCacheBackendError: The connection 'login' doesn't exist.`: `test_the_cache_aliases_are_exactly_default_and_login`, `test_login_has_its_own_location`, `test_login_declares_its_capacity_and_cull_options`, `test_login_cache_drops_a_tenth_of_its_entries_when_it_is_full`, `test_a_key_written_in_login_does_not_exist_in_default` y `test_a_key_written_in_default_does_not_exist_in_login`. Los dos que pasan, `test_default_is_local_memory_without_options` y `test_default_cache_keeps_its_capacity_of_300_entries`, caracterizan el almacén `default`, que ya existía.
+- `apps/users/tests/test_login_throttling.py`: `1 error during collection`, `ImportError: cannot import name 'LOGIN_CACHE_ALIAS' from 'apps.users.throttling'` (no existían `LOGIN_CACHE_ALIAS`, `LoginIpThrottle`, `client_bucket` ni `wait_seconds`). Las vistas de test se escribieron con el código, porque importan `LoginIpThrottle`.
+
+### Verde, después del código
+- Los dos ficheros nuevos: `46 passed` (8 de la caché y 38 del límite). Capacidad medida con la API pública de la caché: 18 001 claves supervivientes tras escribir 20 001 en `login` y 201 tras escribir 301 en `default`, los números previstos (la caché expulsa antes de insertar).
+- Suite entera, con `test_migrations.py`, `test_production.py` y `test_settings.py`: `2267 passed in 51.60s`.
+- `ruff check .`: `All checks passed!`. `ruff format --check .`: `146 files already formatted`. El primer `ruff check` dio un `E501` en un comentario de un test, de 89 columnas; se acortó.
+- Tras las mutaciones, con los ficheros restaurados: `519 passed` en los módulos nuevos y en `apps/users/tests`.
+
+### Desfase de `openapi.json`
+La orden de la CI (`python manage.py spectacular --format openapi-json --file /tmp/openapi.json --validate --fail-on-warn --lang en && diff /tmp/openapi.json openapi.json`), lanzada en un contenedor suelto con `--no-deps -e DB_HOST=db-inexistente.invalid`: salida `exit=0`, sin ninguna línea de `diff` y sin avisos de validación. La T2 no toca vistas, serializers ni URLs de producción.
+
+### Pruebas de mecanismo
+Cada mutación se hizo sobre el fichero con copia previa, sha256 antes y después y restauración desde la copia; los doce hashes coincidieron (`throttling.py` `a191a1167813…`, `base.py` `7b88eb531408…`). Se ejecutaron los dos ficheros de tests nuevos. Son las 7 de la tarea, con sus variantes (M2a y M2b, M5a y M5b, M7a y M7b), más M5c y M8.
+
+| Mutación | Cambio | Tests que la matan |
+|---|---|---|
+| M1 | `wait_seconds` cuenta desde `history[-1]`, la anotación más antigua | `test_wait_seconds_counts_from_the_entry_that_leaves_the_count_below_the_limit`, `test_the_wait_comes_from_the_entry_that_leaves_the_count_below_the_limit` |
+| M2a | Ventana fija: un `allow_request` propio vacía el historial cuando la anotación más antigua cumple la ventana | `test_the_window_slides_instead_of_resetting`, solo por su aserción final: la 11.ª petición, tras las 10 que pasan a los 60 s, da 200 en vez de 429; sin ella la mutación sobrevive |
+| M2b | Sin podar la ventana | `test_throttled_requests_do_not_count_and_do_not_extend_the_wait`, `test_the_window_frees_up_as_the_clock_advances`, `test_the_window_slides_instead_of_resetting` |
+| M3 | `throttle_failure` anota también los rechazos | `test_the_wait_comes_from_the_entry_that_leaves_the_count_below_the_limit`, `test_throttled_requests_do_not_count_and_do_not_extend_the_wait`, `test_the_window_slides_instead_of_resetting` |
+| M4 | `cache` devuelve `caches["default"]` | `test_the_counters_live_in_the_login_cache_and_not_in_default`, `test_the_cache_is_resolved_at_each_use_and_follows_override_settings`, `test_the_wait_comes_from_the_entry_that_leaves_the_count_below_the_limit` |
+| M5a | `MAX_ENTRIES` 300 | `test_login_declares_its_capacity_and_cull_options`, `test_login_cache_drops_a_tenth_of_its_entries_when_it_is_full` |
+| M5b | `login` sin `LOCATION`, la misma que `default` | `test_login_has_its_own_location`, `test_a_key_written_in_login_does_not_exist_in_default`, `test_a_key_written_in_default_does_not_exist_in_login`, `test_the_counters_live_in_the_login_cache_and_not_in_default` |
+| M5c | `CULL_FREQUENCY` 3, el valor por defecto de Django, en lugar del 10 elegido en el plan (D7) | los mismos dos que M5a |
+| M6 | Sin el `wait()` propio: queda el de DRF | `test_the_wait_comes_from_the_entry_that_leaves_the_count_below_the_limit` |
+| M7a | `client_bucket` toma la IP de `X-Forwarded-For` | `test_client_bucket_ignores_x_forwarded_for`, `test_x_forwarded_for_is_ignored` |
+| M7b | `NUM_PROXIES = None` en los ajustes | los mismos dos que M7a |
+| M8 | `cache` como atributo de clase, resuelto al importar | `test_the_cache_is_resolved_at_each_use_and_follows_override_settings` |
+
+### Puntos de «Lo que esta lectura no cubre» resueltos en esta tarea
+- Una `property` `cache` sustituye al atributo de clase de `SimpleRateThrottle`: confirmado (el test del `override_settings` y M8).
+- `LOCATION` separa los diccionarios de `LocMemCache`: confirmado (aislamiento en los dos sentidos y M5b).
+- `Throttled(wait)` redondea hacia arriba: no influye, porque `wait_seconds` ya devuelve segundos enteros.
+
+### Desviaciones y añadidos respecto del plan
+- **`client_bucket` y la clave del límite**: `LoginIpThrottle.get_cache_key` usa `client_bucket(request)` en vez de calcular `ip_bucket(self.get_ident(request))`. Es la misma identidad, con el mismo camino que `RegistrationThrottle` (`BaseThrottle.get_ident`, que respeta `NUM_PROXIES`) y sin leer `REMOTE_ADDR` a mano. Evita que `client_bucket` quede sin uso hasta la T3 y que haya dos definiciones de la IP del visitante. Sus tests directos (el cubo de `REMOTE_ADDR`, `X-Forwarded-For` ignorado, direcciones no válidas al cubo fijo y la clave del límite) pasan de la T3 a la T2; la T3 usa `client_bucket` para la clave del par.
+- **Añadido**: `LoginIpLimitedSessionView` y su ruta, para probar que el límite también alcanza a quien tiene sesión; el test `test_the_cache_is_resolved_at_each_use_and_follows_override_settings`, que fija la `property`; y las mutaciones M5c y M8.
+- **`conftest.py`**: `clear_default_cache` pasa a `clear_caches` y vacía todos los alias de `CACHES`.
