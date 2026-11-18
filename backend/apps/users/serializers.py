@@ -19,7 +19,22 @@ class RegistrationRequestSerializer(serializers.Serializer):
     password = serializers.CharField(write_only=True)
 
 
+# El componente queda LoginRequest; nulos admitidos, como acepta la vista
+@extend_schema_serializer(component_name="Login")
+class LoginRequestSerializer(serializers.Serializer):
+    email = serializers.CharField(allow_null=True)
+    password = serializers.CharField(write_only=True, allow_null=True)
+
+
 class RegistrationErrorSerializer(serializers.Serializer):
+    code = serializers.CharField(read_only=True)
+    # Sin read_only: drf-spectacular publica como obligatorio todo campo de solo lectura
+    params = serializers.DictField(
+        child=serializers.ListField(child=serializers.CharField()), required=False
+    )
+
+
+class LoginErrorSerializer(serializers.Serializer):
     code = serializers.CharField(read_only=True)
     # Sin read_only: drf-spectacular publica como obligatorio todo campo de solo lectura
     params = serializers.DictField(

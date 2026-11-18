@@ -18,7 +18,10 @@ from apps.core.csrf import CsrfEnforcedMixin
 from apps.core.errors import DomainValidationError
 from apps.core.request_body import read_json_object, read_text_fields
 from apps.core.serializers import ApiErrorSerializer
+from apps.users.login import CREDENTIALS_INVALID, check_credentials
 from apps.users.serializers import (
+    LoginErrorSerializer,
+    LoginRequestSerializer,
     RegistrationErrorSerializer,
     RegistrationRequestSerializer,
     SessionSerializer,
@@ -27,6 +30,7 @@ from apps.users.services import register_user
 from apps.users.throttling import RegistrationThrottle
 
 REGISTRATION_MAX_BYTES = 4096
+LOGIN_MAX_BYTES = 4096
 
 # (clave del error de dominio, clave pública), en el orden en que se responden
 PUBLIC_FIELDS = (
@@ -61,6 +65,9 @@ SESSION_COOKIES = set_cookie_header(
     200, "Cookie csrftoken; borra sessionid si la sesión no es válida."
 )
 LOGOUT_COOKIES = set_cookie_header(204, "Borra la cookie sessionid.")
+LOGIN_COOKIES = set_cookie_header(
+    200, "Cookies sessionid (HttpOnly) y csrftoken nuevas."
+)
 
 
 def public_field_errors(message_dict):
@@ -117,6 +124,50 @@ class RegisterView(CsrfEnforcedMixin, APIView):
         response = Response(
             SessionSerializer({"user": user}).data, status=status.HTTP_201_CREATED
         )
+        patch_cache_control(response, no_store=True)
+        return response
+
+
+def _open_session(http_request, user):
+    with transaction.atomic():
+        # Sin flush(), login() conservaría la clave y los datos con la misma cuenta
+        http_request.session.flush()
+        login(http_request, user)
+
+
+class LoginView(CsrfEnforcedMixin, APIView):
+    # Sin autenticación: la entrada sustituye la sesión, nunca la lee
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    http_method_names = ["post"]
+
+    @extend_schema(
+        operation_id="login",
+        tags=["auth"],
+        parameters=[CSRF_HEADER, LOGIN_COOKIES],
+        request=LoginRequestSerializer,
+        responses={
+            200: SessionSerializer,
+            400: LoginErrorSerializer,
+            403: ApiErrorSerializer,
+            405: ApiErrorSerializer,
+            413: ApiErrorSerializer,
+            429: ApiErrorSerializer,
+        },
+    )
+    def post(self, request):
+        http_request = request._request
+        fields = read_text_fields(
+            read_json_object(http_request, max_bytes=LOGIN_MAX_BYTES),
+            ("email", "password"),
+        )
+        user = check_credentials(http_request, **fields)
+        # Todas las causas dan la misma respuesta y ninguna toca la sesión
+        if user is None:
+            raise ApiError("invalid_fields", {"non_field": [CREDENTIALS_INVALID]})
+
+        _open_session(http_request, user)
+        response = Response(SessionSerializer({"user": user}).data)
         patch_cache_control(response, no_store=True)
         return response
 

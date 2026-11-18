@@ -4,6 +4,8 @@ from django.views.decorators.debug import sensitive_variables
 from apps.core.text import contains_lone_surrogate
 from apps.users.services import PASSWORD_MAX_LENGTH
 
+CREDENTIALS_INVALID = "credentials_invalid"
+
 
 def is_queryable_email(email):
     # PostgreSQL rechaza el nulo y psycopg no codifica un sustituto suelto
