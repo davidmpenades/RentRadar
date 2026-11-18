@@ -17,6 +17,7 @@ from apps.users.models import User
 from apps.users.tests.helpers import (
     Clock,
     assert_no_store,
+    assert_throttled,
     cross_origin_headers,
     stored_sessions,
     untouchable_session_store,
@@ -523,14 +524,9 @@ def clock(monkeypatch):
     return fake
 
 
-def assert_throttled(response):
-    assert response.status_code == 429
-    body = response.json()
-    assert set(body) == {"code", "retry_after"}
-    assert body["code"] == "throttled"
-    assert isinstance(body["retry_after"], int)
-    assert body["retry_after"] >= 1
-    assert response["Retry-After"] == str(body["retry_after"])
+def assert_register_throttled(response):
+    assert_throttled(response)
+    assert set(response.json()) == {"code", "retry_after"}
     assert_no_store(response)
 
 
@@ -572,7 +568,7 @@ def test_ten_rejected_requests_use_up_the_quota_of_the_real_endpoint(
         assert response.status_code == status
         assert response.json()["code"] == code
 
-    assert_throttled(register(csrf_client))
+    assert_register_throttled(register(csrf_client))
     assert User.objects.count() == 0
 
 
@@ -583,7 +579,7 @@ def test_ten_registrations_use_up_the_quota_and_the_eleventh_creates_nothing(
         body = {"email": f"ana{index}@correo.es", "password": PASSWORD}
         assert register(csrf_client, body).status_code == 201
 
-    assert_throttled(register(csrf_client))
+    assert_register_throttled(register(csrf_client))
     assert not User.objects.filter(email=EMAIL).exists()
 
 

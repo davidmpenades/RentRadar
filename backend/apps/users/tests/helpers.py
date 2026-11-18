@@ -16,6 +16,16 @@ def assert_no_store(response):
     assert response["Cache-Control"] == "no-store"
 
 
+def assert_throttled(response):
+    assert response.status_code == 429
+    body = response.json()
+    assert body["code"] == "throttled"
+    assert isinstance(body["retry_after"], int)
+    assert body["retry_after"] >= 1
+    assert response["Retry-After"] == str(body["retry_after"])
+    return body["retry_after"]
+
+
 class Clock:
     def __init__(self):
         self.now = 1000.0

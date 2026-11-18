@@ -6,7 +6,7 @@ from django.test import RequestFactory
 from rest_framework.request import Request
 
 from apps.users.models import User
-from apps.users.tests.helpers import Clock
+from apps.users.tests.helpers import Clock, assert_throttled
 from apps.users.throttling import RegistrationThrottle, ip_bucket
 
 PATH = "/register-like/"
@@ -48,16 +48,6 @@ def post(client, body=BODY, *, token=TOKEN, ip=IP, path=PATH, **extra):
 def fill_the_quota(client, **kwargs):
     for _ in range(LIMIT):
         assert post(client, **kwargs).status_code == 200
-
-
-def assert_throttled(response):
-    assert response.status_code == 429
-    body = response.json()
-    assert body["code"] == "throttled"
-    assert isinstance(body["retry_after"], int)
-    assert body["retry_after"] >= 1
-    assert response["Retry-After"] == str(body["retry_after"])
-    return body["retry_after"]
 
 
 # ip_bucket
