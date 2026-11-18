@@ -1,3 +1,9 @@
+from contextlib import ExitStack, contextmanager
+from unittest import mock
+
+from django.contrib.sessions.backends.db import SessionStore
+from django.contrib.sessions.models import Session
+
 from apps.users.models import User
 
 
@@ -19,3 +25,29 @@ class Clock:
 
     def advance(self, seconds):
         self.now += seconds
+
+
+def stored_sessions():
+    return list(
+        Session.objects.order_by("session_key").values_list(
+            "session_key", "session_data", "expire_date"
+        )
+    )
+
+
+@contextmanager
+def untouchable_session_store():
+    # Cualquier lectura o escritura de la sesión hace fallar la petición
+    names = ("load", "save", "create", "delete", "flush", "cycle_key", "clear")
+    with ExitStack() as stack:
+        for name in names:
+            stack.enter_context(
+                mock.patch.object(
+                    SessionStore, name, side_effect=AssertionError(f"session.{name}")
+                )
+            )
+        yield
+
+
+def cross_origin_headers(response):
+    return [n for n in response.headers if n.lower().startswith("access-control-")]

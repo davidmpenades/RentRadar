@@ -1,4 +1,3 @@
-from contextlib import ExitStack, contextmanager
 from datetime import timedelta
 from unittest import mock
 
@@ -12,7 +11,12 @@ from django.test import Client
 from django.utils import timezone
 
 from apps.users.models import User
-from apps.users.tests.helpers import assert_no_store
+from apps.users.tests.helpers import (
+    assert_no_store,
+    cross_origin_headers,
+    stored_sessions,
+    untouchable_session_store,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -44,38 +48,12 @@ def log_in(client, email=EMAIL, **fields):
     return client.cookies[SESSION_COOKIE].value
 
 
-def stored_sessions():
-    return list(
-        Session.objects.order_by("session_key").values_list(
-            "session_key", "session_data", "expire_date"
-        )
-    )
-
-
 def stored_accounts():
     return list(
         User.objects.order_by("pk").values_list(
             "pk", "email", "password", "is_active", "is_staff", "last_login"
         )
     )
-
-
-@contextmanager
-def untouchable_session_store():
-    # Cualquier lectura o escritura de la sesión hace fallar la petición
-    names = ("load", "save", "create", "delete", "flush", "cycle_key", "clear")
-    with ExitStack() as stack:
-        for name in names:
-            stack.enter_context(
-                mock.patch.object(
-                    SessionStore, name, side_effect=AssertionError(f"session.{name}")
-                )
-            )
-        yield
-
-
-def cross_origin_headers(response):
-    return [n for n in response.headers if n.lower().startswith("access-control-")]
 
 
 def assert_session_cookie_deleted(response):

@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-from contextlib import ExitStack, contextmanager
 from unittest import mock
 
 import pytest
@@ -15,7 +14,13 @@ from django.db import connection
 
 from apps.users import views
 from apps.users.models import User
-from apps.users.tests.helpers import Clock, assert_no_store
+from apps.users.tests.helpers import (
+    Clock,
+    assert_no_store,
+    cross_origin_headers,
+    stored_sessions,
+    untouchable_session_store,
+)
 from apps.users.throttling import RegistrationThrottle
 from apps.users.views import public_field_errors
 
@@ -83,35 +88,9 @@ SESSIONS = pytest.mark.parametrize(
 )
 
 
-def stored_sessions():
-    return list(
-        Session.objects.order_by("session_key").values_list(
-            "session_key", "session_data", "expire_date"
-        )
-    )
-
-
-@contextmanager
-def untouchable_session_store():
-    # Cualquier lectura o escritura de la sesión hace fallar la petición
-    names = ("load", "save", "create", "delete", "flush", "cycle_key", "clear")
-    with ExitStack() as stack:
-        for name in names:
-            stack.enter_context(
-                mock.patch.object(
-                    SessionStore, name, side_effect=AssertionError(f"session.{name}")
-                )
-            )
-        yield
-
-
 def session_of(response):
     key = response.cookies[SESSION_COOKIE].value
     return key, Session.objects.get(session_key=key).get_decoded()
-
-
-def cross_origin_headers(response):
-    return [n for n in response.headers if n.lower().startswith("access-control-")]
 
 
 # --- Alta correcta ------------------------------------------------------------
