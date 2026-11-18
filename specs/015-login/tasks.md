@@ -21,7 +21,7 @@ Reglas comunes:
   - Commits, en este orden: `docs(spec-009): reflect login in the auth spec`, `docs(spec-016): add login buttons and status region`, `docs(spec-015): equalize hash cost and add accepted risks`.
   - Hecho cuando: los cinco cambios de «Cambios en otras specs» de la 015 y las Desviaciones 1, 3 y 4 y el riesgo nuevo del plan están en el texto; un grep de «hasta la 015», «spec 015) no se puede usar» y «notas de la 015» en `specs/009-auth/spec.md` no da resultados.
 
-- [ ] **T2. Almacén `login` y límite por IP.** RF-3, RNF Almacén
+- [x] **T2. Almacén `login` y límite por IP.** RF-3, RNF Almacén
   - Ficheros:
     - `backend/config/settings/base.py`: `CACHES` con `default` (LocMemCache sin opciones, como el implícito de hoy) y `login` (`LOCATION = "login-attempts"`, `MAX_ENTRIES` 20 000, `CULL_FREQUENCY` 10).
     - Crea `backend/config/tests/test_cache_settings.py`.
