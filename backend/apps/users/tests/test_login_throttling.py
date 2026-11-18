@@ -4,14 +4,17 @@ import pytest
 from django.conf import settings as django_settings
 from django.core.cache import caches
 from django.test import RequestFactory
+from django.utils.crypto import salted_hmac
 from rest_framework.request import Request
 
 from apps.users.models import User
 from apps.users.tests.helpers import Clock
 from apps.users.throttling import (
     LOGIN_CACHE_ALIAS,
+    LoginFailureLimit,
     LoginIpThrottle,
     client_bucket,
+    login_pair_key,
     wait_seconds,
 )
 
@@ -342,3 +345,240 @@ def test_a_logged_in_visitor_is_limited_too(csrf_client, clock):
     fill_the_quota(csrf_client, path=SESSION_PATH)
 
     assert_throttled(post(csrf_client, path=SESSION_PATH))
+
+
+# clave del par de IP y email
+
+PAIR_SALT = "rentradar.users.login_pair_key"
+PAIR_EMAIL = "ana@correo.es"
+
+
+def expected_digest(normalized):
+    value = normalized.encode("utf-8", errors="surrogatepass")
+    return salted_hmac(PAIR_SALT, value, algorithm="sha256").hexdigest()
+
+
+def test_the_pair_key_carries_neither_the_email_nor_a_marker():
+    marker = "marker-9f3a"
+
+    key = login_pair_key(IP, f"{marker}@correo.es")
+
+    assert marker not in key
+    assert "correo" not in key
+
+
+def test_equivalent_spellings_of_an_email_share_the_key():
+    assert login_pair_key(IP, "  Ana@Correo.ES ") == login_pair_key(IP, PAIR_EMAIL)
+
+
+def test_none_and_empty_email_share_the_key():
+    assert login_pair_key(IP, None) == login_pair_key(IP, "")
+
+
+def test_a_lone_surrogate_and_a_null_character_give_distinct_keys_without_failing():
+    keys = {
+        login_pair_key(IP, chr(0xD800)),
+        login_pair_key(IP, "\x00"),
+        login_pair_key(IP, ""),
+    }
+
+    assert len(keys) == 3
+
+
+def test_the_secret_key_changes_the_key(settings):
+    before = login_pair_key(IP, PAIR_EMAIL)
+
+    settings.SECRET_KEY = "another-secret-for-this-test"
+
+    assert login_pair_key(IP, PAIR_EMAIL) != before
+
+
+def test_another_bucket_gives_another_key():
+    assert login_pair_key(IP, PAIR_EMAIL) != login_pair_key("203.0.113.8", PAIR_EMAIL)
+
+
+def test_the_key_hashes_a_single_normalization_of_the_raw_email():
+    raw = chr(0xA8) + "ana@x.es"
+    once = User.objects.normalize_email(raw)
+    twice = User.objects.normalize_email(once)
+
+    key = login_pair_key(IP, raw)
+
+    assert key == f"login_pair:{IP}:{expected_digest(once)}"
+    assert once != twice
+    assert key != login_pair_key(IP, once)
+
+
+def test_the_pair_key_ignores_x_forwarded_for():
+    keys = {
+        login_pair_key(
+            client_bucket(
+                Request(
+                    RequestFactory().post(
+                        PATH, REMOTE_ADDR=IP, HTTP_X_FORWARDED_FOR=forwarded
+                    )
+                )
+            ),
+            PAIR_EMAIL,
+        )
+        for forwarded in ("198.51.100.9", "2001:db8::1, 10.0.0.1", "unknown")
+    }
+
+    assert keys == {login_pair_key(IP, PAIR_EMAIL)}
+
+
+def test_the_pair_and_ip_keys_do_not_overlap():
+    request = Request(RequestFactory().post(PATH, REMOTE_ADDR=IP))
+
+    pair = login_pair_key(client_bucket(request), PAIR_EMAIL)
+    ip_key = LoginIpThrottle().get_cache_key(request, None)
+
+    assert pair.startswith("login_pair:")
+    assert not pair.startswith("throttle_login_ip_")
+    assert ip_key.startswith("throttle_login_ip_")
+    assert not ip_key.startswith("login_pair:")
+
+
+# límite de fallos del par
+
+PAIR_KEY = "login_pair:test-bucket:test-digest"
+OTHER_PAIR_KEY = "login_pair:test-bucket:other-digest"
+FAILURES = 5
+WINDOW = 15 * 60
+
+
+@pytest.fixture
+def failure_clock(monkeypatch):
+    fake = Clock()
+    monkeypatch.setattr(LoginFailureLimit, "timer", staticmethod(fake))
+    return fake
+
+
+def record_failures(limit, clock, count, key=PAIR_KEY):
+    # Una por segundo; la última queda en el instante actual del reloj
+    for index in range(count):
+        limit.record_failure(key)
+        if index < count - 1:
+            clock.advance(1)
+
+
+def test_the_failure_limit_is_declared_on_the_class():
+    assert LoginFailureLimit.limit == FAILURES
+    assert LoginFailureLimit.window == WINDOW
+
+
+def test_the_failure_limit_cache_is_resolved_at_each_use_and_follows_override_settings(
+    settings,
+):
+    before = LoginFailureLimit().cache
+    other = {"BACKEND": LOCMEM, "LOCATION": "another-failure-store"}
+
+    settings.CACHES = {**settings.CACHES, LOGIN_CACHE_ALIAS: other}
+    after = LoginFailureLimit().cache
+
+    assert after is caches[LOGIN_CACHE_ALIAS]
+    assert after is not before
+
+
+def test_wait_is_none_without_history_and_below_the_limit(failure_clock):
+    limit = LoginFailureLimit()
+
+    assert limit.wait(PAIR_KEY) is None
+
+    record_failures(limit, failure_clock, FAILURES - 1)
+
+    assert limit.wait(PAIR_KEY) is None
+
+
+def test_wait_with_exactly_the_limit_returns_the_wait(failure_clock):
+    limit = LoginFailureLimit()
+
+    record_failures(limit, failure_clock, FAILURES)
+
+    # Marcas 1000 a 1004: cuenta desde la de 1000
+    assert limit.wait(PAIR_KEY) == WINDOW - 4
+
+
+def test_wait_with_seven_entries_counts_from_the_fifth_most_recent(failure_clock):
+    limit = LoginFailureLimit()
+
+    record_failures(limit, failure_clock, 7)
+
+    # Marcas 1000 a 1006: la 5.ª más reciente es 1002; la más antigua daría 894
+    assert limit.wait(PAIR_KEY) == WINDOW - 4
+
+
+def test_wait_does_not_record(failure_clock):
+    limit = LoginFailureLimit()
+
+    assert limit.wait(PAIR_KEY) is None
+    assert caches[LOGIN_CACHE_ALIAS].get(PAIR_KEY) is None
+
+    record_failures(limit, failure_clock, FAILURES)
+    stored = caches[LOGIN_CACHE_ALIAS].get(PAIR_KEY)
+    failure_clock.advance(5)
+    limit.wait(PAIR_KEY)
+
+    assert caches[LOGIN_CACHE_ALIAS].get(PAIR_KEY) == stored
+
+
+def test_record_failure_stores_newest_first_in_the_login_cache_for_the_window(
+    failure_clock, monkeypatch
+):
+    cache = caches[LOGIN_CACHE_ALIAS]
+    original = cache.set
+    calls = []
+
+    def spy(key, value, timeout=None, version=None):
+        calls.append((key, timeout))
+        original(key, value, timeout, version)
+
+    monkeypatch.setattr(cache, "set", spy)
+    limit = LoginFailureLimit()
+
+    record_failures(limit, failure_clock, 2)
+
+    assert cache.get(PAIR_KEY) == [1001.0, 1000.0]
+    assert caches["default"].get(PAIR_KEY) is None
+    assert calls == [(PAIR_KEY, WINDOW), (PAIR_KEY, WINDOW)]
+
+
+def test_the_window_slides_and_the_entry_on_the_boundary_leaves(failure_clock):
+    limit = LoginFailureLimit()
+    record_failures(limit, failure_clock, 1)
+    limit.record_failure(PAIR_KEY)
+    limit.record_failure(PAIR_KEY)
+    failure_clock.advance(WINDOW // 2)
+    limit.record_failure(PAIR_KEY)
+    limit.record_failure(PAIR_KEY)
+
+    assert limit.wait(PAIR_KEY) == WINDOW // 2
+
+    failure_clock.advance(WINDOW // 2)
+    # Las 3 de la marca 1000 cumplen la ventana justo ahora; quedan 2
+    assert limit.wait(PAIR_KEY) is None
+
+    for _ in range(3):
+        limit.record_failure(PAIR_KEY)
+
+    assert limit.wait(PAIR_KEY) == WINDOW // 2
+
+
+def test_record_failure_drops_the_entries_that_left_the_window(failure_clock):
+    limit = LoginFailureLimit()
+    for _ in range(3):
+        limit.record_failure(PAIR_KEY)
+    failure_clock.advance(WINDOW)
+
+    limit.record_failure(PAIR_KEY)
+
+    assert caches[LOGIN_CACHE_ALIAS].get(PAIR_KEY) == [failure_clock.now]
+
+
+def test_each_key_has_its_own_counter(failure_clock):
+    limit = LoginFailureLimit()
+
+    record_failures(limit, failure_clock, FAILURES)
+
+    assert limit.wait(PAIR_KEY) is not None
+    assert limit.wait(OTHER_PAIR_KEY) is None
