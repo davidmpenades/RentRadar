@@ -1,5 +1,5 @@
 # Spec 015 — Entrada
-Estado: borrador
+Estado: aprobada
 Depende de: spec 004 (usuarios y normalización del email), spec 009 (registro, sesión, salida, CSRF, límites y formato de errores) y spec 016 (campos, «Mostrar contraseña» y botones).
 
 ## Contexto y objetivo
