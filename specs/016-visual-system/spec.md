@@ -31,8 +31,8 @@ Antes del plan se preparan dos o tres variantes visuales en `prototypes/016-visu
 
 ## Definiciones
 - **Botón**: control que ejecuta una acción, o enlace con forma de botón. Hay dos tipos:
-  - **principal** (fondo azul y texto blanco): «Registrarse», «Crear cuenta», «Reintentar» del aviso, «Reintentar» y «Volver a la zona inicial» del panel, «Reintentar» del error del mapa base y el enlace «Ir al mapa» de «Página no encontrada»;
-  - **secundario** (cristal claro): «Salir» y «Cerrar aviso». Sobre el mapa o sobre una superficie de cristal, relleno translúcido y borde claro de 1 px. Sobre una superficie blanca (la barra superior y la tarjeta del formulario de registro), su relleno lleva un tinte cielo suave que lo separa del fondo, con el mismo borde claro y la misma sombra. El color, la opacidad, el tono exacto del tinte y la sombra los fija el plan. Lo identifica su texto, no el contraste de su borde.
+  - **principal** (fondo azul y texto blanco): «Registrarse», «Crear cuenta», el envío «Entrar» del formulario de entrada (spec 015), «Reintentar» del aviso, «Reintentar» y «Volver a la zona inicial» del panel, «Reintentar» del error del mapa base y el enlace «Ir al mapa» de «Página no encontrada»;
+  - **secundario** (cristal claro): «Salir», «Cerrar aviso» y «Entrar» de la barra superior (spec 015). Sobre el mapa o sobre una superficie de cristal, relleno translúcido y borde claro de 1 px. Sobre una superficie blanca (la barra superior y la tarjeta del formulario de registro), su relleno lleva un tinte cielo suave que lo separa del fondo, con el mismo borde claro y la misma sombra. El color, la opacidad, el tono exacto del tinte y la sombra los fija el plan. Lo identifica su texto, no el contraste de su borde.
 
   El control del ojo no es un botón con relieve: es un control del campo.
 - **Relieve**: sombra que proyecta un botón en reposo y lo separa del fondo. Al pulsarlo (con puntero o con teclado), la sombra se reduce: su desplazamiento o su desenfoque son menores que en reposo. Se verifica por el estilo calculado en el navegador. Los valores los fija la variante elegida.
@@ -95,8 +95,8 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - RF-1: EL SISTEMA muestra cada botón con el aspecto de su tipo y con relieve en reposo. MIENTRAS el botón está pulsado, su relieve se reduce; MIENTRAS está deshabilitado, no tiene relieve ni responde al pasar el puntero.
 - RF-2: EL SISTEMA muestra cada campo con su etiqueta visible fija encima, que no se mueve ni desaparece al enfocarlo o escribir. MIENTRAS el campo tiene un error, su borde lleva el color de error y sus mensajes siguen asociados al campo, como en la 009.
 - RF-3: CUANDO el visitante pulsa el control del ojo, situado al final del campo de contraseña, EL SISTEMA alterna entre ocultar y mostrar la contraseña y cambia el icono (ojo abierto con la contraseña oculta, ojo tachado con la contraseña visible) y el estado pulsado accesible del control. No cambia su nombre accesible, «Mostrar contraseña», no mueve el foco y no altera el valor del campo.
-- RF-4: MIENTRAS la región de estado del formulario de registro muestra un error general, EL SISTEMA lo presenta con el indicador y el texto en tinta, sin limón.
-- RF-5: MIENTRAS la región de estado del formulario de registro muestra el envío en curso («Creando la cuenta…»), EL SISTEMA lo presenta sin indicador, sin fondo de color y con el texto en el gris secundario.
+- RF-4: MIENTRAS la región de estado del formulario de registro o del de entrada (spec 015) muestra un error general, EL SISTEMA lo presenta con el indicador y el texto en tinta, sin limón.
+- RF-5: MIENTRAS la región de estado del formulario de registro o del de entrada (spec 015) muestra el envío en curso («Creando la cuenta…» o «Entrando…»), EL SISTEMA lo presenta sin indicador, sin fondo de color y con el texto en el gris secundario.
 
 ### Aviso flotante
 - RF-6: CUANDO falla la salida (009, RF-12), EL SISTEMA muestra el aviso flotante, con el indicador, el texto en tinta, «Reintentar» y «Cerrar aviso», pegado al borde inferior de la zona libre:
@@ -192,7 +192,7 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - Un botón secundario sobre la barra superior blanca o sobre la tarjeta blanca del registro: se distingue del fondo por su relleno teñido de cielo, no solo por su sombra (Definiciones).
 - El foco llega a un botón con sombra azul o a un campo de un formulario: el anillo de 2 px queda separado 2 px del control y su sombra no lo tapa (RF-15).
 - El foco llega a un control del mapa (zoom, atribución): conserva el anillo de la 006, porque el azul #1647B8 no se distinguiría de la línea azul de los círculos (Fuera de alcance).
-- A 375 px el enlace de la marca muestra solo el icono, y este y «Registrarse» o «Salir» caben en la barra sin desbordarla. El enlace mide al menos 44 × 44 px, el nombre no se ve y su nombre accesible sigue siendo «RentRadar» (RF-11).
+- A 375 px el enlace de la marca muestra solo el icono, y este y «Entrar» y «Registrarse», o «Salir», caben en la barra sin desbordarla. El enlace mide al menos 44 × 44 px, el nombre no se ve y su nombre accesible sigue siendo «RentRadar» (RF-11).
 - La ventana cruza los 900 px: el nombre de la marca aparece o se oculta a la vista y el nombre accesible del enlace no cambia (RF-11).
 - En la captura de la pestaña a 16 px, la sombra y el brillo se distinguen del tono base con al menos 1,5:1 de razón de contraste (Valores; RF-12, RF-13).
 - La barra del navegador es clara (fondo blanco) u oscura (gris oscuro de las pestañas de Chrome en modo oscuro): la silueta del icono contrasta al menos 3:1 con los dos. Una silueta en el azul #1647B8 llega a 7,99:1 con el blanco, pero solo a unos 2:1 con el gris oscuro, así que no se acepta: el contorno necesita capas más claras (RF-12; Valores).
@@ -204,7 +204,7 @@ Los demás valores visuales (color del tinte, desenfoque, sombras, radios, color
 - Cambiar la lista blanca de SVG de las imágenes de categoría de la 006 o lo que comprueba su test: se mantienen tal cual. Mover las reglas a un módulo que compartan los dos tests no es un cambio. — sustituido por la 017
 - Avatar y su menú (spec 014).
 - Filtro y colapso del panel, y la selección que usa el limón (spec 007).
-- Formulario de entrada (spec 015), que reutilizará estas piezas.
+- Formulario de entrada (spec 015), que reutiliza estas piezas. Esta spec solo fija el tipo de sus botones (Definiciones) y cómo se presenta su región de estado (RF-4 y RF-5).
 - Avisos flotantes sin acción o con cierre automático, y avisos visibles para otros mensajes (como «Has salido» o los errores del panel).
 - Cerrar el aviso con Escape.
 - La barra superior como superficie de cristal sobre el mapa: sigue sólida y encima de la zona de contenido.
