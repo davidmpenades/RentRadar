@@ -4,6 +4,7 @@ from unittest import mock
 
 import pytest
 from django.conf import settings as django_settings
+from django.contrib.auth.signals import user_logged_out
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.core.handlers.wsgi import LimitedStream
@@ -136,6 +137,23 @@ def test_the_csrf_cookie_is_left_untouched(csrf_client):
     assert response.status_code == 204
     assert CSRF_COOKIE not in response.cookies
     assert csrf_client.cookies[CSRF_COOKIE].value == TOKEN
+
+
+def test_logging_out_does_not_send_user_logged_out(csrf_client):
+    log_in(csrf_client)
+    received = []
+
+    def receiver(sender, **kwargs):
+        received.append(kwargs)
+
+    user_logged_out.connect(receiver, weak=False)
+    try:
+        response = logout(csrf_client)
+    finally:
+        user_logged_out.disconnect(receiver)
+
+    assert response.status_code == 204
+    assert received == []
 
 
 def test_an_expired_session_row_is_deleted_too(csrf_client):
