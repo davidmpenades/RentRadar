@@ -100,3 +100,48 @@ Cada mutación se hizo sobre el fichero con copia previa, sha256 antes y despué
 - **`client_bucket` y la clave del límite**: `LoginIpThrottle.get_cache_key` usa `client_bucket(request)` en vez de calcular `ip_bucket(self.get_ident(request))`. Es la misma identidad, con el mismo camino que `RegistrationThrottle` (`BaseThrottle.get_ident`, que respeta `NUM_PROXIES`) y sin leer `REMOTE_ADDR` a mano. Evita que `client_bucket` quede sin uso hasta la T3 y que haya dos definiciones de la IP del visitante. Sus tests directos (el cubo de `REMOTE_ADDR`, `X-Forwarded-For` ignorado, direcciones no válidas al cubo fijo y la clave del límite) pasan de la T3 a la T2; la T3 usa `client_bucket` para la clave del par.
 - **Añadido**: `LoginIpLimitedSessionView` y su ruta, para probar que el límite también alcanza a quien tiene sesión; el test `test_the_cache_is_resolved_at_each_use_and_follows_override_settings`, que fija la `property`; y las mutaciones M5c y M8.
 - **`conftest.py`**: `clear_default_cache` pasa a `clear_caches` y vacía todos los alias de `CACHES`.
+
+## T3. Clave del par y límite de fallos
+Fecha: 2026-11-18 · Commit: `881b895` (`feat`, con `LOGIN_PAIR_KEY_SALT`, `login_pair_key`, `LoginFailureLimit` y 19 tests nuevos en `test_login_throttling.py`).
+
+### Rojo, antes del código
+- `apps/users/tests/test_login_throttling.py`: `1 error during collection`, `ImportError: cannot import name 'LoginFailureLimit' from 'apps.users.throttling'` (no existían `LoginFailureLimit` ni `login_pair_key`). Ruff estaba limpio sobre los tests.
+
+### Verde, después del código
+- `test_login_throttling.py`: `57 passed` (38 de la T2 y 19 nuevos: 9 de la clave del par, 9 del límite y el de la `property`).
+- Suite entera, con `test_migrations.py`, `test_production.py` y `test_settings.py`: `2286 passed in 47.68s`.
+- `ruff check .`: `All checks passed!`. `ruff format --check .`: `146 files already formatted`.
+- Ningún fichero de test tocado contiene U+00A8 literal: comprobado con un script que busca los bytes `c2 a8` sin escribir el carácter.
+- Desfase de `openapi.json`: la orden de la CI de la T2, lanzada en un contenedor suelto con `--no-deps -e DB_HOST=db-inexistente.invalid`, termina con `exit=0`, sin ninguna línea de `diff` y sin avisos de validación. La T3 no toca vistas, serializers ni URLs de producción.
+- Frontend, en el host: `npm run api:check` con `exit=0`; `npm test` (vitest) con `34 passed` ficheros y `1174 passed` tests; `npm run build` con `exit=0` y el aviso de Vite sobre chunks de más de 500 kB. La T2 no ejecutó vitest, build ni `api:check`. Ni la T2 ni la T3 tocan el frontend, y por eso no hay `eslint` de ficheros tocados.
+
+### Pruebas de mecanismo
+Una sola ejecución sobre el código del commit `881b895`, con las 18 mutaciones. Cada una se hizo sobre `throttling.py` con copia previa fuera del repo y fuera de `/tmp`, sha256 antes y después y restauración desde la copia; los dos hashes coincidieron (`9d34caf36036…`). Se ejecutó `test_login_throttling.py` entero. Mueren las 18. M1 a M8 son las del plan; M9 a M16 se añaden en la tarea.
+
+| Mutación | Cambio | Tests que la matan |
+|---|---|---|
+| M1 | Clave sin secreto: `hashlib.sha256` en lugar de `salted_hmac` | `test_the_secret_key_changes_the_key`, `test_the_key_hashes_a_single_normalization_of_the_raw_email` |
+| M2 | Email normalizado en claro en la clave | `test_the_pair_key_carries_neither_the_email_nor_a_marker`, `test_the_secret_key_changes_the_key`, `test_the_key_hashes_a_single_normalization_of_the_raw_email` |
+| M3 | `encode("utf-8")` estricto | `test_a_lone_surrogate_and_a_null_character_give_distinct_keys_without_failing` |
+| M4 | Normalizar dos veces | `test_the_key_hashes_a_single_normalization_of_the_raw_email` |
+| M5 | Clave sin cubo (`login_pair:{digest}`) | `test_another_bucket_gives_another_key`, `test_the_key_hashes_a_single_normalization_of_the_raw_email` |
+| M6 | Ventana fija: se vacía el historial cuando la anotación más antigua cumple la ventana | `test_the_window_slides_and_the_entry_on_the_boundary_leaves` |
+| M7 | Espera desde la anotación más antigua | `test_wait_with_seven_entries_counts_from_the_fifth_most_recent` |
+| M8 | `client_bucket` toma la IP de `X-Forwarded-For` | `test_client_bucket_ignores_x_forwarded_for`, `test_the_pair_key_ignores_x_forwarded_for`, `test_x_forwarded_for_is_ignored` |
+| M9 | `wait` anota | `test_wait_does_not_record`, `test_wait_is_none_without_history_and_below_the_limit` |
+| M10a | `record_failure` guarda sin `timeout` | `test_record_failure_stores_newest_first_in_the_login_cache_for_the_window` |
+| M10b | `record_failure` guarda con la mitad de la ventana | el mismo que M10a |
+| M11 | `cache` devuelve `caches["default"]` | `test_record_failure_stores_newest_first_in_the_login_cache_for_the_window`, `test_record_failure_drops_the_entries_that_left_the_window`, `test_the_failure_limit_cache_is_resolved_at_each_use_and_follows_override_settings` |
+| M12a | `wait` sin podar la ventana | `test_the_window_slides_and_the_entry_on_the_boundary_leaves` |
+| M12b | `record_failure` sin podar la ventana | `test_record_failure_drops_the_entries_that_left_the_window` |
+| M13 | `len > limit` en lugar de `>=` | `test_wait_with_exactly_the_limit_returns_the_wait`, `test_each_key_has_its_own_counter`, `test_the_window_slides_and_the_entry_on_the_boundary_leaves` |
+| M14 | Otra sal | `test_the_key_hashes_a_single_normalization_of_the_raw_email` |
+| M15 | `record_failure` añade al final del historial | `test_record_failure_stores_newest_first_in_the_login_cache_for_the_window`, `test_wait_with_exactly_the_limit_returns_the_wait`, `test_wait_with_seven_entries_counts_from_the_fifth_most_recent`, `test_the_window_slides_and_the_entry_on_the_boundary_leaves` |
+| M16 | `cache` como atributo de clase, resuelto al importar | `test_record_failure_stores_newest_first_in_the_login_cache_for_the_window`, `test_the_failure_limit_cache_is_resolved_at_each_use_and_follows_override_settings` |
+
+### Desviaciones y añadidos respecto del plan
+- **`chr(0xA8)` en lugar del escape**: `test_the_key_hashes_a_single_normalization_of_the_raw_email` construye el email con `chr(0xA8) + "ana@x.es"` y no con `"\u00a8ana@x.es"`. Al escribir el fichero, el escape se convirtió en el carácter literal y la comprobación de la tarea (ningún fichero de test con U+00A8) lo detectó. Construido con `chr`, ninguna herramienta puede convertirlo; el valor es el mismo y la mutación M4 sigue muriendo.
+- **Test añadido de la `property`**: `test_the_failure_limit_cache_is_resolved_at_each_use_and_follows_override_settings`, como el de `LoginIpThrottle` en la T2: un `override_settings` de `CACHES` cambia el almacén que usa `LoginFailureLimit`. Fija la `property` de forma explícita, como en la T2.
+- **Mutaciones añadidas**: M9 a M16 (la M13 y la M16, a petición de la revisión de la tarea).
+- **Sal**: `LOGIN_PAIR_KEY_SALT = "rentradar.users.login_pair_key"`, con el valor literal en el test de la clave para que forme parte del contrato (M14).
+- **Reloj**: `LoginFailureLimit.timer` es un atributo de clase como el de los throttles; los tests lo sustituyen con un fixture propio (`failure_clock`), porque el `clock` de la T2 solo parchea `LoginIpThrottle`.
