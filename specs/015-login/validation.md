@@ -197,3 +197,67 @@ M3 no mata el test de `user_login_failed`: usa una cuenta que existe, así que e
 
 ### Nota para la T10
 `user_login_failed` lleva el email crudo en `credentials` (Django solo tapa la contraseña). Hoy ningún receptor del proyecto se conecta a esa señal; ninguno debe registrar `credentials` en el log.
+
+## T5. Endpoint de entrada (sin límites)
+Fecha: 2026-11-18 · Commits: `924390b` (`untouchable_session_store`, `stored_sessions` y `cross_origin_headers` a `helpers.py`, sin cambiar casos), `969377c` (`feat`, con `CREDENTIALS_INVALID`, `LoginRequestSerializer`, `LoginErrorSerializer`, `LoginView`, `_open_session`, la ruta, los tests, `openapi.json` y `schema.gen.ts`) y `73ce3cf` (riesgo aceptado de la cookie de sesión con nulos).
+
+### Traslado de los ayudantes de sesión (`924390b`)
+- `test_register_api.py` y `test_logout_api.py` recogen los mismos 135 tests antes y después, con los mismos identificadores.
+- Suite entera: `2324 passed`, como tras la T4. Ruff, desfase de `openapi.json` (`exit=0`, sin `diff`), `api:check`, vitest y build en verde.
+
+### Rojo, antes del código
+- `apps/users/tests/test_login_api.py`: `99 failed, 28 errors`. Los fallos son el 404 de `/api/v1/auth/login/` (`assert 404 == 400`, `assert 404 == 200`, `KeyError: 'sessionid'`…); los errores, del fixture que parchea `check_credentials` en `apps.users.views`, que aún no lo importaba.
+- `test_auth_contract.py`: `1 error during collection`, `ImportError: cannot import name 'LoginErrorSerializer'`.
+- `apps/core/tests/test_csrf_guard.py`: `1 error during collection`, `ImportError: cannot import name 'LoginView'`.
+
+### Verde, después del código
+- Los tres ficheros: `163 passed` (127 de `test_login_api.py`, los del contrato con 6 nuevos y dos casos ampliados, y la guarda con uno nuevo).
+- Suite entera, con `test_migrations.py`, `test_production.py` y `test_settings.py`: `2460 passed` (136 nuevos).
+- `ruff check .`: `All checks passed!`. `ruff format --check .`: `149 files already formatted`.
+- Ningún fichero de test tocado contiene U+00A8 literal ni un nulo literal: el sustituto y la barra del escape octal se construyen con `chr()`, y los nulos van como escape.
+
+### Contrato y frontend
+- `openapi.json` regenerado con `spectacular --validate --fail-on-warn` (`exit=0`) y `schema.gen.ts` con `npm run api:gen`, en el mismo commit que la vista.
+- Desfase de `openapi.json` tras regenerar: la orden de la CI, en un contenedor suelto con `--no-deps -e DB_HOST=db-inexistente.invalid`, termina con `exit=0` y sin ninguna línea de `diff`.
+- Frontend, en el host: `npm run api:check` con `exit=0`; `npm test` (vitest) con `34 passed` ficheros y `1174 passed` tests; `npm run build` con `exit=0`. La T5 no toca código del frontend; solo regenera `schema.gen.ts`.
+
+### Pruebas de mecanismo
+Una sola ejecución sobre el código del commit `969377c`, con las 14 mutaciones. Cada una se hizo sobre `views.py`, `serializers.py` o `login.py` con copia previa fuera del repo y fuera de `/tmp`, sha256 antes y después y restauración desde la copia; los hashes coincidieron y son los de los ficheros del commit (`views.py` `8440673785d1…`, `serializers.py` `3d89df027969…`, `login.py` `e37e563c077c…`). Se ejecutaron `test_login_api.py`, `test_auth_contract.py` y `test_csrf_guard.py`. Mueren las 14. M1 a M6 son las de la tarea; M7 a M14 se añaden en ella.
+
+| Mutación | Cambio | Tests que la matan |
+|---|---|---|
+| M1 | Otro código (`account_inactive`) para la cuenta desactivada | `test_every_wrong_credential_gets_the_same_answer[*-inactive-account]`, en los cuatro estados de cookie (además, los casos con nulo o sustituto en el email, porque el mutante consulta la BD con ellos) |
+| M2 | Sin `flush()` en `_open_session` | `test_a_previous_session_is_replaced[anonymous]` y `[same-account]` |
+| M3 | Lee `request.session` en la rama de fallo | `test_a_failed_login_touches_neither_the_session_nor_the_cookies[anonymous]` y `[another-account]` (sin sesión, Django no carga nada) |
+| M4 | `LoginView` sin `CsrfEnforcedMixin` | los 12 casos de `test_without_a_valid_token_the_credentials_are_not_checked`, `test_a_foreign_origin_is_rejected_even_with_a_valid_token`, `test_the_body_is_not_read_before_the_csrf_check`, `test_errors_carry_only_their_planned_keys[csrf-failed]`, `test_no_answer_can_be_stored_by_a_cache[403]`, `test_no_answer_grants_cross_origin_access[403]` y `test_every_project_view_that_changes_state_has_the_explicit_csrf_check` |
+| M5 | Sin `no-store` en el 200 | `test_a_valid_login_answers_200_with_only_the_stored_email`, `test_no_answer_can_be_stored_by_a_cache[200]` |
+| M6 | `SessionUserSerializer` como `ModelSerializer` con todos los campos | `test_the_success_carries_only_the_email_even_for_a_staff_account`, `test_serializers_are_explicit_white_lists[SessionUserSerializer-fields0]`, `test_the_session_component_has_a_nullable_user_with_only_the_email` y cinco más de la entrada que comparan el cuerpo exacto |
+| M7 | Devuelve el email recibido en lugar del guardado | `test_a_valid_login_answers_200_with_only_the_stored_email` |
+| M8 | `login()` antes que `flush()` | los cuatro casos de `test_a_previous_session_is_replaced`, `test_the_new_session_belongs_to_the_account`, `test_who_am_i_returns_the_email_after_logging_in` y tres más |
+| M9 | `max_bytes=LOGIN_MAX_BYTES + 1` | `test_a_body_of_4096_bytes_is_read_and_one_of_4097_is_too_large` |
+| M10 | Sin `http_method_names` | los seis casos de `test_every_other_method_gets_405_with_allow_post`, `test_a_preflight_from_another_origin_gets_405_without_cross_origin_headers` |
+| M11 | Otro `operation_id` | `test_the_login_is_a_post_with_its_operation_and_tag` |
+| M12 | Sin `LOGIN_COOKIES` en los parámetros del esquema | `test_the_login_success_documents_the_cookies_it_sets` |
+| M13 | Otro valor de `CREDENTIALS_INVALID` | los 60 casos de `test_every_wrong_credential_gets_the_same_answer` y `test_a_body_of_4096_bytes_is_read_and_one_of_4097_is_too_large` |
+| M14 | `rotate_token(http_request)` en la rama de fallo | los tres casos de `test_a_failed_login_touches_neither_the_session_nor_the_cookies` |
+
+### Cookie de sesión con nulos (Desviación 2 del plan)
+- Con una cookie `sessionid` de 8 nulos escritos con escape octal y las credenciales correctas, la entrada responde 500: `_open_session` llama a `flush()`, que borra por esa clave (`django/contrib/sessions/backends/db.py`, `delete`), y PostgreSQL lo rechaza (`DataError: PostgreSQL text fields cannot contain NUL (0x00) bytes`). El test `test_a_session_cookie_with_null_characters_gives_a_server_error_on_success` fija el 500 y que no queda ninguna sesión.
+- La salida (`POST /api/v1/auth/logout/`) y «quién soy» (`GET /api/v1/auth/session/`) de la 009 también dan 500 con esa cookie, sin credenciales: comprobado con un test temporal sobre la BD de test, creado y borrado en la misma orden.
+- Riesgo aceptado en la spec (`73ce3cf`), con su corrección prevista: validar también el alfabeto de la clave de sesión.
+
+### Puntos de «Lo que esta lectura no cubre» resueltos en esta tarea
+- Cookies que escriben o borran `SessionMiddleware` y `CsrfViewMiddleware`: con las cookies bien formadas, un fallo no envía ningún `Set-Cookie`; con un `sessionid` de menos de 8 caracteres o una clave desconocida, la respuesta es idéntica para todas las causas de RF-2.
+- Cookie `sessionid` con nulos por escape octal: confirmada la hipótesis (500 en `flush()`).
+- drf-spectacular: `LoginRequest` y `LoginError` pasan `--fail-on-warn`.
+- `update_last_login` es el único receptor de `user_logged_in` (`django/contrib/auth/apps.py:28`, sin otros en `apps/` ni `config/`); la entrada escribe `last_login`.
+
+### Desviaciones y añadidos respecto del plan
+- **`minLength: 1` en el contrato**: `LoginRequest` publica `email` y `password` obligatorios y nulables, y drf-spectacular añade `minLength: 1` porque `CharField` no admite cadena vacía, igual que en `RegistrationRequest`. El servidor acepta `""` y responde `credentials_invalid` (RF-2), lo que fijan los tests.
+- **`@sensitive_variables("fields")` pasa a la T6**: entra en `LoginView.post` con su test (informe de error con `DEBUG=False`) y su mutación. En la T5, el cuerpo leído va directamente a `read_text_fields`, sin una variable propia.
+- **M10 cambiada**: añadir `"get"` a `http_method_names` sin un manejador seguiría dando 405 con `Allow: POST`, y la mutación sobreviviría por construcción; se quita `http_method_names`, lo que deja pasar OPTIONS y el resto.
+- **`test_a_failed_login_touches_neither_the_session_nor_the_cookies` reforzado**: con las cookies bien formadas, un fallo no envía ningún `Set-Cookie`, tampoco el de `csrftoken`; lo mata M14.
+- **Añadido**: las mutaciones M7 a M14 y los casos de 4096 y 4097 bytes, sesión caducada, `last_login` e `is_active`/`next` ignorados.
+
+### Nota para la T10
+La /sdd-change de la 009 (validar también el alfabeto de la clave de sesión: 32 caracteres de [a-z0-9]) va a «Próximos pasos» de MEMORY.md, para hacerla al cerrar la 015.
