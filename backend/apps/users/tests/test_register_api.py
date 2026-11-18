@@ -15,7 +15,7 @@ from django.db import connection
 
 from apps.users import views
 from apps.users.models import User
-from apps.users.tests.helpers import assert_no_store
+from apps.users.tests.helpers import Clock, assert_no_store
 from apps.users.throttling import RegistrationThrottle
 from apps.users.views import public_field_errors
 
@@ -534,14 +534,6 @@ def test_the_body_is_not_read_before_the_csrf_check(csrf_client):
 
 
 # --- Límite sobre el endpoint real --------------------------------------------
-
-
-class Clock:
-    def __init__(self):
-        self.now = 1000.0
-
-    def __call__(self):
-        return self.now
 
 
 @pytest.fixture

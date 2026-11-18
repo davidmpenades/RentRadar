@@ -6,6 +6,7 @@ from django.test import RequestFactory
 from rest_framework.request import Request
 
 from apps.users.models import User
+from apps.users.tests.helpers import Clock
 from apps.users.throttling import RegistrationThrottle, ip_bucket
 
 PATH = "/register-like/"
@@ -21,17 +22,6 @@ IP = "203.0.113.7"
 @pytest.fixture(autouse=True)
 def test_urls(settings):
     settings.ROOT_URLCONF = "apps.users.tests.throttle_urls"
-
-
-class Clock:
-    def __init__(self):
-        self.now = 1000.0
-
-    def __call__(self):
-        return self.now
-
-    def advance(self, seconds):
-        self.now += seconds
 
 
 @pytest.fixture
