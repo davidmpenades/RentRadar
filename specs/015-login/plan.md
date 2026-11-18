@@ -188,7 +188,7 @@ Los de «Riesgos aceptados» de la spec no se repiten. Propios del plan:
 | La comprobación en navegador escribe en la BD de desarrollo (registro, `last_login`) | Solo con OK expreso del usuario en ese momento, con `@example.com`; el límite del par se prueba el último; repetirlo exige reiniciar el backend, también con OK |
 | Expulsión LRU por llenado del almacén | Aceptada en la spec; D7 reduce la expulsión de golpe |
 | Otra web agota el límite por IP desde el navegador de la víctima con POST rechazados por CSRF | Riesgo aceptado en la spec (T1), para la 011; el límite del par no se ve afectado |
-| Un 500 con `DEBUG` mostraría el email y la contraseña en la página técnica | `@sensitive_variables` tapa las variables de `check_credentials` y `LoginView.post`, con test; otras funciones (lectura del cuerpo, `authenticate`, el hasher) pueden mostrarlas en la página técnica con `DEBUG`, que solo se usa en desarrollo |
+| Un 500 con `DEBUG` mostraría el email y la contraseña en la página técnica | `@sensitive_variables` tapa las variables de `check_credentials` y `LoginView.post`, con test; `django.contrib.auth.authenticate` ya tapa `credentials`; otras funciones (lectura del cuerpo, `ModelBackend.authenticate` con `username` y `password`, el hasher) pueden mostrarlas en la página técnica con `DEBUG`, que solo se usa en desarrollo |
 | Una actualización de Django cambia el recuento de hashes de `ModelBackend` | El test de recuento de la T4 falla y lo detecta (D1) |
 
 ## Estrategia de tests
@@ -230,7 +230,45 @@ Cada una sobre una copia del fichero, con sha256 antes y después y restauració
 ### Comprobaciones en el contenedor (cada una con OK del usuario)
 Las lanza el usuario o se lanzan con su OK en ese momento; un implementer nunca levanta, para ni reinicia el stack. Las dos órdenes de lectura van al principio de la sesión siguiente, antes de `/sdd-tasks`; si alguna contradice el plan, el plan se corrige en su propio commit antes de las tareas.
 - Versiones, sin BD: `docker compose run --rm --no-deps -e DB_HOST=db-inexistente.invalid --entrypoint "" backend python -c "import django, rest_framework, drf_spectacular; print(django.get_version(), rest_framework.VERSION, drf_spectacular.__version__)"`.
-- Código de Django y DRF que el plan supone, sin BD (antes de T2 y T4): `docker compose run --rm --no-deps -e DB_HOST=db-inexistente.invalid --entrypoint "" backend python -c "import inspect; from django.contrib.auth import hashers, backends; from django.contrib.sessions.backends.base import SessionBase; from django.core.cache.backends.locmem import LocMemCache; from rest_framework.throttling import BaseThrottle, SimpleRateThrottle; from rest_framework.views import APIView; from django.utils.crypto import salted_hmac; [print(inspect.getsource(o)) for o in (hashers.verify_password, backends.ModelBackend.authenticate, SessionBase.is_empty, SessionBase._validate_session_key, LocMemCache._cull, BaseThrottle.get_ident, SimpleRateThrottle.wait, APIView.dispatch, salted_hmac)]"`.
+- Código de Django y DRF que el plan supone, sin BD (antes de T2 y T4), leído con `ast` sin importar Django (importar `django.contrib.auth.backends` carga los modelos y, sin ajustes, falla con `ImproperlyConfigured`), con los números de línea del fichero fuente y la salida en un temporal fuera del repo:
+
+```
+docker compose run --rm -T --no-deps -e DB_HOST=db-inexistente.invalid --entrypoint "" backend python - > "$CLAUDE_JOB_DIR/tmp/getsource.txt" 2>&1 <<'EOF'
+import ast, pathlib, django, rest_framework
+D = pathlib.Path(django.__file__).parent
+R = pathlib.Path(rest_framework.__file__).parent
+TARGETS = [
+    (D / "contrib/auth/hashers.py", "verify_password"),
+    (D / "contrib/auth/hashers.py", "check_password"),
+    (D / "contrib/auth/hashers.py", "make_password"),
+    (D / "contrib/auth/backends.py", "ModelBackend.authenticate"),
+    (D / "contrib/auth/backends.py", "ModelBackend.user_can_authenticate"),
+    (D / "contrib/auth/base_user.py", "AbstractBaseUser.set_password"),
+    (D / "contrib/auth/base_user.py", "AbstractBaseUser.check_password"),
+    (D / "contrib/auth/__init__.py", "authenticate"),
+    (D / "contrib/auth/__init__.py", "login"),
+    (D / "contrib/sessions/backends/base.py", "SessionBase.is_empty"),
+    (D / "contrib/sessions/backends/base.py", "SessionBase._validate_session_key"),
+    (D / "core/cache/backends/locmem.py", "LocMemCache._cull"),
+    (D / "utils/crypto.py", "salted_hmac"),
+    (R / "throttling.py", "BaseThrottle.get_ident"),
+    (R / "throttling.py", "SimpleRateThrottle.wait"),
+    (R / "views.py", "APIView.dispatch"),
+]
+for path, name in TARGETS:
+    lines = path.read_text().splitlines()
+    nodes = ast.parse("\n".join(lines)).body
+    for part in name.split("."):
+        node = next(n for n in nodes if isinstance(n, (ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef)) and n.name == part)
+        nodes = node.body
+    start = min([node.lineno] + [d.lineno for d in node.decorator_list])
+    print(f"== {str(path).split('site-packages/')[1]}:{start}-{node.end_lineno} {name}")
+    for i in range(start, node.end_lineno + 1):
+        print(f"{i:5} {lines[i - 1]}")
+    print()
+EOF
+```
+
 - Comportamiento fijado por tests en la BD de test, con el stack ya levantado por el usuario: `docker compose exec backend pytest -q apps/users/tests/test_login_credentials.py` (T4), `docker compose exec backend pytest -q apps/users/tests/test_login_api.py` (T5, T6) y la suite completa en cada tarea. Si un test muestra que Django se comporta distinto de lo que supone el plan, el implementer para y avisa.
 - Regeneración del contrato (T5): la orden de «Descripción OpenAPI».
 
@@ -244,7 +282,7 @@ Las lanza el usuario o se lanzan con su OK en ese momento; un implementer nunca 
 - `authenticate` tapa la contraseña en `user_login_failed` y deja el email.
 - `LocMemCache._cull` expulsa por LRU `len // CULL_FREQUENCY` entradas al llegar a `MAX_ENTRIES`, y `LOCATION` separa los diccionarios.
 - `Throttled(wait)` redondea hacia arriba; una `property` `cache` en una subclase de `SimpleRateThrottle` sustituye al atributo de clase.
-- `BaseThrottle.get_ident` lee `NUM_PROXIES` de los ajustes de DRF (no de un atributo de la clase), y `APIView.dispatch` decide el 405 después de `initial()`, así que un método no admitido no pasa por la comprobación CSRF del mixin.
+- `BaseThrottle.get_ident` lee `NUM_PROXIES` de los ajustes de DRF (no de un atributo de la clase), y `APIView.dispatch` decide el 405 después de `initial()`, así que los límites, que se aplican en `super().initial()`, ganan al 405 y lo cuentan; un método no admitido no pasa por la comprobación CSRF por la condición del mixin (`backend/apps/core/csrf.py:25-29`), no por `dispatch`.
 - `sensitive_variables` se puede aplicar a un método de una `APIView` y la página técnica de Django oculta esas variables.
 - drf-spectacular 0.30.0: `component_name="Login"` produce `LoginRequest` con `COMPONENT_SPLIT_REQUEST`; `LoginError` pasa `--fail-on-warn`.
 - La cookie `sessionid="\000…"` llega desescapada con nulos (Desviación 2).
