@@ -52,7 +52,7 @@ Reglas comunes:
   - Commit: `feat(users): add login failure limit per ip and email`
   - Hecho cuando: los tests fallan primero y luego pasan; un script (que busca el punto de código 0xA8 sin escribir el carácter) comprueba que los ficheros de test tocados no contienen U+00A8 literal, que va como escape; suite, ruff y migraciones en verde; mutaciones registradas en `validation.md`.
 
-- [ ] **T4. Comprobación de credenciales.** RF-1, RF-2, RNF Igualdad de tiempo, Señal de salida, Privacidad y logs
+- [x] **T4. Comprobación de credenciales.** RF-1, RF-2, RNF Igualdad de tiempo, Señal de salida, Privacidad y logs
   - Ficheros:
     - Crea `backend/apps/users/login.py`: `is_queryable_email`, `is_checkable_password` y `check_credentials` (con `@sensitive_variables("email", "password")`; el email crudo va a `authenticate`).
     - Crea `backend/apps/users/tests/test_login_credentials.py`.
