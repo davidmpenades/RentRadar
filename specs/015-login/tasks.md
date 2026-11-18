@@ -72,7 +72,7 @@ Reglas comunes:
   - Commit: `feat(users): add login credential check`
   - Hecho cuando: los tests fallan primero y luego pasan (el de la señal de salida, anotado como caracterización con su mutación); un script (que busca el punto de código 0xA8 sin escribir el carácter) comprueba que los ficheros de test tocados no contienen U+00A8 literal, que se construye con `chr(0xA8)`; los casos existentes de `test_logout_api.py` no cambian; suite, ruff y migraciones en verde.
 
-- [ ] **T5. Endpoint de entrada (sin límites).** RF-1, RF-2, RF-5, RF-6, RNF Permisos, Respuestas mínimas, Contrato
+- [x] **T5. Endpoint de entrada (sin límites).** RF-1, RF-2, RF-5, RF-6, RNF Permisos, Respuestas mínimas, Contrato
   - Ficheros:
     - `backend/apps/users/serializers.py`: `LoginRequestSerializer` (`component_name="Login"`) y `LoginErrorSerializer`.
     - `backend/apps/users/views.py`: `LoginView` (`CsrfEnforcedMixin`, sin autenticación, `AllowAny`, solo POST, `@sensitive_variables` en `post`), `LOGIN_MAX_BYTES = 4096`, `LOGIN_COOKIES` y `_open_session` (`flush()` y `login()` en `transaction.atomic()`).
