@@ -1,6 +1,6 @@
 # Tareas 015 — Entrada
 Spec: specs/015-login/spec.md · Plan: specs/015-login/plan.md
-Máximo 10 tareas: hay 10, en orden lineal de dependencia (T1 → … → T10), con el corte del plan. La T1 lleva un commit por spec y la T10 cuatro; la T2 va precedida del commit que crea `validation.md`; la T6 y la T8 llevan dos commits; la T5 puede llevar un commit más de documentación (Desviación 2 del plan).
+Máximo 10 tareas: hay 10, en orden lineal de dependencia (T1 → … → T10), con el corte del plan. La T1 lleva un commit por spec y la T10 cuatro; la T2 va precedida del commit que crea `validation.md`; la T5, la T6 y la T8 llevan dos commits; la T5 puede llevar además un commit de documentación (Desviación 2 del plan).
 
 Reglas comunes:
 - Cada commit de código (T2 a T9) es atómico y deja en verde pytest, `ruff check` y `ruff format --check`, la comprobación de migraciones, el desfase de `openapi.json`, vitest, build, eslint de los ficheros tocados y `api:check`. Los tests se escriben primero y fallan por la razón que indica cada tarea; el fallo se anota en `validation.md`.
@@ -54,9 +54,8 @@ Reglas comunes:
 
 - [ ] **T4. Comprobación de credenciales.** RF-1, RF-2, RNF Igualdad de tiempo, Señal de salida, Privacidad y logs
   - Ficheros:
-    - Crea `backend/apps/users/login.py`: `CREDENTIALS_INVALID`, `is_queryable_email`, `is_checkable_password` y `check_credentials` (con `@sensitive_variables("email", "password")`; el email crudo va a `authenticate`).
+    - Crea `backend/apps/users/login.py`: `is_queryable_email`, `is_checkable_password` y `check_credentials` (con `@sensitive_variables("email", "password")`; el email crudo va a `authenticate`).
     - Crea `backend/apps/users/tests/test_login_credentials.py`.
-    - `backend/apps/users/tests/helpers.py`: `untouchable_session_store`, `stored_sessions` y `cross_origin_headers` (tercer uso), movidos desde `test_register_api.py` y `test_logout_api.py`, que pasan a importarlos sin cambiar sus casos.
     - `backend/apps/users/tests/test_logout_api.py`: la salida no emite `user_logged_out`.
     - `validation.md`.
   - Tests (primero; fallan porque no existe `apps.users.login`, salvo el de la señal de salida, que es de caracterización y pasa al escribirlo: su valor lo da la mutación con `logout()`):
@@ -71,12 +70,14 @@ Reglas comunes:
   - Pruebas de mecanismo: quitar el tope de 128; pasar `""` a `authenticate`; consultar la cuenta antes y no llamar a `authenticate` sin ella; pasar el email ya normalizado; quitar el rechazo del sustituto; `django.contrib.auth.logout()` en `LogoutView`; quitar `@sensitive_variables`.
   - OK necesario: al empezar la tarea, para los `exec` de pytest y ruff; orden a orden, levantar el stack si está parado.
   - Commit: `feat(users): add login credential check`
-  - Hecho cuando: los tests fallan primero y luego pasan (el de la señal de salida, anotado como caracterización con su mutación); un script (que busca el punto de código 0xA8 sin escribir el carácter) comprueba que los ficheros de test tocados no contienen U+00A8 literal, que va como escape; los tests de registro y salida pasan sin cambios en sus casos; suite, ruff y migraciones en verde.
+  - Hecho cuando: los tests fallan primero y luego pasan (el de la señal de salida, anotado como caracterización con su mutación); un script (que busca el punto de código 0xA8 sin escribir el carácter) comprueba que los ficheros de test tocados no contienen U+00A8 literal, que va como escape; los casos existentes de `test_logout_api.py` no cambian; suite, ruff y migraciones en verde.
 
 - [ ] **T5. Endpoint de entrada (sin límites).** RF-1, RF-2, RF-5, RF-6, RNF Permisos, Respuestas mínimas, Contrato
   - Ficheros:
     - `backend/apps/users/serializers.py`: `LoginRequestSerializer` (`component_name="Login"`) y `LoginErrorSerializer`.
     - `backend/apps/users/views.py`: `LoginView` (`CsrfEnforcedMixin`, sin autenticación, `AllowAny`, solo POST, `@sensitive_variables` en `post`), `LOGIN_MAX_BYTES = 4096`, `LOGIN_COOKIES` y `_open_session` (`flush()` y `login()` en `transaction.atomic()`).
+    - `backend/apps/users/login.py`: `CREDENTIALS_INVALID`, en el `feat`, que es donde la usa `LoginView`.
+    - Antes del `feat`, un commit aparte, sin cambiar casos: `backend/apps/users/tests/helpers.py` recibe `untouchable_session_store`, `stored_sessions` y `cross_origin_headers` (tercer uso), movidos desde `test_register_api.py` y `test_logout_api.py`, que pasan a importarlos; `test_login_api.py` los importa desde el `feat`.
     - `backend/apps/users/urls.py`: `auth/login/` con `name="auth-login"`.
     - Crea `backend/apps/users/tests/test_login_api.py`; modifica `test_auth_contract.py` y `backend/apps/core/tests/test_csrf_guard.py`.
     - Regenera `backend/openapi.json` y `frontend/src/api/schema.gen.ts` (orden de «Descripción OpenAPI» del plan y `npm run api:gen`), en el mismo commit que la vista.
@@ -90,8 +91,8 @@ Reglas comunes:
     - Si la cookie con nulos da 500, el test fija ese comportamiento y la tarea sigue (Desviación 2, opción A).
   - Pruebas de mecanismo: otro código o estado para la cuenta desactivada; quitar `flush()`; leer `request.session` en el fallo; quitar `CsrfEnforcedMixin`; quitar `no-store` del 200; `ModelSerializer` con todos los campos.
   - OK necesario: al empezar la tarea, para los `exec` de pytest y ruff; orden a orden, levantar el stack si está parado y la regeneración del contrato (el `docker compose run` de `spectacular`), en el momento de lanzarla. El cambio de contrato está aprobado en la spec.
-  - Commits: `feat(users): add login endpoint`; si la cookie con nulos da 500, además `docs(spec-015): accept malformed session cookie risk` (riesgo aceptado que también afecta a la 009, para la 011).
-  - Hecho cuando: los tests fallan primero y luego pasan; `spectacular --validate --fail-on-warn`, el diff de `openapi.json` regenerado, `npm run api:check` y `npm run build` en verde; suite, ruff y migraciones en verde.
+  - Commits, en este orden: `test(users): share session helpers` y `feat(users): add login endpoint`; si la cookie con nulos da 500, además `docs(spec-015): accept malformed session cookie risk` (riesgo aceptado que también afecta a la 009, para la 011).
+  - Hecho cuando: tras el primer commit, la suite, ruff y las migraciones siguen en verde con los mismos casos; los tests del `feat` fallan primero y luego pasan; `spectacular --validate --fail-on-warn`, el diff de `openapi.json` regenerado, `npm run api:check` y `npm run build` en verde; suite, ruff y migraciones en verde.
 
 - [ ] **T6. Límites conectados al endpoint, orden y fugas.** RF-3, RF-4, RF-5, RF-6, RNF Orden de comprobaciones, Privacidad y logs
   - Ficheros: `backend/apps/users/views.py` (`throttle_classes = [LoginIpThrottle]`; en `post`, tras leer el cuerpo, `LoginFailureLimit.wait` → `Throttled`, y `record_failure` tras un fallo de credenciales); `test_login_api.py`; `validation.md`.
