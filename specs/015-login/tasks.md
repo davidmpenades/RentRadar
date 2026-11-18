@@ -42,7 +42,7 @@ Reglas comunes:
   - Commits, en este orden: `docs(spec-015): record container checks` (solo `validation.md` con la sección de las comprobaciones en el contenedor) y `feat(users): add login ip limit with its own cache`.
   - Hecho cuando: el primer commit solo contiene `validation.md` con esa sección; los tests nuevos fallan primero por la razón indicada y luego pasan; `openapi.json` no cambia; la suite entera, ruff y la comprobación de migraciones en verde; `validation.md` tiene la sección de la T2 con sus mutaciones.
 
-- [ ] **T3. Clave del par y límite de fallos por IP y email.** RF-4, RNF Privacidad y logs
+- [x] **T3. Clave del par y límite de fallos por IP y email.** RF-4, RNF Privacidad y logs
   - Ficheros: `backend/apps/users/throttling.py` (`LOGIN_PAIR_KEY_SALT`, `login_pair_key`, `LoginFailureLimit` con `wait` y `record_failure`, sin `reset`); `test_login_throttling.py`; `validation.md`.
   - Tests (primero; fallan porque no existen `login_pair_key` ni `LoginFailureLimit`):
     - La clave no contiene el email ni una marca; `"  Ana@Correo.ES "` y `"ana@correo.es"` dan la misma clave; `None`, ausente y `""` la comparten; `chr(0xD800)` y `"\x00"` dan clave sin error y distinta de otra; `override_settings(SECRET_KEY=…)` la cambia; otro cubo, otra clave; con un email que empieza por U+00A8 (escrito en el test con escape), la clave es igual a un HMAC calculado en el test sobre una sola normalización y distinta de la de dos normalizaciones; `client_bucket` ignora `X-Forwarded-For`; las claves `login_pair:` y `throttle_login_ip_` no se solapan.
