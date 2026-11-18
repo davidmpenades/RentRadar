@@ -261,3 +261,75 @@ Una sola ejecución sobre el código del commit `969377c`, con las 14 mutaciones
 
 ### Nota para la T10
 La /sdd-change de la 009 (validar también el alfabeto de la clave de sesión: 32 caracteres de [a-z0-9]) va a «Próximos pasos» de MEMORY.md, para hacerla al cerrar la 015.
+
+## T6. Límites conectados al endpoint, orden y fugas
+Fecha: 2026-11-18 · Commits: `f925eb6` (`assert_throttled` a `helpers.py`, sin cambiar casos) y `5b81f3b` (`feat`: `throttle_classes = [LoginIpThrottle]`, límite del par en `post` tras leer el cuerpo, `@sensitive_variables("fields")` y los tests).
+
+### Traslado de `assert_throttled` (`f925eb6`)
+- `test_throttling.py` y `test_login_throttling.py` importan la común; `test_register_api.py` la llama desde `assert_register_throttled`, que añade sus claves exactas (`{"code", "retry_after"}`) y `no-store`.
+- `pytest --collect-only` de los tres ficheros: los mismos 220 identificadores antes y después (`diff` vacío).
+- Suite entera: `2460 passed`, como tras la T5. Ruff, migraciones, desfase de `openapi.json` (`exit=0`, sin `diff`), `api:check`, vitest y build en verde.
+
+### Rojo, antes del código
+`apps/users/tests/test_login_api.py` sobre la vista de la T5: `48 failed, 143 passed`. Todos los fallos se deben a que falta el límite o `@sensitive_variables`:
+- RF-3 (10): 200, 403 o 405 donde se espera 429 (`assert response.status_code == 429`); en la 21.ª entrada, la petición llega a `check_credentials`, que está prohibido, y da 500.
+- RF-4 (13): 200 o 400 donde se espera 429; en los 5 fallos con la contraseña correcta, la petición llega a `check_credentials`, que está prohibido.
+- RF-5 (6): la entrada con el límite superado llega a la sesión (`AssertionError: session.flush`).
+- RF-6 (11): la condición previa de que los dos pares estén bloqueados falla (`assert None == 900`).
+- Casos 429 añadidos a los tests de la T5 (6): `assert 200 == 429` y cuerpo `{'user'}` en lugar de `{'code', 'retry_after'}`.
+- Fugas (2): sin ningún 429 en la secuencia (`At index 6 diff: 200 != 429`); `fields` visible en el informe de error (`{'email': 'zq7x.ana@correo.es', …} == '********************'`).
+
+Pasan ya en rojo, porque sin límite también dan 200 o no anotan nada; son de caracterización respecto de la T5 y los valida su mutación:
+- `test_a_success_is_not_counted_as_a_failure` (dos aciertos tras cuatro fallos): lo valida M1.
+- `test_the_same_email_from_another_network_can_log_in` (`ipv4`, `ipv6-other-64`): lo valida M13.
+- `test_no_rejection_before_the_credentials_records_a_failure` (13 casos): lo valida M7.
+
+### Verde, después del código
+- `test_login_api.py`: `191 passed` (los 127 de la T5, sin cambios, y 64 nuevos).
+- Suite entera: `2524 passed` (64 nuevos). `test_migrations.py`: `1 passed`.
+- `ruff check .`: `All checks passed!`. `ruff format --check .`: `149 files already formatted`.
+- Ningún fichero tocado contiene U+00A8 literal ni un nulo literal: el nulo y el sustituto se construyen con `chr()`.
+
+### Contrato y frontend
+- `openapi.json` no cambia: la orden de la CI, en un contenedor suelto con `--no-deps -e DB_HOST=db-inexistente.invalid`, termina con `exit=0` y sin ninguna línea de `diff`. `@sensitive_variables` va debajo de `@extend_schema`, y la anotación del esquema se conserva.
+- Frontend, en el host: `npm run api:check` con `exit=0`; `npm test` (vitest) con `34 passed` ficheros y `1174 passed` tests; `npm run build` con `exit=0`. La T6 no toca el frontend.
+
+### Pruebas de mecanismo
+Una sola ejecución sobre el código del commit `5b81f3b`, con las 13 mutaciones. Cada una se hizo sobre `views.py`, `api.py` o `throttling.py` con copia previa fuera del repo y fuera de `/tmp`, sha256 antes y después y restauración desde la copia. Los hashes coincidieron y son los de los ficheros del commit, comprobados con `git show 5b81f3b:<ruta> | sha256sum`: `views.py` `4be86758dde5…`, `api.py` `8102e9b69355…`, `throttling.py` `9d34caf3605e…`. Se ejecutaron `test_login_api.py`, `test_register_api.py`, `test_throttling.py` y `test_login_throttling.py`. Mueren las 13. M1 a M9 son las del plan (plan.md, línea 227) y M10 la añade tasks.md; M11 llega con @sensitive_variables, movido de la T5 a esta tarea; M13 repite la de la T3, cuyo plan ya citaba un test de la T6; M12 se añade en esta tarea.
+
+| Mutación | Cambio | Tests que la matan |
+|---|---|---|
+| M1 | Anota el acierto como fallo | `test_a_success_is_not_counted_as_a_failure`, `test_a_success_does_not_reset_the_failures`, `test_the_twenty_first_login_from_one_ip_is_throttled_before_the_credentials`, `test_a_different_x_forwarded_for_on_each_request_does_not_avoid_the_ip_limit` y `test_no_answer_log_or_limit_store_contains_the_email_or_the_password` |
+| M2 | Borra los fallos del par al acertar | `test_a_success_does_not_reset_the_failures` |
+| M3 | Anota un fallo en cada rechazo del par | `test_pair_rejections_are_not_counted_as_failures` y `test_fifteen_minutes_after_the_first_failure_the_account_can_log_in` |
+| M4 | Comprueba el par después de `check_credentials` | `test_five_failures_throttle_the_correct_password_without_checking_it` |
+| M5 | `check_credentials(http_request, email=None, password=None)` en la primera línea de `post` | `test_five_failures_throttle_the_correct_password_without_checking_it`, los 8 casos de cuerpo mal formado de `test_with_the_pair_blocked_each_earlier_rejection_gets_its_own_error`, los 8 de `test_a_malformed_or_too_large_body_is_rejected_with_its_general_code`, `test_a_body_that_is_not_json_is_an_invalid_request` y `test_the_error_report_hides_the_body_fields_in_the_login_view` |
+| M6 | El cuerpo se lee una vez en `initial` y el par se comprueba allí, antes de los límites y del CSRF; `post` usa esos campos sin comprobar el par | `test_a_pair_rejection_counts_towards_the_ip_limit`, `test_the_body_is_not_read_before_the_csrf_check`, `test_with_the_pair_blocked_each_earlier_rejection_gets_its_own_error[no-csrf-header]` y `[foreign-origin]` y `test_no_answer_log_or_limit_store_contains_the_email_or_the_password` |
+| M7 | `handle_exception` propio que, salvo en un 429, anota un fallo con la clave del email ausente | los 13 casos de `test_no_rejection_before_the_credentials_records_a_failure`, los 11 de `test_with_the_pair_blocked_each_earlier_rejection_gets_its_own_error` y `test_failures_with_an_email_that_cannot_be_queried_count[absent]`, `[null]`, `[empty]` y `[blank]` |
+| M8 | `throttle_classes = []` | `test_the_twenty_first_login_from_one_ip_is_throttled_before_the_credentials`, `test_a_pair_rejection_counts_towards_the_ip_limit`, los 7 casos de `test_once_the_ip_limit_is_reached_every_method_gets_429`, `test_a_different_x_forwarded_for_on_each_request_does_not_avoid_the_ip_limit`, los 3 casos `ip-*` de `test_a_throttled_login_touches_neither_the_session_nor_the_cookies`, `[429-ip-limit]` de los tests de caché y origen cruzado, `test_errors_carry_only_their_planned_keys[ip-throttled]` y `test_no_answer_log_or_limit_store_contains_the_email_or_the_password` |
+| M9 | Sin `no-store` en los 429 (`api_exception_handler`, `api.py`) | `test_no_answer_can_be_stored_by_a_cache[429-ip-limit]` y `[429-pair-limit]` de la entrada; en el registro, `test_no_answer_can_be_stored_by_a_cache[429]`, los 7 casos de `test_ten_rejected_requests_use_up_the_quota_of_the_real_endpoint` y `test_ten_registrations_use_up_the_quota_and_the_eleventh_creates_nothing` |
+| M10 | `client_bucket` toma la IP de `X-Forwarded-For` (`throttling.py`) | `test_a_different_x_forwarded_for_on_each_request_does_not_avoid_the_ip_limit` y `…_the_pair_limit`; en `test_login_throttling.py`, `test_x_forwarded_for_is_ignored`, `test_client_bucket_ignores_x_forwarded_for` y `test_the_pair_key_ignores_x_forwarded_for` |
+| M11 | Sin `@sensitive_variables("fields")` | `test_the_error_report_hides_the_body_fields_in_the_login_view` |
+| M12 | `logger.warning` con el email en la rama de fallo | `test_no_answer_log_or_limit_store_contains_the_email_or_the_password` |
+| M13 | Clave del par sin la red (`throttling.py`) | `test_the_same_email_from_another_network_can_log_in[ipv4]` y `[ipv6-other-64]`; en `test_login_throttling.py`, `test_another_bucket_gives_another_key` y `test_the_key_hashes_a_single_normalization_of_the_raw_email`. `test_two_addresses_of_the_same_ipv6_64_share_the_pair_limit` no la mata, como se espera |
+
+Con esta sección, `validation.md` reúne las mutaciones de T2 a T6: cada tarea tiene la suya en su apartado «Pruebas de mecanismo».
+
+### Puntos de «Lo que esta lectura no cubre» resueltos en esta tarea
+- `_clean_credentials` tapa la contraseña en `user_login_failed`: el receptor temporal recibe 5 señales, todas con `password` igual a `********************`.
+- `sensitive_variables` en un método de una `APIView`: con `DEBUG=False`, el informe de error muestra `fields` tapado en el marco de `LoginView.post`, filtrado por función y por fichero (el `post` del cliente de pruebas lleva el cuerpo en claro).
+- `retry_after` de los dos límites sobre el endpoint: 60 en el de IP y 900, 850 o 1 en el del par, según el historial.
+
+### Desviaciones y añadidos respecto del plan
+- **«Anotar el rechazo del par» (M3)**: no la mata «la espera no crece», porque con `history[4]` insertar el rechazo delante deja la misma espera. La matan `test_pair_rejections_are_not_counted_as_failures`, que sustituye a ese test, y `test_fifteen_minutes_after_the_first_failure_the_account_can_log_in`.
+- **«`check_credentials` antes del cuerpo» (M5)**: los tests de RF-3 no pueden matarla, porque el 429 por IP se decide en `initial()`, antes de `post`. La matan los de RF-4 y RF-6.
+- **«4 fallos, acierto y fallo»**: el 429 llega en la 7.ª petición, la siguiente al quinto fallo, no en el 6.º intento.
+- **`no-store` de los 429**: lo pone `api_exception_handler` para todos los errores, no la vista; M9 muta `api.py`, y también la matan los tests del registro.
+- **M4**: solo la mata `test_five_failures_throttle_the_correct_password_without_checking_it`. Con 7 fallos sembrados, la espera calculada tras `check_credentials` sigue siendo la de `history[4]` y el 429 se produce igual, antes de abrir la sesión.
+- **M6 reescrita**: en una primera versión, `initial` consumía el cuerpo y `post` lo releía vacío, y además seguía comprobando el par; todas las peticiones anotaban con la clave del email ausente y `test_a_pair_rejection_counts_towards_the_ip_limit` pasaba por casualidad. La versión registrada lee el cuerpo una sola vez y quita la comprobación de `post`.
+- **Fugas**: el cuerpo del 200 lleva el email de la cuenta por contrato, así que el test comprueba el cuerpo en los 20 rechazos, y las cabeceras y las cookies en todas las respuestas. El SQL con valores no llega al log porque la configuración real deja `django.db.backends` en INFO; el test lo fija como condición previa, igual que el del registro, en lugar de copiar `log_every_sql`.
+- **Rechazos previos con el par bloqueado**: el test cubre los 8 cuerpos mal formados, además de sin cabecera CSRF, origen ajeno (403 `csrf_failed`) y PUT (405 con `Allow: POST`), con `check_credentials` prohibido. Comprueba primero que los pares del email y del email ausente están bloqueados, y por eso falla en rojo.
+- **Caracterización**: `test_a_success_is_not_counted_as_a_failure`, `test_the_same_email_from_another_network_can_log_in` y `test_no_rejection_before_the_credentials_records_a_failure` pasan sobre la vista de la T5; los validan M1, M13 y M7.
+- **Reloj y ayudantes**: un solo `Clock`, autouse en `test_login_api.py`, sustituye el `timer` de `LoginIpThrottle` y de `LoginFailureLimit`, así que los 429 añadidos a los tests de la T5 no dependen de la hora real. `forbid_credential_checks` sale del fixture `credentials_never_checked` (tercer uso), sin cambiar su comportamiento.
+- **Registro de comprobaciones**: va en un commit de documentación aparte del `feat`, no dentro de él.
+- **Añadido**: la mutación M12 (email en un log).
