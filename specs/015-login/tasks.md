@@ -1,6 +1,6 @@
 # Tareas 015 — Entrada
 Spec: specs/015-login/spec.md · Plan: specs/015-login/plan.md
-Máximo 10 tareas: hay 10, en orden lineal de dependencia (T1 → … → T10), con el corte del plan. La T1 lleva un commit por spec y la T10 cuatro; la T2 va precedida del commit que crea `validation.md`; la T8 lleva dos commits; la T5 puede llevar un commit más de documentación (Desviación 2 del plan).
+Máximo 10 tareas: hay 10, en orden lineal de dependencia (T1 → … → T10), con el corte del plan. La T1 lleva un commit por spec y la T10 cuatro; la T2 va precedida del commit que crea `validation.md`; la T6 y la T8 llevan dos commits; la T5 puede llevar un commit más de documentación (Desviación 2 del plan).
 
 Reglas comunes:
 - Cada commit de código (T2 a T9) es atómico y deja en verde pytest, `ruff check` y `ruff format --check`, la comprobación de migraciones, el desfase de `openapi.json`, vitest, build, eslint de los ficheros tocados y `api:check`. Los tests se escriben primero y fallan por la razón que indica cada tarea; el fallo se anota en `validation.md`.
@@ -95,6 +95,7 @@ Reglas comunes:
 
 - [ ] **T6. Límites conectados al endpoint, orden y fugas.** RF-3, RF-4, RF-5, RF-6, RNF Orden de comprobaciones, Privacidad y logs
   - Ficheros: `backend/apps/users/views.py` (`throttle_classes = [LoginIpThrottle]`; en `post`, tras leer el cuerpo, `LoginFailureLimit.wait` → `Throttled`, y `record_failure` tras un fallo de credenciales); `test_login_api.py`; `validation.md`.
+  - Antes del `feat`, un commit aparte, sin cambiar casos, como con `Clock` en la T2: `backend/apps/users/tests/helpers.py` recibe `assert_throttled` (tercer uso), con la comprobación de forma común (429, `code` `throttled`, `retry_after` entero de al menos 1 y `Retry-After` igual) y devolviendo `retry_after`. Se mueve desde `test_throttling.py`; `test_login_throttling.py` la importa, y `test_register_api.py`, que añade sus claves exactas y `no-store`, la llama y completa esas dos aserciones. `test_login_api.py` la importa desde el `feat`. `post`, `fill_the_quota` y `COUNTED` siguen duplicados entre `test_throttling.py` y `test_login_throttling.py` mientras no aparezca una tercera copia.
   - Tests (primero; fallan sobre la vista de la T5 porque no hay ningún límite):
     - RF-3: 20 entradas correctas y la 21.ª con credenciales correctas → 429 sin sesión y sin llamar a `check_credentials`; un rechazo del par cuenta en RF-3; con el límite superado, cualquier método da 429; `X-Forwarded-For` distinto en cada petición no lo evita.
     - RF-4: 5 fallos y la contraseña correcta → 429 sin sesión y sin llamar a `check_credentials`; con 7 fallos sembrados para el par, `retry_after` de `history[4]`; a los 15 minutos del primer fallo, entra; 4 fallos, acierto y fallo → el 6.º intento da 429; 4 fallos, acierto y acierto → 200; un rechazo del par no anota un fallo; cuentan los fallos de emails no consultables; el mismo email desde otro /64 entra; dos IPv6 del mismo /64 comparten; `X-Forwarded-For` distinto no evita el límite.
@@ -102,8 +103,8 @@ Reglas comunes:
     - Fugas: email y contraseña centinela con una marca, `caplog` a DEBUG con `force_debug_cursor`; la marca no aparece en el log, en ninguna respuesta (200, 400 y los dos 429) ni en las claves y valores de `caches["login"]`; un receptor temporal de `user_login_failed` recibe la contraseña tapada; `LoginView.post` declara sus variables sensibles y el informe de error con `DEBUG` no muestra la marca.
   - Pruebas de mecanismo: anotar el acierto como fallo; reiniciar al acertar; anotar el rechazo del par; comprobar el par tras las credenciales; llamar a `check_credentials` antes del cuerpo y del par; comprobar el par en `initial()` antes de `super().initial()`; anotar fallos en los rechazos de RF-6; `throttle_classes = []`; quitar `no-store` de los 429; la IP desde `X-Forwarded-For`.
   - OK necesario: al empezar la tarea, para los `exec` de pytest y ruff; orden a orden, levantar el stack si está parado.
-  - Commit: `feat(users): rate limit the login endpoint`
-  - Hecho cuando: los tests fallan primero sobre la vista de la T5 y luego pasan; `openapi.json` no cambia; suite, ruff y migraciones en verde; `validation.md` reúne las mutaciones de T2 a T6.
+  - Commits, en este orden: `test(users): share assert_throttled` y `feat(users): rate limit the login endpoint`.
+  - Hecho cuando: tras el primer commit, la suite, ruff y las migraciones siguen en verde con los mismos casos; los tests del `feat` fallan primero sobre la vista de la T5 y luego pasan; `openapi.json` no cambia; suite, ruff y migraciones en verde; `validation.md` reúne las mutaciones de T2 a T6.
 
 - [ ] **T7. Entrada en el cliente de sesión.** RF-8
   - Ficheros: `frontend/src/api/session.ts` (`LOGIN_URL`, `LoginOutcome`, `login()`, `interpretLogin`, `isCredentialsInvalid`; extracción de `postWithin` y `retryOnceOnCsrf`, tercer uso, que pasan a usar el registro y la salida) y `session.test.ts`.
