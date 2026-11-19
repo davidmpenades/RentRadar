@@ -1,6 +1,6 @@
 # Tareas 009 — Registro, sesión y salida
 Spec: specs/009-auth/spec.md · Plan: specs/009-auth/plan.md
-Máximo 10 tareas: hay 10, porque la T5 se partió con la tarea de holgura en T5a (registro, URL, guarda del URLconf y contrato) y T5b («quién soy», salida y contrato).
+Máximo 10 tareas: hay 10 (T1 a T9), porque la T5 se partió con la tarea de holgura en T5a (registro, URL, guarda del URLconf y contrato) y T5b («quién soy», salida y contrato). Las del cambio de la clave de sesión, C1 a C3, se numeran aparte.
 Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfase de `openapi.json`, vitest, build, eslint de los ficheros tocados y `api:check`. El backend solo se prueba en el contenedor y nunca contra la BD de desarrollo. No hay migraciones.
 
 - [x] **T1. Ajustes de autenticación y base de errores de la API.** RF-2 (validadores), RF-4 y RF-6 (sesión de 14 días), RNF Lista pública sin cambios, Errores
@@ -109,3 +109,47 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
   - Se actualiza `docs/architecture.md` y se propone pasar la spec a «implementada».
   - Commit: `docs(spec-009): browser validation and architecture`
   - Hecho cuando: `validation.md` recorre RF-1 a RF-13 y los no funcionales con su test o su comprobación, reúne las mutaciones de T1 a T6 y termina con un veredicto; el `git diff` de `requirements*` y `package*.json` está vacío.
+
+## Cambio: clave de sesión
+Cambio posterior a la implementación (RF-14), con su plan en «Cambio: clave de sesión (RF-14)» de `plan.md`. Sus tareas se numeran aparte de T1 a T9. Cada una deja en verde lo mismo que las anteriores; sin migraciones, y `openapi.json` y el frontend no cambian. Los números de línea citados son los de 37cadc9.
+
+- [ ] **C1. Clave sin fila bien formada y compartida.** RF-14 (preparación), RF-5, RF-6
+  - Solo tests, con todo en verde, antes de cualquier rojo.
+  - `KEY_WITHOUT_ROW = "0123456789abcdefghijklmnopqrstuv"` en `apps/core/tests/helpers.py`, que se crea, con el comentario «Bien formada (32 caracteres de a-z y 0-9) y sin fila en la BD». Lo importan `test_session_api.py`, `test_logout_api.py` y `test_login_api.py`, que pierden su definición (l.23-24, 31-32 y 57-58).
+  - `test_the_key_without_row_is_well_formed_and_has_no_row` en `test_session_api.py`: `re.fullmatch` y ninguna fila.
+  - Ids `shorter-than-8` → `too-short` (`test_session_api.py:96` y `:115`, `test_logout_api.py:171`). El comentario de `test_session_api.py:77` pasa a «Mal formada: más corta que una clave de sesión».
+  - Ningún otro valor de cookie cambia (clasificación por intención en el blast radius del cambio, en `plan.md`).
+  - Commit: `test(users): share a well-formed session key without row`
+  - Hecho cuando: toda la suite, ruff y la comprobación de migraciones están en verde; `KEY_WITHOUT_ROW` se define solo en `apps/core/tests/helpers.py`; el número de tests recogidos sube en uno (el de la precondición); el diff solo toca `apps/core/tests/helpers.py` (nuevo) y los tres ficheros de test.
+
+- [ ] **C2. Motor de sesión que ignora las claves mal formadas.** RF-14, RF-1, RF-2, RF-5, RF-6, RF-7, RNF Lista pública sin cambios
+  - Primero los tests:
+    - en `apps/core/tests/helpers.py`, `OCTAL_NULL` (traído de `test_login_api.py:55-56`), `raw_cookie_header`, `MALFORMED_SESSION_VALUES` y `session_queries_with`;
+    - los de las cuatro operaciones (`test_register_api.py`, `test_login_api.py`, `test_logout_api.py` y `test_session_api.py`), con la inversión de `test_a_session_cookie_with_null_characters_gives_a_server_error_on_success` (`test_login_api.py:423-439`) y un contrapeso con `KEY_WITHOUT_ROW` por operación;
+    - `apps/core/tests/test_session_store.py` y los dos de `config/tests/test_auth_settings.py`;
+    - la guarda de `test_public_list_session.py`: `fetch_with_cookie` (l.35-40) con `raw_cookie_header` y la cookie de nulos con ids en la l.119;
+    - la guarda de `test_public_list_api.py`: `MALFORMED_COOKIES` (l.677-681) gana `null-characters` y `set_cookies` (l.684-686) manda la cabecera en bruto con `client.defaults["HTTP_COOKIE"]`, comprobado antes de añadir el id.
+  - Después `apps/core/session_store.py`, `SESSION_ENGINE = "apps.core.session_store"` en `config/settings/base.py` y `MODULES` en `apps/core/tests/test_api_import.py`.
+  - `docs/architecture.md`: estructura (`session_store.py` junto a `middleware.py`, l.31), l.92, l.96 y la lista de internos de la l.110 (`_validate_session_key`, el setter de `_session_key` y la condición de borrado de `SessionMiddleware.process_response`, con la nota de `SessionBase.__bool__` en 6.1).
+  - Commit: `fix(core): treat malformed session keys as no session`
+  - Hecho cuando:
+    - antes del código, los tests nuevos fallan por la razón esperada de la estrategia de tests de `plan.md`:
+      - Ids `null-characters` de los cuatro tests `..._is_ignored_when_...`: 500, porque PostgreSQL rechaza el nulo. En el registro, la entrada y la salida lo provoca el `DELETE` de `flush()`; en «quién soy», el `SELECT` de `load()`.
+      - Resto de ids de esos cuatro tests: hay una consulta a `django_session` con el valor.
+      - `..._removes_a_malformed_session_cookie` y `..._without_a_token_...`, todos los ids: la cookie no se retira, porque la sesión no está vacía.
+      - `test_session_store.py`: al recogerlo falla el import de `apps.core.session_store` (`ModuleNotFoundError`). Es un error de colección y pytest interrumpe toda la ejecución, así que el rojo se registra en dos ejecuciones: la suite sin ese fichero (`--ignore`), con los fallos de esta lista y su motivo, y ese fichero solo, con el `ModuleNotFoundError` esperado.
+      - Tests de ajustes: fallan porque el motor es el de Django. Comparan por nombre, sin importar `apps.core.session_store` de forma directa: `settings.SESSION_ENGINE == "apps.core.session_store"`, `import_module(settings.SESSION_ENGINE).SessionStore.__module__ == "apps.core.session_store"` y, tras `force_login`, `type(client.session).__module__ == "apps.core.session_store"`.
+      - Contrapesos y guardas de la lista pública: pasan antes y después del código.
+    - después, pasan toda la suite, ruff y `config/tests/test_migrations.py`; `manage.py check` no da avisos; regenerar `backend/openapi.json` no produce diferencias; el `git diff` de `frontend/`, `requirements*` y las migraciones está vacío.
+
+- [ ] **C3. Mutaciones, comprobación de punta a punta y cierre.** RF-14
+  - `validation.md`, sección «Cambio: clave de sesión (RF-14)»: C1 y C2 (tests que fallaron primero y recuentos), y la nota de que `Client.session` y `force_login` con una cookie mal formada no consultan la BD.
+  - Mutaciones, cada una con su lista exacta escrita en `validation.md` antes de ejecutarla, sobre una copia y con el sha256 antes y después: «quitar la comprobación de la forma» (los 63 fallos de la estrategia de tests de `plan.md`) y M1, M2, M2b, M3a, M3b, M4 y M5. La de M5 incluye los ids `null-characters` de las dos guardas de la lista pública.
+  - Navegador, a 1280 y 375 px, a través del proxy de Vite:
+    - con `sessionid="\000\000\000\000\000\000\000\000"` puesta con `document.cookie`, `/map` carga con «Entrar» y «Registrarse», sin errores en la consola, y la respuesta de «quién soy» retira la cookie;
+    - con la cookie puesta otra vez, un POST real a `/api/v1/auth/logout/` desde la página, con `X-CSRFToken`, responde 204 con `Set-Cookie: sessionid=""; Max-Age=0`, y `document.cookie` queda sin `sessionid`.
+  - Ninguna respuesta trae una `sessionid` nueva: la primera de «quién soy» y la de la salida la retiran (`Max-Age=0`), y la de la lista pública no lleva cookies. Que no se crean ni borran filas de `django_session` lo prueban los tests de C2 en la BD de test. Si el stack no está levantado, se pregunta antes.
+  - Punto 7 de «Cambios en otras specs» en `specs/015-login/spec.md:165`.
+  - `MEMORY.md`: se quita el primer punto de «Próximos pasos», avanza la hoja de ruta y se anota que `SimpleCookie` rechaza los caracteres de control, así que los tests mandan la cookie en bruto.
+  - Commit: `docs(spec-009): validate malformed session cookie change`
+  - Hecho cuando: cada mutación da exactamente la lista escrita, o la diferencia queda explicada; el sha256 es idéntico antes y después de cada mutación; la comprobación en el navegador queda registrada a 375 y 1280 px; el riesgo «Cookie de sesión con nulos» de la 015 dice el texto del punto 7; la validación termina con un veredicto sobre RF-14 y se propone devolver la spec a «implementada».
