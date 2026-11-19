@@ -1,6 +1,6 @@
 # Tareas 015 — Entrada
 Spec: specs/015-login/spec.md · Plan: specs/015-login/plan.md
-Máximo 10 tareas: hay 10, en orden lineal de dependencia (T1 → … → T10), con el corte del plan. La T1 lleva un commit por spec y la T10 cuatro; la T2 va precedida del commit que crea `validation.md`; la T5, la T6 y la T8 llevan dos commits; la T5 puede llevar además un commit de documentación (Desviación 2 del plan).
+Máximo 10 tareas: hay 10, en orden lineal de dependencia (T1 → … → T10), con el corte del plan. La T1 lleva un commit por spec y la T10 cuatro; la T2 va precedida del commit que crea `validation.md`; la T5, la T6, la T7 y la T8 llevan dos commits; la T5 puede llevar además un commit de documentación (Desviación 2 del plan).
 
 Reglas comunes:
 - Cada commit de código (T2 a T9) es atómico y deja en verde pytest, `ruff check` y `ruff format --check`, la comprobación de migraciones, el desfase de `openapi.json`, vitest, build, eslint de los ficheros tocados y `api:check`. Los tests se escriben primero y fallan por la razón que indica cada tarea; el fallo se anota en `validation.md`.
@@ -115,8 +115,10 @@ Reglas comunes:
     - Los tests del registro y de la salida pasan sin cambios tras la extracción.
   - Pruebas de mecanismo: no aplica (plan).
   - OK necesario: ninguno (frontend en el host).
-  - Commit: `feat(frontend): add login to the session client`
-  - Hecho cuando: los tests nuevos fallan primero y luego pasan; vitest, build, eslint de los ficheros tocados y `api:check` en verde.
+  - Commits, en este orden:
+    1. `refactor(frontend): share post and csrf retry in the session client`: extracción de `postWithin` y `retryOnceOnCsrf`, que pasan a usar el registro y la salida.
+    2. `feat(frontend): add login to the session client`: `login()` y sus tests; el rojo, porque `login` no existe.
+  - Hecho cuando: tras el refactor, los tests del registro y de la salida siguen en verde sin cambiar ni una línea; los tests nuevos fallan primero y luego pasan; tras cada commit, vitest, build, eslint de los ficheros tocados y `api:check` en verde.
 
 - [ ] **T8. Página `/login` y enlaces cruzados.** RF-8, RF-9
   - Ficheros:
