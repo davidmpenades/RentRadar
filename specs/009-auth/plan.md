@@ -16,6 +16,7 @@ Spec: specs/009-auth/spec.md (aprobada, alineada con el comportamiento verificad
   - barra superior con la marca (enlace al mapa), «Registrarse» y «Salir», y zona de contenido bajo ella;
   - página `/register`.
 - Sin dependencias nuevas, sin modelos y sin migraciones. Cambio de contrato (aprobado por el usuario): se regeneran `backend/openapi.json` y `frontend/src/api/schema.gen.ts`.
+- Cambio posterior a la implementación (RF-14, cookie de sesión mal formada): un `SessionStore` propio y `SESSION_ENGINE`, sin cambio de contrato; ver «Cambio: clave de sesión (RF-14)».
 
 ## Archivos y responsabilidades
 | Archivo | Crea/Modifica | Responsabilidad | RF |
@@ -64,7 +65,7 @@ Spec: specs/009-auth/spec.md (aprobada, alineada con el comportamiento verificad
 
 ## Modelo de datos y migraciones
 - **No hay modelos ni migraciones nuevos.**
-  - La sesión usa el motor de BD por defecto (`django.contrib.sessions`, ya instalado).
+  - La sesión usa el motor de BD de `django.contrib.sessions` (ya instalado). Desde el cambio de RF-14 pasa por un `SessionStore` propio que solo cambia la validación de la clave, con la misma tabla y el mismo modelo (ver «Cambio: clave de sesión (RF-14)»).
   - El usuario es el de la 004, sin cambios.
   - Las cuentas se crean por el servicio.
 - `config/tests/test_migrations.py` (`makemigrations --check`, en la BD de test) sigue en verde en T1, T5a y T5b.
@@ -349,7 +350,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
 | Comprobaciones en el contenedor | Ver Estrategia de tests, «Comprobaciones en el contenedor» |
 
 ## Blast radius
-- **Cambian:**
+- **Cambian** (T1 a T9; los ficheros del cambio de RF-14 están en su propio blast radius):
   - `apps/core/api.py` y `tests/test_api.py` (T1);
   - `config/settings/base.py` (T1);
   - `config/tests/test_http_hardening.py` l.86-95 (T1);
@@ -363,7 +364,7 @@ Formato: `{"code": "<general>", "params"?: {...}, "retry_after"?: <entero ≥ 1>
   - `vite.config.ts` (T6);
   - `main.tsx`, `MapPage.tsx` l.78, `NotFoundPage.tsx` l.5 y `i18n/es.ts` (T7);
   - `route.ts`, `route.test.ts`, `main.tsx`, `AppShell.tsx` y `styles/index.css` (T8).
-- **No cambian:**
+- **No cambian** (T1 a T9; con el cambio de RF-14, `apps/core/tests/test_middleware.py` sigue sin cambiar y `apps/assets/tests/test_public_list_api.py` cambia en C2):
   - `config/tests/test_api_settings.py`, `apps/core/tests/test_middleware.py`;
   - `apps/assets/tests/test_public_list_api.py`, también l.460-468, 513-520, 565-569, 661-699 y 900-918;
   - `test_production.py`, `test_migrations.py`;
@@ -402,13 +403,14 @@ Los que la spec ya recoge en «Riesgos aceptados» (el usuario los aceptó) no s
 | RF-11 | vitest (T8): `fieldMessages`, `firstFocusTarget`, `formStateAfter` (un test por caso: email conservado siempre; contraseña borrada solo con `fieldErrors` que traiga un error de `password`, también junto a errores del email; conservada con `fieldErrors` solo del email o de `other`, `throttled` y cada `failed`: `csrf`, `request`, `network`, `server`, `invalid`, `timeout` y `unexpected`; envío habilitado en todos, también con `failed("timeout")`). vitest (T6): reintento único y error general tras el segundo `csrf_failed`; registro vencido a los 10 s con temporizador inyectado → pregunta «quién soy»: con sesión `registered`, sin ella `failed("timeout")`. DevTools (T9): foco y anuncios con el teclado; registro que no responde (`fetch` simulado que no resuelve) → error general y reintento |
 | RF-12 | vitest (T7): `logoutResult` (anuncio, foco y aviso en éxito, fallo y tiempo vencido). vitest (T6): reintento de la salida; salida vencida a los 10 s → `failed`. DevTools (T9): «Has salido», foco en «Registrarse»; fallo y tiempo vencido simulados: aviso visible con «Reintentar», foco en «Salir»; segunda pestaña |
 | RF-13 | vitest (T8): `resolveRoute` (`/register`, `/register/`, `/register//`, `/REGISTER`) y `shouldLeaveRegister`. vitest (T7): `createNavigator` (`replace` sin entrada nueva, `navigate` a la misma ruta no hace nada, `popstate`). DevTools (T9): `/register` con sesión → `/map` con `replace`; `/register/` normalizada |
+| RF-14 | pytest (C2) y navegador (C3): ver «Cambio: clave de sesión (RF-14)», estrategia de tests |
 
 | Requisito no funcional | Verificación |
 |---|---|
 | Permisos y métodos | pytest (T5a): 405 con `Allow` y formato en PUT, PATCH, DELETE, OPTIONS y HEAD del registro. pytest (T5b): lo mismo en la salida, y en POST, PUT y DELETE de «quién soy» con y sin sesión y sin token, con `Allow: GET, HEAD`. Ninguna operación acepta identificadores |
 | Orden de comprobaciones | pytest (T4, T5a): límite antes que método y CSRF; CSRF antes que el cuerpo; cuerpo antes que la validación; con el límite superado, cualquier método del registro da 429 |
 | Sesión y cookies | pytest (T1): ajustes por entorno. pytest (T5a y T5b): atributos de las cookies, `csrftoken` legible (sin HttpOnly), Max-Age |
-| Lista pública sin cambios | pytest (T1): `test_public_list_session.py` |
+| Lista pública sin cambios | pytest (T1): `test_public_list_session.py`; con la cookie de nulos, C2 (ver «Cambio: clave de sesión (RF-14)») |
 | Caché | pytest (T5a): `no-store` en 201, 400, 403, 405, 413 y 429. pytest (T5b): en 200, 204, 403 y 405, y `Vary: Cookie` en «quién soy» |
 | Respuestas mínimas | pytest (T5a y T5b): claves exactas `{"user"}` y `{"email"}` con un usuario staff; ni `id` ni `last_login` |
 | Desconfianza de la entrada | pytest (T2, T3, T5a): nunca 500 con NUL, sustitutos, anidamiento ni tipos. vitest (T6): esquemas estrictos |
@@ -496,6 +498,213 @@ Cada mutación se hace sobre una copia del fichero, con el sha256 antes y despu�
 - La BD de desarrollo tiene la tabla de sesiones: está en `INSTALLED_APPS` y la BD se migró entera, pero no se puede comprobar sin acceder a ella.
 - `MapView` libera el mapa al desmontarse (`map.remove()` en la limpieza; se comprueba al volver con «Atrás» en T9) y MapLibre reajusta su tamaño cuando cambia el alto de su contenedor (aviso de salida).
 - Con `changeOrigin: false`, `ALLOWED_HOSTS` acepta `localhost:5173` y el Origin coincide con el host.
+
+## Cambio: clave de sesión (RF-14)
+Cambio de requisitos posterior a la implementación: RF-14, la definición de «Cookie de sesión mal formada», los casos límite de RF-14 y los criterios «Cambio de RF-14» de la spec. Sus tareas, C1 a C3, se numeran aparte de T1 a T9.
+
+### Resumen
+- `apps/core/session_store.py` define `SessionStore`, que hereda de `django.contrib.sessions.backends.db.SessionStore` y redefine solo `_validate_session_key`. Una clave está bien formada si es texto de exactamente 32 caracteres de `a`-`z` y `0`-`9`. En `config/settings/base.py` se añade `SESSION_ENGINE = "apps.core.session_store"`.
+- Con una clave mal formada, el setter de `_session_key` la deja en `None`, así que la sesión está vacía desde el principio:
+  - ningún método consulta la BD con ese valor (`load`, `flush`, `delete` y `cycle_key`; `delete(None)` vuelve sin consulta);
+  - `SessionMiddleware.process_response` retira la cookie porque viene en la petición y la sesión está vacía;
+  - el registro y la entrada abren su sesión nueva como siempre.
+- La lista pública sigue sin cookies. Con el cambio, `SessionMiddleware` también añade el borrado de la cookie a sus respuestas cuando la cookie está mal formada (antes solo con menos de 8 caracteres). Ese borrado lo quita `CleanMarkedResponseMiddleware`, porque la vista marca todas sus respuestas (`apps/assets/views.py:75-78`).
+- Sin modelos, sin migraciones y sin dependencias nuevas. `backend/openapi.json` y el frontend no cambian. No cambia ningún endpoint ni ningún permiso.
+
+### Archivos y responsabilidades
+| Archivo | Crea/Modifica | Responsabilidad | RF |
+|---|---|---|---|
+| backend/apps/core/session_store.py | C | (C2) `SessionStore(db.SessionStore)` con solo `_validate_session_key`: `isinstance(key, str)` y `re.fullmatch` contra `[a-z0-9]{32}`, que devuelve un bool. Un comentario de una línea explica que es la forma de las claves que genera Django | RF-14 |
+| backend/config/settings/base.py | M | (C2) `SESSION_ENGINE` junto a los ajustes de sesión (l.42-45). No hay `SESSION_ENGINE` en `test.py` ni en `development.py` | RF-14 |
+| backend/apps/core/tests/test_session_store.py | C | (C2) La regla (sin BD), que la subclase solo redefine ese método y que las claves que genera Django cumplen la forma (con BD) | RF-14 |
+| backend/config/tests/test_auth_settings.py | M | (C2) El motor es el módulo propio, y el cliente de pruebas usa la clase propia | RF-14 |
+| backend/apps/core/tests/test_api_import.py | M | (C2) `MODULES` (l.9-15) gana `apps.core.session_store`: lo nombra un ajuste y se importa al construir `SessionMiddleware` | — |
+| backend/apps/core/tests/helpers.py | C | (C1) `KEY_WITHOUT_ROW`. (C2) `OCTAL_NULL`, `raw_cookie_header`, `MALFORMED_SESSION_VALUES` y `session_queries_with`. Son los genéricos de sesión que usan los tests de core, users y assets; `untouchable_session_store` se queda en `apps/users/tests/helpers.py` | RF-14 |
+| backend/apps/users/tests/test_session_api.py, test_logout_api.py, test_login_api.py | M | (C1) Importan `KEY_WITHOUT_ROW`; los ids pasan a nombrar la intención. (C2) Los tests de su operación con cookie mal formada; en la entrada se invierte el test del 500 | RF-5, RF-6, RF-7, RF-14 |
+| backend/apps/users/tests/test_register_api.py | M | (C2) Los tests del registro con cookie mal formada | RF-1, RF-2, RF-7, RF-14 |
+| backend/apps/assets/tests/test_public_list_session.py | M | (C2) `fetch_with_cookie` manda la cabecera en bruto, y la parametrización de la l.119 gana la cookie de nulos | RNF Lista pública, RF-14 |
+| backend/apps/assets/tests/test_public_list_api.py | M | (C2) `MALFORMED_COOKIES` (l.677-681) gana `null-characters`, y `set_cookies` (l.684-686) manda la cabecera en bruto con `client.defaults["HTTP_COOKIE"]`, así que la reciben los dos tests que lo parametrizan (l.689-699 y l.724-736), también los envíos de error de `ERROR_SENDERS` | RNF Lista pública, RF-14 |
+| docs/architecture.md | M | (C2) Estructura, l.92, l.96 y la lista de internos de la l.110 | — |
+| specs/009-auth/validation.md | M | (C3) Sección del cambio: tests, mutaciones y navegador | RF-14 |
+| specs/015-login/spec.md | M | (C3) Punto 7 de «Cambios en otras specs» (l.165) | — |
+| MEMORY.md | M | (C3) Cierra el paso de la hoja de ruta y anota el aprendizaje de la cookie en bruto | — |
+
+### Decisiones
+| Decisión | Opciones | Elegida | Qué evita | Coste |
+|---|---|---|---|---|
+| DC1 Dónde se comprueba la forma de la clave | A) `SessionStore` propio que redefine solo `_validate_session_key`; B) middleware propio antes de `SessionMiddleware` que descarta la cookie mal formada; C) comprobación en cada vista que toca la sesión (registro, entrada, salida y «quién soy») | A | B: reescribe `request.COOKIES` antes de `SessionMiddleware` y añade un middleware cuyo orden hay que fijar con un test. Además, la cookie descartada ya no llegaría a `SessionMiddleware`, y para retirarla habría que duplicar su `delete_cookie`. C: repite el control en cuatro operaciones y no cubre `SessionMiddleware`, `AuthenticationMiddleware`, `SessionAuthentication`, `Client.session` ni ninguna vista futura; una vista que lo olvide vuelve a dar 500 | Depende de dos internos no documentados de Django: `_validate_session_key` y el setter de `_session_key`. Lo vigilan el test unitario, el de claves generadas, el de «solo redefine» y la nota en `docs/architecture.md`. Suma un ajuste (`SESSION_ENGINE`) |
+| DC2 Cómo se escribe la regla | A) `isinstance(key, str)` y `re.fullmatch(r"[a-z0-9]{32}", key)`; B) longitud 32 con `isalnum()` e `islower()`; C) comparar con `VALID_KEY_CHARS` de Django | A | B acepta letras y dígitos Unicode (`ñ`, `٣`). Un `re.match` con `$` aceptaría un `\n` final. C ata la regla a otro interno no documentado, y el alfabeto ya lo fija la spec | Si Django cambiara el alfabeto de sus claves, ver Riesgos |
+| DC3 Módulo | A) `apps/core/session_store.py`; B) `apps/users/sessions.py`; C) `apps/core/sessions.py` | A | B: el motor vale para todas las peticiones, también la lista pública, no solo para las vistas de `users`. C: al leer los imports se confunde con `django.contrib.sessions`. `core` ya agrupa las piezas HTTP transversales (`csrf.py`, `middleware.py`, `request_body.py`) | Un fichero más y su entrada en `test_api_import.py` |
+| DC4 Cómo llega la cookie de nulos en los tests | A) cabecera `Cookie` en bruto (`HTTP_COOKIE`) con escape octal; B) el almacén de cookies del cliente (`client.cookies`) | A | B: `SimpleCookie` rechaza los caracteres de control con `CookieError` | `raw_cookie_header` en `apps/core/tests/helpers.py`. La barra del escape se construye con `chr(92)`, como hoy en `test_login_api.py:55-56` |
+| DC5 Forma de los tests de cada operación | A) tests nuevos por operación, parametrizados con los valores mal formados; B) añadir casos a las parametrizaciones existentes (`COOKIE_STATES`, `EMPTY_SESSIONS`, `EVERY_STATE`, `WITHOUT_A_VALID_SESSION`) | A | B: esas parametrizaciones ponen la cookie con `prepare(client)` en el almacén del cliente, que no admite nulos (DC4). Además, sus aserciones no distinguen «no busca» en los valores de 31 o 33 caracteres, que hoy dan el mismo resultado visible | Cuatro bloques de tests parecidos que comparten los helpers |
+| DC6 Dónde viven los helpers comunes | A) `apps/core/tests/helpers.py` para los genéricos de sesión (`KEY_WITHOUT_ROW`, `OCTAL_NULL`, `raw_cookie_header`, `MALFORMED_SESSION_VALUES` y `session_queries_with`); B) `apps/users/tests/helpers.py`; C) fixtures en `backend/conftest.py` | A | B: `test_session_store.py`, de core, usa `KEY_WITHOUT_ROW` en el id `mixed`, así que core importaría de los tests de users, y los tests de assets también. C: son constantes y funciones, no fixtures, y se mezclarían con los globales | Un fichero nuevo de helpers en core, que crea C1. `untouchable_session_store` se queda en `apps/users/tests/helpers.py` |
+
+### Blast radius
+- **Comportamiento que cambia**:
+  - Toda petición con una cookie de sesión mal formada (vacía, de otra longitud, con mayúsculas, con caracteres de control o fuera de ASCII) se trata como sin sesión, sin consultar la BD.
+  - Toda respuesta no marcada, incluidos los 404 y 405 del router, lleva `Set-Cookie: sessionid=""; Max-Age=0` y `Vary: Cookie` cuando llega una de esas cookies. Antes solo pasaba con menos de 8 caracteres.
+  - `Client.session` y `force_login` con una cookie mal formada no consultan la BD.
+- **Sin cambios, comprobado**:
+  - `get_model_class` no hace falta: el modelo y la tabla son los mismos.
+  - `Session.get_session_store_class()` sigue devolviendo el `SessionStore` de BD. Solo lo usa `get_decoded()` (`test_login_api.py:221` y `:347`, `test_register_api.py:94`), lo cual es inocuo.
+  - `clearsessions` hereda `clear_expired`.
+  - Las sesiones abiertas antes del cambio tienen claves generadas por Django, que están bien formadas.
+- **Inventario de valores de cookie de sesión en los tests, por intención**:
+
+| Fichero:línea | Valor | Intención | Con la regla nueva | Acción |
+|---|---|---|---|---|
+| `apps/users/tests/test_session_api.py:23-24` (uso 88-90; id `key-without-row` en 96 y 117) | `KEY_WITHOUT_ROW = "k3y5in4f1l4" * 3` (33) | Clave bien formada sin fila | Pasaría a estar mal formada y probaría otra cosa | C1: 32 caracteres `[a-z0-9]`, en `apps/core/tests/helpers.py` |
+| `apps/users/tests/test_logout_api.py:31-32` (uso 159-161; id `closed-in-another-tab` en 171) | El mismo | El mismo | El mismo | C1 |
+| `apps/users/tests/test_login_api.py:57-58` (uso 137-139; `COOKIE_STATES` en 294) | El mismo | El mismo | El mismo | C1 |
+| `apps/users/tests/test_session_api.py:76-79` (comentario en 77; id `shorter-than-8` en 96 y 115) | `"abc1234"` | Mal formada a propósito | Sigue mal formada | Se mantiene. C1: id `too-short` y un comentario que no cite el umbral de Django |
+| `apps/users/tests/test_logout_api.py:151-152` (id en 171) | `"abc1234"` | Mal formada a propósito | Sigue mal formada | Se mantiene. C1: id `too-short` |
+| `apps/users/tests/test_login_api.py:132-134` (usos 293 y 367) | `"abc"` | Mal formada a propósito | Sigue mal formada | Se mantiene |
+| `apps/users/tests/test_session_api.py:82-85` (valor en 83, asignado en 84) y `test_logout_api.py:155-156` | `"no-es-una-clave-de-sesion-" * 3` (78, con guiones) | Mal formada a propósito | Hoy pasa la validación de Django y se busca sin encontrar fila. Ahora no se busca, con el mismo resultado visible | Se mantiene |
+| `apps/assets/tests/test_public_list_session.py:119` | `"short"` y `"!" * 40` | Mal formada a propósito | `"!" * 40` hoy pasa la validación y la cookie no se retira. Ahora `SessionMiddleware` añade el borrado y `CleanMarkedResponseMiddleware` lo quita | Se mantienen. C2: ids explícitos y se añade la de nulos |
+| `apps/assets/tests/test_public_list_session.py:17-18` | `UNKNOWN_KEY = "a" * 32` | Clave bien formada sin fila | Sigue bien formada | Se mantiene |
+| `apps/assets/tests/test_public_list_api.py:677-681` | `"short"` | Mal formada a propósito | Sigue mal formada | Se mantiene. C2: `MALFORMED_COOKIES` gana `null-characters`, con la cabecera en bruto |
+| `apps/core/tests/test_middleware.py:15` | `"short"` | Mal formada a propósito | Sigue mal formada | Se mantiene |
+| `apps/users/tests/test_login_api.py:55-56` y `:423-439` | Ocho nulos con escape octal | Mal formada a propósito | Deja de dar 500 | C2: se invierte el test, se replica en las otras tres operaciones y en las dos guardas de la lista pública, y `OCTAL_NULL` pasa a `apps/core/tests/helpers.py` |
+| `test_session_api.py:31-34`, `test_logout_api.py:45-48` y `:187-189`, `test_login_api.py:101-114`, `test_register_api.py:68-82`, `test_public_list_session.py:49-58` | Claves de `force_login`, `log_in` y `SessionStore().create()` | Sesión válida | Las genera Django y están bien formadas | Se mantienen |
+
+- **`patch.object` y `monkeypatch` sobre la clase base**: `apps/users/tests/helpers.py:64` (`untouchable_session_store`), `test_middleware.py:250`, `test_public_list_api.py:668` y `test_register_api.py:200` parchean `django.contrib.sessions.backends.db.SessionStore`. Siguen aplicándose por MRO, porque la subclase no redefine esos métodos; lo fija `test_the_store_only_redefines_the_key_validation`. Las tres primeras pasarían en vacío si el parche no llegara, así que cada una tiene su mutación de control (M2, M2b y M3a). La de `test_register_api.py:200` se valida sola: si el parche no llegara, el registro tendría éxito y fallaría `pytest.raises(SessionCreateFailed)`.
+
+### Riesgos
+| Riesgo | Mitigación |
+|---|---|
+| Una versión de Django cambia `_validate_session_key` o el setter de `_session_key`, y la regla deja de aplicarse sin aviso | Test unitario de la regla a través de `SessionStore(valor).session_key`, test de «solo redefine» y nota en la lista de internos de `docs/architecture.md:110`, con la condición de borrado de `SessionMiddleware.process_response`, para revisarlo al subir de 5.2.x. En Django 6.1, `SessionBase.__bool__` devuelve `not is_empty()`; hoy no hay ningún `if request.session:` |
+| Django cambia el alfabeto o la longitud de sus claves: `create()` asigna una clave que el setter pone a `None`, `save()` vuelve a `create()` y se produce un `RecursionError` (500 en todo registro y toda entrada) | `test_keys_created_by_django_are_well_formed` (con `create()` y `cycle_key()`) falla al actualizar Django, antes de desplegar |
+| Si la subclase redefiniera un método parcheado, esos tests pasarían en vacío | Test de «solo redefine» y mutaciones M2, M2b, M3a y M4 |
+| La lista pública pasa a depender de `CleanMarkedResponseMiddleware` con cualquier cookie mal formada | Guardas con la cookie de nulos en `test_public_list_session.py` y `test_public_list_api.py`. `assert_same_as_anonymous` (`test_public_list_session.py:76-82`) y `assert_same_public_answer` (`test_public_list_api.py:630-637`) ya exigen que no haya `Set-Cookie` ni `Cookie` en `Vary`. M5 repite con el motor nuevo la mutación «No marcar las respuestas» de la 006 (`specs/006-public-map/validation.md:235`), que se ejecutó con el motor viejo |
+| Efecto nuevo: las respuestas no marcadas retiran cualquier cookie mal formada y declaran `Vary: Cookie` | Es lo que pide RF-14. No cambia ningún endpoint ni ningún permiso |
+| `SessionMiddleware` resuelve el motor al construirse, así que `override_settings` no cambiaría el de un cliente ya creado | No hay overrides de `SESSION_ENGINE`. El test de ajustes usa un cliente nuevo |
+| Una cookie plantada desde un subdominio, con otro `Domain` o `Path`, no se borra | Riesgo ya aceptado («Inyección de cookies desde subdominios hermanos», spec 011) |
+
+Privacidad: nadie pierde la sesión, no hay logs nuevos y no se puede enumerar nada, porque una cookie mal formada, una sin fila y una caducada responden igual. El tiempo de respuesta solo revela la regla de forma, que es pública en el código de Django.
+
+### Estrategia de tests
+| Aspecto de RF-14 | Cómo se verifica |
+|---|---|
+| Regla de forma | pytest sin BD (`test_session_store.py`). `test_a_well_formed_key_is_kept`, con ids `letters` (`"a" * 32`), `digits` (`"0" * 32`) y `mixed` (`KEY_WITHOUT_ROW`). `test_a_malformed_key_is_no_session`, con ids `none`, `empty`, `seven-characters`, `31-characters`, `33-characters`, `uppercase`, `n-with-tilde`, `arabic-indic-digit` (`٣`), `eight-nulls`, `thirty-two-nulls`, `control-character` (31 + `\x1f`), `trailing-newline` (32 + `\n`), `leading-space`, `trailing-space`, `hyphen` (32 con un `-`) y `long-with-hyphens`. Los caracteres invisibles se construyen con `chr()` |
+| Solo cambia la validación | `test_the_store_only_redefines_the_key_validation`: los nombres no dunder de `vars(SessionStore)` son exactamente `{"_validate_session_key"}`, y la clase es subclase de la de BD |
+| Sesiones abiertas antes del cambio y claves futuras | `test_keys_created_by_django_are_well_formed` (con BD): las claves de `create()` y de `cycle_key()` cumplen `[a-z0-9]{32}` |
+| Motor configurado | `test_auth_settings.py`. `test_the_session_engine_is_the_project_store`: `settings.SESSION_ENGINE == "apps.core.session_store"` e `import_module(...).SessionStore` es la clase propia. `test_the_test_client_uses_the_project_store` (con BD): tras `force_login`, `type(client.session)` es la clase propia |
+| Registro | `test_register_api.py`, parametrizados con `MALFORMED_SESSION_VALUES` (ids `null-characters`, `31-characters`, `33-characters`, `uppercase`, `non-ascii`). `test_a_malformed_session_cookie_is_ignored_when_registering`: 201, `sessionid` nueva que cumple la forma, una sola fila de sesión y de la cuenta creada, y ninguna consulta a `django_session` con ese valor. `test_a_rejected_registration_removes_a_malformed_session_cookie`: 400 `invalid_fields`, sin cuenta ni fila y con la cookie retirada (`Max-Age=0`). `test_without_a_token_a_malformed_session_cookie_is_removed`: 403 `csrf_failed`, sin efectos y con la cookie retirada. Contrapeso: `test_a_well_formed_key_without_row_is_looked_up`, en el que sí hay una consulta a `django_session` con `KEY_WITHOUT_ROW` |
+| Entrada | `test_login_api.py`, con los mismos valores. `test_a_malformed_session_cookie_is_ignored_when_logging_in` sustituye a `test_a_session_cookie_with_null_characters_gives_a_server_error_on_success`; su id `null-characters` es la inversión: 200, sesión nueva y cookie sin el nulo. `test_a_failed_login_removes_a_malformed_session_cookie`: 400 `credentials_invalid` y la cookie retirada. `test_without_a_token_a_malformed_session_cookie_is_removed`. Y el contrapeso con `KEY_WITHOUT_ROW` |
+| Salida | `test_logout_api.py`. `test_a_malformed_session_cookie_is_ignored_when_logging_out`: 204, cookie retirada, `stored_sessions()` y las cuentas sin cambios, y ninguna consulta con ese valor. `test_without_a_token_a_malformed_session_cookie_is_removed`. Y el contrapeso (`DELETE` con `KEY_WITHOUT_ROW`) |
+| «Quién soy» | `test_session_api.py`. `test_a_malformed_session_cookie_is_ignored_when_asking`, con GET y HEAD: 200, `{"user": null}` en GET, cookie retirada, `csrftoken` presente, `no-store`, `Vary: Cookie` y ninguna consulta con ese valor. Y el contrapeso (`SELECT` con `KEY_WITHOUT_ROW`) |
+| Lista pública | `test_public_list_session.py::test_a_malformed_or_unknown_cookie_changes_nothing`, con ids `short`, `exclamation-marks`, `null-characters` y `unknown-key`: la misma respuesta que la del anónimo, sin `Set-Cookie`, sin `Cookie` en `Vary` y sin consultas a `django_session`. `test_public_list_api.py`: `MALFORMED_COOKIES` gana `null-characters`, así que `test_malformed_cookies_do_not_make_the_success_response_set_cookies[null-characters]` (respuesta idéntica, sin cookies y con `Vary: Accept-Encoding`) y `test_error_responses_of_the_view_leave_without_cookies` con `null-characters` en 400, 405 y 429 (sin cookies) también la prueban. Están en verde desde el principio |
+| Punta a punta | Navegador y petición real de salida (C3) |
+
+Todas las peticiones con valores mal formados mandan la cabecera `Cookie` en bruto: `HTTP_COOKIE=raw_cookie_header(csrftoken=TOKEN, sessionid=valor)`. El helper escapa en octal todo carácter fuera de `[A-Za-z0-9]` y solo sirve para puntos de código menores que 256. El `٣` solo se prueba sin BD. Los tests de las cuatro operaciones usan `Client(enforce_csrf_checks=True, raise_request_exception=False)`, para que el error del servidor aparezca como un 500 y no como una excepción. `session_queries_with(captured, value)` devuelve las consultas de `CaptureQueriesContext` que nombran `django_session` y contienen el valor.
+
+**Tests que se escriben primero (C2) y por qué fallan antes del código**
+- Ids `null-characters` de los cuatro tests `..._is_ignored_when_...`: 500, porque PostgreSQL rechaza el nulo. En el registro, la entrada y la salida lo provoca el `DELETE` de `flush()`; en «quién soy», el `SELECT` de `load()`.
+- Resto de ids de esos cuatro tests: hay una consulta a `django_session` con el valor.
+- `..._removes_a_malformed_session_cookie` y `..._without_a_token_...`, todos los ids: la cookie no se retira, porque la sesión no está vacía.
+- `test_session_store.py`: no se importa, porque el módulo no existe.
+- Tests de ajustes: el motor es el de Django.
+- Contrapesos y guardas de la lista pública: pasan antes y después del código.
+
+**Mutación «quitar la comprobación de la forma»**
+`_validate_session_key` pasa a devolver `super()._validate_session_key(key)`. Se elige así y no borrando el método para que el test de «solo redefine» siga pasando. La lista se escribe en `validation.md` antes de ejecutarla. Deben fallar 63:
+- `test_session_store.py::test_a_malformed_key_is_no_session`, 13 ids: `31-characters`, `33-characters`, `uppercase`, `n-with-tilde`, `arabic-indic-digit`, `eight-nulls`, `thirty-two-nulls`, `control-character`, `trailing-newline`, `leading-space`, `trailing-space`, `hyphen` y `long-with-hyphens`.
+- `test_register_api.py`: `test_a_malformed_session_cookie_is_ignored_when_registering`, `test_a_rejected_registration_removes_a_malformed_session_cookie` y `test_without_a_token_a_malformed_session_cookie_is_removed`, cada uno con sus 5 ids (15).
+- `test_login_api.py`: `test_a_malformed_session_cookie_is_ignored_when_logging_in`, `test_a_failed_login_removes_a_malformed_session_cookie` y `test_without_a_token_a_malformed_session_cookie_is_removed`, cada uno con sus 5 ids (15).
+- `test_logout_api.py`: `test_a_malformed_session_cookie_is_ignored_when_logging_out` y `test_without_a_token_a_malformed_session_cookie_is_removed`, cada uno con sus 5 ids (10).
+- `test_session_api.py::test_a_malformed_session_cookie_is_ignored_when_asking`, con 5 ids en GET y en HEAD (10).
+
+No deben fallar:
+- `test_a_malformed_key_is_no_session[none]`, `[empty]` y `[seven-characters]`, que la regla de Django ya rechaza;
+- los cuatro contrapesos;
+- `test_keys_created_by_django_are_well_formed`;
+- el test de «solo redefine»;
+- los dos de ajustes;
+- todo `test_public_list_session.py` y `test_public_list_api.py`;
+- el resto de la suite.
+
+**Mutaciones de control**
+Cada una lleva su lista escrita en `validation.md` antes de ejecutarla.
+- **M1**, quitar `SESSION_ENGINE` de `base.py`: fallan los dos tests de ajustes y los 50 casos de las cuatro operaciones de la lista anterior. No falla ninguno de `test_session_store.py`, que importa la clase directamente.
+- **M2**, `PublicAssetListView.get` empieza leyendo `request._request.session.get("x")`. Fallan:
+  - `test_public_list_api.py::test_the_session_is_never_read_and_the_answer_is_the_same`, con «sesión leída»: el parche de la l.668 llega al motor nuevo;
+  - `test_public_list_session.py::test_a_valid_session_is_never_read_and_the_answer_is_the_same`, `test_an_expired_session_is_never_read_and_the_answer_is_the_same` y `test_a_malformed_or_unknown_cookie_changes_nothing[unknown-key]`.
+
+  Los ids `short`, `exclamation-marks` y `null-characters` siguen pasando: con la clave en `None`, la sesión no se carga.
+- **M2b**, `marked_view` (`test_middleware.py:18-19`) llama a `request.session.load()`: falla `test_marked_view_does_not_load_the_session` con «Sesión cargada», porque el parche de la l.250 llega al motor nuevo. Los demás tests del bloque B que usan la vista marcada fallan por acceder a la BD sin marca; se anota.
+- **M3a**, se repite la m2 de la T5a (`flush()` al principio de `post`, `validation.md:261`): fallan los 3 casos de `test_a_rejected_registration_leaves_the_session_untouched` con «session.flush», porque `untouchable_session_store` (`apps/users/tests/helpers.py:64`) llega al motor nuevo.
+- **M3b**, se repite la m3b de la T5b (leer la sesión antes de `flush()`, `validation.md:316`): falla `test_an_expired_session_row_is_deleted_too`.
+- **M4**, añadir `def load(self): return super().load()` a la subclase: solo falla `test_the_store_only_redefines_the_key_validation`.
+- **M5**, quitar `mark_response_cookieless` de `apps/assets/views.py:78` (`finalize_response` devuelve la respuesta sin marcar), con el motor nuevo. La de la 006 se ejecutó con el motor viejo, y las guardas de los nulos nunca se han visto fallar. La lista exacta se escribe en `validation.md` antes de ejecutarla, partiendo de los 13 fallos de la 006, y debe incluir los ids `null-characters` de las dos guardas: `test_public_list_session.py::test_a_malformed_or_unknown_cookie_changes_nothing[null-characters]`, `test_public_list_api.py::test_malformed_cookies_do_not_make_the_success_response_set_cookies[null-characters]` y los tres casos `null-characters` de `test_public_list_api.py::test_error_responses_of_the_view_leave_without_cookies` (400, 405 y 429).
+- `test_register_api.py:200` no necesita mutación: se valida con `pytest.raises`.
+
+### Tareas
+- **C1. Clave sin fila bien formada y compartida.** RF-14 (preparación), RF-5, RF-6
+  - Alcance: solo tests.
+    - `KEY_WITHOUT_ROW = "0123456789abcdefghijklmnopqrstuv"` en `apps/core/tests/helpers.py`, que se crea, con el comentario «Bien formada (32 caracteres de a-z y 0-9) y sin fila en la BD». Lo importan `test_session_api.py`, `test_logout_api.py` y `test_login_api.py`, que pierden su definición (l.23-24, 31-32 y 57-58).
+    - `test_the_key_without_row_is_well_formed_and_has_no_row` en `test_session_api.py`: `re.fullmatch` y ninguna fila.
+    - Ids `shorter-than-8` → `too-short` (`test_session_api.py:96` y `:115`, `test_logout_api.py:171`). El comentario de `test_session_api.py:77` pasa a «Mal formada: más corta que una clave de sesión».
+    - Ningún otro valor del inventario cambia.
+  - Commit: `test(users): share a well-formed session key without row`
+  - Hecho cuando:
+    - toda la suite, ruff y la comprobación de migraciones están en verde;
+    - `KEY_WITHOUT_ROW` se define solo en `apps/core/tests/helpers.py`;
+    - el número de tests recogidos sube en uno (el de la precondición);
+    - el diff solo toca `apps/core/tests/helpers.py` (nuevo) y los tres ficheros de test.
+
+- **C2. Motor de sesión que ignora las claves mal formadas.** RF-14, RF-1, RF-2, RF-5, RF-6, RF-7, RNF Lista pública sin cambios
+  - Alcance:
+    - Primero los tests:
+      - los helpers de C2 en `apps/core/tests/helpers.py`, con `OCTAL_NULL` traído de `test_login_api.py:55-56`;
+      - los de las cuatro operaciones, con la inversión de `test_login_api.py:423-439`;
+      - `test_session_store.py` y los dos de `test_auth_settings.py`;
+      - la guarda de `test_public_list_session.py`: `fetch_with_cookie` (l.35-40) con `raw_cookie_header` y la cookie de nulos con ids en la l.119;
+      - la guarda de `test_public_list_api.py`: `MALFORMED_COOKIES` (l.677-681) gana `null-characters` y `set_cookies` (l.684-686) manda la cabecera en bruto.
+    - Después `apps/core/session_store.py`, `SESSION_ENGINE` en `base.py` y `MODULES` en `test_api_import.py`.
+    - `docs/architecture.md`:
+      - estructura: `session_store.py` junto a `middleware.py` (l.31);
+      - l.92: con una cookie mal formada, también la de nulos, `SessionMiddleware` añade el borrado y la marca lo quita;
+      - l.96: la sesión pasa por `apps.core.session_store` y una cookie mal formada equivale a no tener sesión;
+      - l.110: `_validate_session_key`, el setter de `_session_key` y la condición de borrado de `SessionMiddleware.process_response` como internos que hay que revisar al actualizar Django, con la nota de `SessionBase.__bool__` en 6.1.
+  - Commit: `fix(core): treat malformed session keys as no session`
+  - Hecho cuando:
+    - antes del código, los tests nuevos fallan por la razón esperada de la estrategia de tests (los ids `null-characters` de las cuatro operaciones, con 500) y las guardas de la lista pública ya pasan;
+    - después, pasan toda la suite, ruff y `config/tests/test_migrations.py`;
+    - `manage.py check` no da avisos;
+    - regenerar `backend/openapi.json` no produce diferencias;
+    - `git diff` de `frontend/`, `requirements*` y las migraciones está vacío.
+
+- **C3. Mutaciones, comprobación de punta a punta y cierre.** RF-14
+  - Alcance:
+    - En `validation.md`, una sección «Cambio: clave de sesión (RF-14)» con C1 y C2 (tests que fallaron primero y recuentos).
+    - La lista de la mutación «quitar la forma» y las de M1 a M5, escritas antes de ejecutar cada una. Se ejecutan sobre una copia, con el sha256 antes y después.
+    - La nota de que `Client.session` y `force_login` con una cookie mal formada no consultan la BD.
+    - Navegador, a 1280 y 375 px, a través del proxy de Vite:
+      - con `sessionid="\000\000\000\000\000\000\000\000"` puesta con `document.cookie`, `/map` carga con «Entrar» y «Registrarse», sin errores en la consola, y la respuesta de «quién soy» retira la cookie;
+      - con la cookie puesta otra vez, un POST real a `/api/v1/auth/logout/` desde la página, con `X-CSRFToken`, responde 204 con `Set-Cookie: sessionid=""; Max-Age=0`, y `document.cookie` queda sin `sessionid`.
+    - Ninguna de esas peticiones consulta la BD de desarrollo. Si el stack no está levantado, se pregunta antes.
+    - Punto 7 en `specs/015-login/spec.md:165`.
+    - `MEMORY.md`: se quita el primer punto de «Próximos pasos», la hoja de ruta avanza y se anota que `SimpleCookie` rechaza los caracteres de control, así que los tests mandan la cookie en bruto.
+  - Commit: `docs(spec-009): validate malformed session cookie change`
+  - Hecho cuando:
+    - en `validation.md`, cada mutación da exactamente la lista escrita, o la diferencia queda explicada;
+    - el sha256 es idéntico antes y después de cada mutación;
+    - la comprobación en el navegador queda registrada a 375 y 1280 px;
+    - el riesgo «Cookie de sesión con nulos» de la 015 dice el texto del punto 7;
+    - la validación termina con un veredicto sobre RF-14.
+
+### Hallazgos de la revisión que no se aplican
+- Añadir la cookie de nulos a `COOKIE_STATES`, `EMPTY_SESSIONS` y `EVERY_STATE`: esas parametrizaciones usan el almacén del cliente, que no admite nulos; se usan tests dedicados (DC5).
+- Añadir la cookie de nulos a `test_middleware.py:15`: no es un test de la lista pública.
+- Alinear el plan, las tareas y la validación de la 015: son el registro de lo que se implementó entonces. Solo cambia su spec (punto 7), y la corrección queda en esta validación.
+- M4 con `return {}`: se usa `return super().load()`, que detecta lo mismo sin romper otros tests.
+
+### Afirmaciones no verificadas
+- En PostgreSQL con psycopg 3, el SQL que captura `CaptureQueriesContext` lleva los valores interpolados. Si no fuera así, los contrapesos fallarían en C2 y habría que cambiar `session_queries_with`.
+- `parse_cookie` de Django deshace `\361` en `ñ`. Que deshace `\000` ya se comprobó en la 015 (`specs/015-login/validation.md:245`). Si `\361` no se deshiciera, el valor seguiría mal formado y el caso `ñ` seguiría cubierto por el test sin BD.
+- Chrome acepta en `document.cookie` un valor entre comillas con barras (`"\000…"`) y lo envía tal cual. Si no fuera así, la petición de salida se hace con curl a través del proxy de Vite y se anota la limitación.
+- Que `SimpleCookie` rechaza los caracteres de control solo se ha comprobado en el Python 3.12 del host. La cabecera en bruto no depende de ello.
+- `client.defaults["HTTP_COOKIE"]` pisa la cabecera que el cliente de pruebas construye con su almacén de cookies, así que llega también a los envíos de `ERROR_SENDERS`. Se comprueba en C2 antes de añadir el id `null-characters`; si no fuera así, `set_cookies` cambia de forma y se anota.
 
 ## Skills que aplican
 - sdd y django-drf.
