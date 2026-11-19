@@ -1,7 +1,6 @@
 import json
 import logging
 import re
-from contextlib import ExitStack, contextmanager
 from unittest import mock
 
 import pytest
@@ -15,7 +14,14 @@ from django.db import connection
 
 from apps.users import views
 from apps.users.models import User
-from apps.users.tests.helpers import assert_no_store
+from apps.users.tests.helpers import (
+    assert_no_store,
+    assert_throttled,
+    cross_origin_headers,
+    stored_sessions,
+    untouchable_session_store,
+    use_clock,
+)
 from apps.users.throttling import RegistrationThrottle
 from apps.users.views import public_field_errors
 
@@ -83,35 +89,9 @@ SESSIONS = pytest.mark.parametrize(
 )
 
 
-def stored_sessions():
-    return list(
-        Session.objects.order_by("session_key").values_list(
-            "session_key", "session_data", "expire_date"
-        )
-    )
-
-
-@contextmanager
-def untouchable_session_store():
-    # Cualquier lectura o escritura de la sesión hace fallar la petición
-    names = ("load", "save", "create", "delete", "flush", "cycle_key", "clear")
-    with ExitStack() as stack:
-        for name in names:
-            stack.enter_context(
-                mock.patch.object(
-                    SessionStore, name, side_effect=AssertionError(f"session.{name}")
-                )
-            )
-        yield
-
-
 def session_of(response):
     key = response.cookies[SESSION_COOKIE].value
     return key, Session.objects.get(session_key=key).get_decoded()
-
-
-def cross_origin_headers(response):
-    return [n for n in response.headers if n.lower().startswith("access-control-")]
 
 
 # --- Alta correcta ------------------------------------------------------------
@@ -536,30 +516,14 @@ def test_the_body_is_not_read_before_the_csrf_check(csrf_client):
 # --- Límite sobre el endpoint real --------------------------------------------
 
 
-class Clock:
-    def __init__(self):
-        self.now = 1000.0
-
-    def __call__(self):
-        return self.now
-
-
 @pytest.fixture
 def clock(monkeypatch):
-    fake = Clock()
-    # staticmethod: sin él Python pasaría la instancia como primer argumento
-    monkeypatch.setattr(RegistrationThrottle, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, RegistrationThrottle)
 
 
-def assert_throttled(response):
-    assert response.status_code == 429
-    body = response.json()
-    assert set(body) == {"code", "retry_after"}
-    assert body["code"] == "throttled"
-    assert isinstance(body["retry_after"], int)
-    assert body["retry_after"] >= 1
-    assert response["Retry-After"] == str(body["retry_after"])
+def assert_register_throttled(response):
+    assert_throttled(response)
+    assert set(response.json()) == {"code", "retry_after"}
     assert_no_store(response)
 
 
@@ -601,7 +565,7 @@ def test_ten_rejected_requests_use_up_the_quota_of_the_real_endpoint(
         assert response.status_code == status
         assert response.json()["code"] == code
 
-    assert_throttled(register(csrf_client))
+    assert_register_throttled(register(csrf_client))
     assert User.objects.count() == 0
 
 
@@ -612,7 +576,7 @@ def test_ten_registrations_use_up_the_quota_and_the_eleventh_creates_nothing(
         body = {"email": f"ana{index}@correo.es", "password": PASSWORD}
         assert register(csrf_client, body).status_code == 201
 
-    assert_throttled(register(csrf_client))
+    assert_register_throttled(register(csrf_client))
     assert not User.objects.filter(email=EMAIL).exists()
 
 

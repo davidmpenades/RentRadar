@@ -5,4 +5,6 @@ from apps.users.tests import throttle_views
 urlpatterns = [
     path("register-like/", throttle_views.ThrottledPostView.as_view()),
     path("register-like-session/", throttle_views.ThrottledSessionView.as_view()),
+    path("login-like/", throttle_views.LoginIpLimitedView.as_view()),
+    path("login-like-session/", throttle_views.LoginIpLimitedSessionView.as_view()),
 ]

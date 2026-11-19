@@ -4,11 +4,12 @@ import { describe, expect, it } from "vitest";
 
 import { es } from "../i18n/es";
 import type { TopBarAction } from "../session/sessionState";
+import buttonsCss from "../styles/buttons.css?raw";
 import { classesOf } from "../testing/classesOf";
 import { TopBar } from "./TopBar";
 
 const noop = () => {};
-const ACTIONS: TopBarAction[] = ["none", "register", "logout"];
+const ACTIONS: TopBarAction[] = ["none", "anonymous", "logout"];
 
 const bar = (action: TopBarAction, logoutPending = false) =>
   renderToStaticMarkup(createElement(TopBar, { action, logoutPending, onNavigate: noop, onLogout: noop }));
@@ -60,20 +61,45 @@ describe("TopBar", () => {
     const html = bar("none");
     expect(links(html)).toHaveLength(1);
     expect(buttons(html)).toHaveLength(0);
+    expect(html).not.toContain(es.topBar.login);
     expect(html).not.toContain(es.topBar.register);
     expect(html).not.toContain(es.topBar.logout);
   });
 
-  it("sin sesión muestra el enlace «Registrarse» a /register, como botón principal, y no «Salir»", () => {
-    const html = bar("register");
-    const register = links(html).find((tag) => tag.includes(es.topBar.register));
-    expect(register).toMatch(/href="\/register"/);
-    expect(classesOf(register ?? "")).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
-    expect(buttons(html)).toHaveLength(0);
-    expect(es.topBar.register).toBe("Registrarse");
+  describe("sin sesión", () => {
+    const html = bar("anonymous");
+    const login = () => links(html).find((tag) => tag.includes(es.topBar.login)) ?? "";
+    const register = () => links(html).find((tag) => tag.includes(es.topBar.register)) ?? "";
+
+    it("muestra «Entrar» a /login como botón secundario y «Registrarse» a /register como principal", () => {
+      expect(login()).toMatch(/href="\/login"/);
+      expect(classesOf(login())).toEqual(expect.arrayContaining(["btn", "btn-secondary"]));
+      expect(register()).toMatch(/href="\/register"/);
+      expect(classesOf(register())).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
+      expect(es.topBar.login).toBe("Entrar");
+      expect(es.topBar.register).toBe("Registrarse");
+    });
+
+    it("«Entrar» va antes que «Registrarse», juntos en un grupo, y no hay «Salir»", () => {
+      expect(html.indexOf('href="/login"')).toBeGreaterThan(-1);
+      expect(html.indexOf('href="/login"')).toBeLessThan(html.indexOf('href="/register"'));
+      const group = html.match(/<div\b[^>]*>(?:(?!<\/div>).)*<\/div>/s)?.[0] ?? "";
+      expect(classesOf(group)).toEqual(expect.arrayContaining(["flex", "items-center", "gap-2"]));
+      expect(group).toContain('href="/login"');
+      expect(group).toContain('href="/register"');
+      expect(buttons(html)).toHaveLength(0);
+    });
+
+    it("los dos son botones de al menos 44 px", () => {
+      const rule = buttonsCss.match(/\.btn \{[^}]*\}/)?.[0] ?? "";
+      expect(rule).toMatch(/min-height:\s*2\.75rem/);
+      expect(rule).toMatch(/min-width:\s*2\.75rem/);
+      expect(classesOf(login())).toContain("btn");
+      expect(classesOf(register())).toContain("btn");
+    });
   });
 
-  it("con sesión muestra el botón «Salir», como botón secundario, y no «Registrarse»", () => {
+  it("con sesión muestra solo el botón «Salir», como botón secundario, sin «Entrar» ni «Registrarse»", () => {
     const html = bar("logout");
     const [logout] = buttons(html);
     expect(buttons(html)).toHaveLength(1);
@@ -82,6 +108,7 @@ describe("TopBar", () => {
     expect(classesOf(logout ?? "")).toEqual(expect.arrayContaining(["btn", "btn-secondary"]));
     expect(logout).not.toMatch(/\saria-disabled=/);
     expect(html).not.toContain("/register");
+    expect(html).not.toContain("/login");
     expect(es.topBar.logout).toBe("Salir");
   });
 

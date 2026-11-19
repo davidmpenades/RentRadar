@@ -6,6 +6,7 @@ from django.test import RequestFactory
 from rest_framework.request import Request
 
 from apps.users.models import User
+from apps.users.tests.helpers import assert_throttled, use_clock
 from apps.users.throttling import RegistrationThrottle, ip_bucket
 
 PATH = "/register-like/"
@@ -23,23 +24,9 @@ def test_urls(settings):
     settings.ROOT_URLCONF = "apps.users.tests.throttle_urls"
 
 
-class Clock:
-    def __init__(self):
-        self.now = 1000.0
-
-    def __call__(self):
-        return self.now
-
-    def advance(self, seconds):
-        self.now += seconds
-
-
 @pytest.fixture
 def clock(monkeypatch):
-    fake = Clock()
-    # staticmethod: sin él Python pasaría la instancia como primer argumento
-    monkeypatch.setattr(RegistrationThrottle, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, RegistrationThrottle)
 
 
 def post(client, body=BODY, *, token=TOKEN, ip=IP, path=PATH, **extra):
@@ -58,16 +45,6 @@ def post(client, body=BODY, *, token=TOKEN, ip=IP, path=PATH, **extra):
 def fill_the_quota(client, **kwargs):
     for _ in range(LIMIT):
         assert post(client, **kwargs).status_code == 200
-
-
-def assert_throttled(response):
-    assert response.status_code == 429
-    body = response.json()
-    assert body["code"] == "throttled"
-    assert isinstance(body["retry_after"], int)
-    assert body["retry_after"] >= 1
-    assert response["Retry-After"] == str(body["retry_after"])
-    return body["retry_after"]
 
 
 # ip_bucket

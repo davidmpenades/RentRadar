@@ -2,7 +2,7 @@ import socket
 
 import pytest
 from django.conf import settings
-from django.core.cache import cache
+from django.core.cache import caches
 from django.test import Client
 
 from config.env import read_optional
@@ -24,9 +24,10 @@ def pytest_sessionstart(session):
 
 
 @pytest.fixture(autouse=True)
-def clear_default_cache():
-    # Los contadores del límite viven en la caché: no pasan de un test a otro
-    cache.clear()
+def clear_caches():
+    # Los contadores de los límites viven en las cachés: no pasan de un test a otro
+    for alias in settings.CACHES:
+        caches[alias].clear()
 
 
 class NetworkBlockedError(RuntimeError):

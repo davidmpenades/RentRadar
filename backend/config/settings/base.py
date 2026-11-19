@@ -99,6 +99,17 @@ LOGGING = {
     "loggers": {"django.db.backends": {"level": "INFO"}},
 }
 
+CACHES = {
+    # Lo mismo que el almacén implícito de Django, declarado para poder añadir otro
+    "default": {"BACKEND": "django.core.cache.backends.locmem.LocMemCache"},
+    # Aparte, para que el tráfico del mapa y del registro no expulse sus contadores
+    "login": {
+        "BACKEND": "django.core.cache.backends.locmem.LocMemCache",
+        "LOCATION": "login-attempts",
+        "OPTIONS": {"MAX_ENTRIES": 20000, "CULL_FREQUENCY": 10},
+    },
+}
+
 
 def build_database(name: str, user: str, password: str, host: str, port: int) -> dict:
     return {

@@ -5,6 +5,8 @@ from django.core.management import call_command
 from rest_framework import serializers
 
 from apps.users.serializers import (
+    LoginErrorSerializer,
+    LoginRequestSerializer,
     RegistrationErrorSerializer,
     RegistrationRequestSerializer,
     SessionSerializer,
@@ -14,6 +16,7 @@ from apps.users.serializers import (
 REGISTER_PATH = "/api/v1/auth/register/"
 SESSION_PATH = "/api/v1/auth/session/"
 LOGOUT_PATH = "/api/v1/auth/logout/"
+LOGIN_PATH = "/api/v1/auth/login/"
 
 
 @pytest.fixture
@@ -192,10 +195,76 @@ def test_the_logout_answers_204_without_a_body_and_documents_its_cookie(spec):
         assert "headers" not in responses[status]
 
 
+def test_the_login_is_a_post_with_its_operation_and_tag(spec):
+    path = spec["paths"][LOGIN_PATH]
+
+    assert set(path) == {"post"}
+    assert path["post"]["operationId"] == "login"
+    assert path["post"]["tags"] == ["auth"]
+
+
+def test_the_login_requires_the_csrf_header_and_nothing_else(spec):
+    parameters = spec["paths"][LOGIN_PATH]["post"]["parameters"]
+
+    assert parameters == [
+        {
+            "in": "header",
+            "name": "X-CSRFToken",
+            "schema": {"type": "string"},
+            "required": True,
+            "description": parameters[0]["description"],
+        }
+    ]
+
+
+def test_the_login_body_has_only_email_and_password_both_required_and_nullable(spec):
+    operation = spec["paths"][LOGIN_PATH]["post"]
+    body = json_schema(operation["requestBody"])
+
+    assert component_name(body) == "LoginRequest"
+    schema = resolve(spec, body)
+    assert set(schema["properties"]) == {"email", "password"}
+    assert set(schema["required"]) == {"email", "password"}
+    for field in ("email", "password"):
+        assert schema["properties"][field]["type"] == "string"
+        assert schema["properties"][field]["nullable"] is True
+
+
+def test_the_login_documents_each_answer_and_its_component(spec):
+    responses = spec["paths"][LOGIN_PATH]["post"]["responses"]
+
+    assert set(responses) == {"200", "400", "403", "405", "413", "429"}
+    assert component_name(json_schema(responses["200"])) == "Session"
+    assert component_name(json_schema(responses["400"])) == "LoginError"
+    for status in ("403", "405", "413", "429"):
+        assert component_name(json_schema(responses[status])) == "ApiError"
+
+
+def test_the_login_success_documents_the_cookies_it_sets(spec):
+    responses = spec["paths"][LOGIN_PATH]["post"]["responses"]
+
+    assert set(responses["200"]["headers"]) == {"Set-Cookie"}
+    for status in ("400", "403", "405", "413", "429"):
+        assert "headers" not in responses[status]
+
+
+def test_the_login_error_has_optional_params_of_code_lists(spec):
+    error = spec["components"]["schemas"]["LoginError"]
+
+    assert set(error["properties"]) == {"code", "params"}
+    assert error["required"] == ["code"]
+    params = error["properties"]["params"]
+    assert params["type"] == "object"
+    assert params["additionalProperties"] == {
+        "type": "array",
+        "items": {"type": "string"},
+    }
+
+
 def test_only_the_session_declares_the_cookie_authentication(spec):
     declaring = [
         path
-        for path in (REGISTER_PATH, SESSION_PATH, LOGOUT_PATH)
+        for path in (REGISTER_PATH, SESSION_PATH, LOGOUT_PATH, LOGIN_PATH)
         for operation in spec["paths"][path].values()
         if {"cookieAuth": []} in operation.get("security", [])
     ]
@@ -210,6 +279,8 @@ def test_only_the_session_declares_the_cookie_authentication(spec):
         (SessionSerializer, {"user"}),
         (RegistrationRequestSerializer, {"email", "password"}),
         (RegistrationErrorSerializer, {"code", "params"}),
+        (LoginRequestSerializer, {"email", "password"}),
+        (LoginErrorSerializer, {"code", "params"}),
     ],
 )
 def test_serializers_are_explicit_white_lists(serializer, fields):

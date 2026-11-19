@@ -5,12 +5,14 @@ export const es = {
   },
   topBar: {
     brand: "RentRadar",
+    login: "Entrar",
     register: "Registrarse",
     logout: "Salir",
   },
   session: {
     loggedOut: "Has salido",
     registered: "Cuenta creada.",
+    loggedIn: "Has entrado.",
     logoutFailed: "No se ha podido salir. Inténtalo de nuevo.",
     retry: "Reintentar",
     dismiss: "Cerrar aviso",
@@ -29,6 +31,7 @@ export const es = {
     // {min} y {max} salen de PASSWORD_MIN_LENGTH y PASSWORD_MAX_LENGTH
     passwordHint: "Al menos {min} caracteres.",
     summary: "Revisa los campos marcados.",
+    toLogin: "¿Ya tienes cuenta? Entra",
     errors: {
       timeout: "La petición ha tardado demasiado. Inténtalo de nuevo.",
       csrf: "No se ha podido enviar el formulario. Recarga la página e inténtalo de nuevo.",
@@ -55,6 +58,13 @@ export const es = {
       password_too_similar: "La contraseña se parece demasiado al email.",
       unknown: "Revisa la contraseña.",
     },
+  },
+  login: {
+    title: "Entrar",
+    submit: "Entrar",
+    submitting: "Entrando…",
+    credentialsInvalid: "El email o la contraseña no son correctos.",
+    toRegister: "¿No tienes cuenta? Regístrate",
   },
   panel: {
     label: "Bienes en esta zona",

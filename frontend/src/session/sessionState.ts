@@ -4,7 +4,7 @@ import { es } from "../i18n/es";
 // Sin email: lo que el cliente no guarda no puede pintarse por error
 export type SessionStatus = "unknown" | "anonymous" | "authenticated";
 
-export type TopBarAction = "none" | "register" | "logout";
+export type TopBarAction = "none" | "anonymous" | "logout";
 
 export type LogoutNoticeKind = "logout_failed";
 
@@ -14,12 +14,12 @@ export type LogoutResult = {
   status: SessionStatus;
   // El fallo no va a la región global: lo anuncia la propia región del aviso
   announcement: string | null;
-  focus: "register" | "logout";
+  focus: "login" | "logout";
   notice: LogoutNoticeKind | null;
 };
 
 export function topBarAction(status: SessionStatus): TopBarAction {
-  if (status === "anonymous") return "register";
+  if (status === "anonymous") return "anonymous";
   if (status === "authenticated") return "logout";
   return "none";
 }
@@ -48,15 +48,13 @@ export async function loadSessionStatus({ whoAmI, signal, logError }: LoadSessio
   }
 }
 
-type SettleLogoutOptions = {
-  logout: () => Promise<LogoutOutcome>;
-  logError: (error: unknown) => void;
-};
-
-// Un rechazo de la salida no puede dejar «Salir» deshabilitado para siempre
-export async function settleLogout({ logout, logError }: SettleLogoutOptions): Promise<SettledLogout> {
+// Un rechazo del cliente no puede dejar un envío bloqueado; se registra el error, nunca lo que lleva la llamada
+export async function settleUnexpected<Outcome>(
+  run: () => Promise<Outcome>,
+  logError: (error: unknown) => void,
+): Promise<Outcome | { kind: "failed"; reason: "unexpected" }> {
   try {
-    return await logout();
+    return await run();
   } catch (error) {
     logError(error);
     return { kind: "failed", reason: "unexpected" };
@@ -66,7 +64,7 @@ export async function settleLogout({ logout, logError }: SettleLogoutOptions): P
 // Tras un fallo o un tiempo vencido no se pregunta quién soy: reintentar sin sesión también sale bien
 export function logoutResult(outcome: SettledLogout): LogoutResult {
   if (outcome.kind === "loggedOut") {
-    return { status: "anonymous", announcement: es.session.loggedOut, focus: "register", notice: null };
+    return { status: "anonymous", announcement: es.session.loggedOut, focus: "login", notice: null };
   }
   return { status: "authenticated", announcement: null, focus: "logout", notice: "logout_failed" };
 }
@@ -76,6 +74,10 @@ export function dismissResult(): { notice: null; focus: "logout" } {
   return { notice: null, focus: "logout" };
 }
 
-export function registrationResult(): { status: SessionStatus; announcement: string } {
-  return { status: "authenticated", announcement: es.session.registered };
+export function authenticatedResult(how: "registered" | "loggedIn"): { status: SessionStatus; announcement: string } {
+  return { status: "authenticated", announcement: how === "registered" ? es.session.registered : es.session.loggedIn };
+}
+
+export function shouldLeaveAuthForm(status: SessionStatus): boolean {
+  return status === "authenticated";
 }

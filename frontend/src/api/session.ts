@@ -9,6 +9,7 @@ type Session = components["schemas"]["Session"];
 const SESSION_URL = "/api/v1/auth/session/";
 const REGISTER_URL = "/api/v1/auth/register/";
 const LOGOUT_URL = "/api/v1/auth/logout/";
+const LOGIN_URL = "/api/v1/auth/login/";
 const WHO_AM_I_TIMEOUT_MS = 5_000;
 const WRITE_TIMEOUT_MS = 10_000;
 const MAX_RETRY_AFTER_SECONDS = 86_400;
@@ -47,11 +48,18 @@ export type RegisterOutcome =
 
 export type LogoutOutcome = { kind: "loggedOut" } | { kind: "failed"; reason: FailureReason };
 
+export type LoginOutcome =
+  | { kind: "loggedIn" }
+  | { kind: "credentialsInvalid" }
+  | { kind: "throttled"; retryAfterSeconds: number }
+  | { kind: "failed"; reason: FailureReason };
+
 export type WhoAmIResult = "authenticated" | "anonymous";
 
 export type SessionClient = {
   whoAmI(signal?: AbortSignal): Promise<WhoAmIResult>;
   register(credentials: { email: string; password: string }): Promise<RegisterOutcome>;
+  login(credentials: { email: string; password: string }): Promise<LoginOutcome>;
   logout(): Promise<LogoutOutcome>;
 };
 
@@ -75,7 +83,7 @@ type SessionClientOptions<Handle> = {
 
 const sessionUserSchema = z.strictObject({ email: z.string().min(1) });
 const sessionSchema = z.strictObject({ user: sessionUserSchema.nullable() });
-// El 201 del registro exige la cuenta: un user nulo no es un registro correcto
+// El éxito del registro y el de la entrada exigen la cuenta: un user nulo no es un éxito
 const registeredSchema = z.strictObject({ user: sessionUserSchema });
 const apiErrorSchema = z.strictObject({
   code: z.string(),
@@ -83,6 +91,8 @@ const apiErrorSchema = z.strictObject({
   retry_after: z.int().min(1).optional(),
 });
 const fieldParamsSchema = z.record(z.string(), z.array(z.string()));
+// La entrada solo tiene un error de credenciales: cualquier otra forma es una respuesta inválida
+const credentialsInvalidParamsSchema = z.strictObject({ non_field: z.tuple([z.literal("credentials_invalid")]) });
 
 // Los errores propios llevan solo la causa: ni el cuerpo ni la dirección pedida
 class SessionTimeoutError extends Error {
@@ -157,6 +167,10 @@ function fieldErrorsFrom(params: unknown): RegisterOutcome {
   return { kind: "fieldErrors", email, password, other };
 }
 
+function isCredentialsInvalid(params: unknown): boolean {
+  return credentialsInvalidParamsSchema.safeParse(params).success;
+}
+
 // Solo el vencimiento y la red son fallos conocidos; cualquier otro error es del código y se propaga
 function failureReason(error: unknown): "timeout" | "network" {
   if (error instanceof SessionTimeoutError) return "timeout";
@@ -168,6 +182,17 @@ type Attempt<Outcome> = Outcome | { kind: "csrf" };
 type RegisterAttempt =
   | Attempt<RegisterOutcome>
   | { kind: "askWhoAmI"; failure: "invalid" | "timeout" | "network" };
+type LoginAttempt =
+  | Attempt<LoginOutcome>
+  | { kind: "askWhoAmI"; failure: "invalid" | "server" | "timeout" | "network" };
+type ClientErrorReading =
+  | { kind: "failed"; reason: "invalid" }
+  | { kind: "csrf" }
+  | { kind: "apiError"; error: z.infer<typeof apiErrorSchema> };
+
+function isCsrf(attempt: { kind: string }): attempt is { kind: "csrf" } {
+  return attempt.kind === "csrf";
+}
 
 export function createSessionClient<Handle>(options: SessionClientOptions<Handle>): SessionClient {
   const { fetch, readCookies, setTimer, clearTimer, whoAmITimeoutMs, writeTimeoutMs } = options;
@@ -202,6 +227,37 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
     };
   }
 
+  // El intérprete lee el cuerpo dentro del mismo plazo que el envío
+  function postWithin<T>(
+    url: string,
+    interpret: (response: Response) => Promise<T>,
+    body?: Record<string, string>,
+  ): Promise<T> {
+    return withTimeout(writeTimeoutMs, async (inner) =>
+      interpret(
+        await send(url, {
+          method: "POST",
+          credentials: "same-origin",
+          signal: inner,
+          headers: postHeaders(body !== undefined),
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        }),
+      ),
+    );
+  }
+
+  // Un solo reintento: quién soy deja una cookie nueva, que se relee al enviar
+  async function retryOnceOnCsrf<Outcome extends { kind: string }>(
+    attempt: () => Promise<Attempt<Outcome>>,
+  ): Promise<Outcome | { kind: "failed"; reason: "csrf" }> {
+    let result = await attempt();
+    if (isCsrf(result)) {
+      await whoAmI();
+      result = await attempt();
+    }
+    return isCsrf(result) ? { kind: "failed", reason: "csrf" } : result;
+  }
+
   async function whoAmI(signal?: AbortSignal): Promise<WhoAmIResult> {
     try {
       return await withTimeout(
@@ -220,6 +276,15 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
     }
   }
 
+  // Lo común a los 4xx de las escrituras: sin un error válido la respuesta es inválida y csrf_failed se reintenta
+  async function readClientError(response: Response): Promise<ClientErrorReading> {
+    if (!isClientError(response.status)) return { kind: "failed", reason: "invalid" };
+    const error = await readApiError(response);
+    if (!error) return { kind: "failed", reason: "invalid" };
+    if (response.status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    return { kind: "apiError", error };
+  }
+
   async function interpretRegister(response: Response): Promise<RegisterAttempt> {
     const { status } = response;
     // El cuerpo de un error del servidor no se lee: nunca llega a la pantalla
@@ -235,11 +300,9 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
         throw error;
       }
     }
-    if (!isClientError(status)) return { kind: "failed", reason: "invalid" };
-
-    const error = await readApiError(response);
-    if (!error) return { kind: "failed", reason: "invalid" };
-    if (status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    const read = await readClientError(response);
+    if (read.kind !== "apiError") return read;
+    const { error } = read;
     if (status === 429) {
       // Cuenta el cuerpo; la cabecera Retry-After se ignora
       const seconds = error.retry_after;
@@ -252,17 +315,10 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
 
   async function attemptRegister(credentials: { email: string; password: string }): Promise<RegisterAttempt> {
     try {
-      return await withTimeout(writeTimeoutMs, async (inner) =>
-        interpretRegister(
-          await send(REGISTER_URL, {
-            method: "POST",
-            credentials: "same-origin",
-            signal: inner,
-            headers: postHeaders(true),
-            body: JSON.stringify({ email: credentials.email, password: credentials.password }),
-          }),
-        ),
-      );
+      return await postWithin(REGISTER_URL, interpretRegister, {
+        email: credentials.email,
+        password: credentials.password,
+      });
     } catch (error) {
       // El servidor pudo completar el registro: antes de dar el error se pregunta quién soy
       return failureReason(error) === "timeout"
@@ -272,16 +328,54 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
   }
 
   async function register(credentials: { email: string; password: string }): Promise<RegisterOutcome> {
-    let attempt = await attemptRegister(credentials);
-    // Un solo reintento: quién soy deja una cookie nueva, que se relee al enviar
-    if (attempt.kind === "csrf") {
-      await whoAmI();
-      attempt = await attemptRegister(credentials);
-    }
-    if (attempt.kind === "csrf") return { kind: "failed", reason: "csrf" };
+    const attempt = await retryOnceOnCsrf(() => attemptRegister(credentials));
     if (attempt.kind !== "askWhoAmI") return attempt;
     return (await whoAmI()) === "authenticated"
       ? { kind: "registered" }
+      : { kind: "failed", reason: attempt.failure };
+  }
+
+  async function interpretLogin(response: Response): Promise<LoginAttempt> {
+    const { status } = response;
+    // El servidor pudo abrir la sesión antes de fallar: sin leer el cuerpo, se pregunta quién soy
+    if (isServerError(status)) return { kind: "askWhoAmI", failure: "server" };
+    if (status === 200) {
+      return registeredSchema.safeParse(await readJson(response)).success
+        ? { kind: "loggedIn" }
+        : { kind: "askWhoAmI", failure: "invalid" };
+    }
+    const read = await readClientError(response);
+    if (read.kind !== "apiError") return read;
+    const { error } = read;
+    if (status === 429) {
+      // Cuenta el cuerpo; la cabecera Retry-After se ignora
+      const seconds = error.retry_after;
+      if (seconds === undefined || seconds > MAX_RETRY_AFTER_SECONDS) return { kind: "failed", reason: "invalid" };
+      return { kind: "throttled", retryAfterSeconds: seconds };
+    }
+    if (status === 400 && error.code === "invalid_fields") {
+      return isCredentialsInvalid(error.params) ? { kind: "credentialsInvalid" } : { kind: "failed", reason: "invalid" };
+    }
+    return { kind: "failed", reason: "request" };
+  }
+
+  async function attemptLogin(credentials: { email: string; password: string }): Promise<LoginAttempt> {
+    try {
+      return await postWithin(LOGIN_URL, interpretLogin, {
+        email: credentials.email,
+        password: credentials.password,
+      });
+    } catch (error) {
+      // Con la red caída, el cuerpo cortado o el plazo vencido, el servidor pudo abrir la sesión
+      return { kind: "askWhoAmI", failure: failureReason(error) };
+    }
+  }
+
+  async function login(credentials: { email: string; password: string }): Promise<LoginOutcome> {
+    const attempt = await retryOnceOnCsrf(() => attemptLogin(credentials));
+    if (attempt.kind !== "askWhoAmI") return attempt;
+    return (await whoAmI()) === "authenticated"
+      ? { kind: "loggedIn" }
       : { kind: "failed", reason: attempt.failure };
   }
 
@@ -289,41 +383,24 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
     const { status } = response;
     if (status === 204) return { kind: "loggedOut" };
     if (isServerError(status)) return { kind: "failed", reason: "server" };
-    if (!isClientError(status)) return { kind: "failed", reason: "invalid" };
-
-    const error = await readApiError(response);
-    if (!error) return { kind: "failed", reason: "invalid" };
-    if (status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    const read = await readClientError(response);
+    if (read.kind !== "apiError") return read;
     return { kind: "failed", reason: "request" };
   }
 
   async function attemptLogout(): Promise<Attempt<LogoutOutcome>> {
     try {
-      return await withTimeout(writeTimeoutMs, async (inner) =>
-        interpretLogout(
-          await send(LOGOUT_URL, {
-            method: "POST",
-            credentials: "same-origin",
-            signal: inner,
-            headers: postHeaders(false),
-          }),
-        ),
-      );
+      return await postWithin(LOGOUT_URL, interpretLogout);
     } catch (error) {
       return { kind: "failed", reason: failureReason(error) };
     }
   }
 
-  async function logout(): Promise<LogoutOutcome> {
-    let attempt = await attemptLogout();
-    if (attempt.kind === "csrf") {
-      await whoAmI();
-      attempt = await attemptLogout();
-    }
-    return attempt.kind === "csrf" ? { kind: "failed", reason: "csrf" } : attempt;
+  function logout(): Promise<LogoutOutcome> {
+    return retryOnceOnCsrf(attemptLogout);
   }
 
-  return { whoAmI, register, logout };
+  return { whoAmI, register, login, logout };
 }
 
 export const sessionClient = createSessionClient({

@@ -1,7 +1,7 @@
 from rest_framework.authentication import SessionAuthentication
 
 from apps.core.tests.csrf_views import PostOnlyView
-from apps.users.throttling import RegistrationThrottle
+from apps.users.throttling import LoginIpThrottle, RegistrationThrottle
 
 
 class ThrottledPostView(PostOnlyView):
@@ -9,5 +9,14 @@ class ThrottledPostView(PostOnlyView):
 
 
 class ThrottledSessionView(ThrottledPostView):
+    # Con autenticación por sesión, el usuario de la petición sí puede estar autenticado
+    authentication_classes = [SessionAuthentication]
+
+
+class LoginIpLimitedView(PostOnlyView):
+    throttle_classes = [LoginIpThrottle]
+
+
+class LoginIpLimitedSessionView(LoginIpLimitedView):
     # Con autenticación por sesión, el usuario de la petición sí puede estar autenticado
     authentication_classes = [SessionAuthentication]

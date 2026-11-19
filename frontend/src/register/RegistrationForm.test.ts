@@ -107,6 +107,17 @@ describe("RegistrationForm: estructura", () => {
   });
 });
 
+describe("RegistrationForm: enlace a la entrada", () => {
+  it("«¿Ya tienes cuenta? Entra» enlaza con /login bajo el envío y mide al menos 44 px", () => {
+    const html = render();
+    const link = tag(html, /<a\b[^>]*\bhref="\/login"[^>]*>[^<]*<\/a>/);
+    expect(textOf(link)).toBe(es.register.toLogin);
+    expect(es.register.toLogin).toBe("¿Ya tienes cuenta? Entra");
+    expect(classesOf(link)).toEqual(expect.arrayContaining(["inline-flex", "min-h-11"]));
+    expect(html.indexOf('type="submit"')).toBeLessThan(html.indexOf('href="/login"'));
+  });
+});
+
 describe("RegistrationForm: la contraseña nunca llega al HTML", () => {
   const STATES: [string, Partial<Props>][] = [
     ["vacío", {}],

@@ -76,10 +76,10 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - RF-8: SI el cuerpo de una petición de registro no es JSON válido, está demasiado anidado (ver «Definiciones»), no es un objeto, o lleva el email o la contraseña con un tipo que no es texto (número, lista u objeto), ENTONCES EL SISTEMA la rechaza como `invalid_request`; y SI declara más de 4 KiB, llega con codificación troceada (`Transfer-Encoding`, de cualquier tamaño) o se leen más de 4 KiB, la rechaza como `payload_too_large`. En ambos casos no crea nada. Un email o una contraseña ausentes, nulos o vacíos no son `invalid_request`: los trata RF-2.
 
 ### Interfaz
-- RF-9: MIENTRAS el cliente aún no sabe si hay sesión, la barra superior no muestra acciones de sesión; después muestra «Registrarse» si no hay sesión y «Salir» si la hay, y nunca el email de la cuenta. La marca de la barra es un enlace a la página del mapa. Si «quién soy» falla, no responde en 5 s o su respuesta tiene una forma inválida, se trata como sin sesión y no bloquea el mapa.
-- RF-10: CUANDO el visitante envía el formulario de registro con el email y la contraseña no vacíos, EL SISTEMA deshabilita el envío mientras la petición está en curso y, si se abre la sesión, lo lleva al mapa sin añadir una entrada al historial y con la barra superior en «Salir». El cliente solo comprueba que no estén vacíos; el resto lo valida el servidor.
+- RF-9: MIENTRAS el cliente aún no sabe si hay sesión, la barra superior no muestra acciones de sesión; después muestra «Entrar» (botón secundario) y «Registrarse» (principal), juntos y en ese orden, si no hay sesión, y solo «Salir» si la hay, y nunca el email de la cuenta. «Entrar» llega con la spec 015. La marca de la barra es un enlace a la página del mapa. Si «quién soy» falla, no responde en 5 s o su respuesta tiene una forma inválida, se trata como sin sesión y no bloquea el mapa.
+- RF-10: CUANDO el visitante envía el formulario de registro con el email y la contraseña no vacíos, EL SISTEMA deshabilita el envío mientras la petición está en curso y, si se abre la sesión, lo lleva al mapa sin añadir una entrada al historial y con la barra superior en «Salir». El cliente solo comprueba que no estén vacíos; el resto lo valida el servidor. El formulario enlaza con la entrada de la spec 015 («¿Ya tienes cuenta? Entra»).
 - RF-11: SI el servidor rechaza el formulario, la petición falla o vence su tiempo máximo de 10 s, ENTONCES EL SISTEMA muestra el error en castellano junto al campo afectado o, si es general, en la región de estado, conserva el email, borra la contraseña solo si el resultado trae un error de la contraseña y la conserva en cualquier otro caso, y lleva el foco al primer campo con error (email antes que contraseña) o, si el error es general, a la región de estado. Ante `csrf_failed`, el cliente vuelve a preguntar «quién soy» y reintenta una sola vez antes de mostrar el error. Si la petición falla o vence, el error es general y el envío vuelve a habilitarse para reintentar; antes de mostrar el error de un tiempo vencido, el cliente pregunta «quién soy» y, si hay sesión, continúa como un éxito.
-- RF-12: CUANDO el visitante pulsa «Salir», EL SISTEMA cierra la sesión, pasa la barra superior a «Registrarse», anuncia «Has salido», lleva el foco a «Registrarse» y lo deja en la página en que estaba. SI falla o vence su tiempo máximo de 10 s, la barra sigue en «Salir», el foco queda en «Salir» y se muestra y anuncia «No se ha podido salir. Inténtalo de nuevo.» con un botón «Reintentar». La salida usa el mismo reintento ante `csrf_failed` que RF-11.
+- RF-12: CUANDO el visitante pulsa «Salir», EL SISTEMA cierra la sesión, pasa la barra superior a «Entrar» y «Registrarse», anuncia «Has salido», lleva el foco a «Entrar» y lo deja en la página en que estaba. SI falla o vence su tiempo máximo de 10 s, la barra sigue en «Salir», el foco queda en «Salir» y se muestra y anuncia «No se ha podido salir. Inténtalo de nuevo.» con un botón «Reintentar». La salida usa el mismo reintento ante `csrf_failed` que RF-11.
 - RF-13: MIENTRAS un visitante abre la página de registro, EL SISTEMA muestra el formulario sin esperar a «quién soy» y, si la sesión llega después o ya existía, lo lleva al mapa sin añadir una entrada al historial.
 
 ## Requisitos no funcionales
@@ -114,7 +114,7 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - **Mismo origen**: el navegador llama a la API desde el mismo origen que la página, y la API no concede permisos entre orígenes.
 - **Dependencias (constitución, punto 1)**: ninguna dependencia nueva. Se usan la autenticación de Django, la de DRF y la interfaz actual; el frontend no añade librería de rutas.
 - **Accesibilidad y móvil (constitución, punto 7)**:
-  - Se diseña a 375 px y se amplía a 1280 px. La barra superior no desborda y los controles miden al menos 44 px: «Registrarse», «Salir», los campos, el envío y «Mostrar contraseña».
+  - Se diseña a 375 px y se amplía a 1280 px. La barra superior no desborda y los controles miden al menos 44 px: «Entrar», «Registrarse», «Salir», los campos, el envío, «Mostrar contraseña» y el enlace «¿Ya tienes cuenta? Entra».
   - Cada campo tiene su etiqueta y sus atributos de autocompletado (email, contraseña nueva) y no se bloquea pegar. Los errores se asocian al campo.
   - Una región de estado anuncia el envío («Creando la cuenta…»), el éxito y los errores, una vez por petición.
   - El formulario tiene un control «Mostrar contraseña» que alterna ver y ocultar el texto, para evitar errores de escritura mientras no haya recuperación de contraseña.
@@ -143,7 +143,7 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - Cuerpo troceado (`Transfer-Encoding`), de cualquier tamaño, o que declara o aporta más de 4 KiB: `payload_too_large` (RF-8). Cuerpo vacío con tipo JSON: se trata como un objeto vacío y da `email_empty` y `password_required` (RF-2).
 - Salir con una sesión caducada o con una cookie de sesión mal formada: respuesta correcta y cookie retirada (RF-5).
 - «Quién soy» con cuenta desactivada, sesión de 14 días y un segundo o cookie mal formada: responde sin sesión y sin error (RF-6).
-- «Quién soy» falla, tarda más de 5 s o responde con otra forma: la barra no muestra acciones al principio, después «Registrarse», y el mapa sigue funcionando (RF-9).
+- «Quién soy» falla, tarda más de 5 s o responde con otra forma: la barra no muestra acciones al principio, después «Entrar» y «Registrarse», y el mapa sigue funcionando (RF-9).
 - El primer envío falla con `csrf_failed` porque falló «quién soy»: el cliente pregunta de nuevo y reintenta una vez; si vuelve a fallar, error general (RF-11).
 - La respuesta de un registro correcto llega con forma inválida: el cliente pregunta «quién soy»; con sesión continúa y sin ella muestra un error general (RF-10).
 - La petición de registro vence a los 10 s: el cliente pregunta «quién soy»; con sesión (el servidor pudo completarlo) continúa como un éxito, y sin ella muestra el error general y el envío vuelve a habilitarse para reintentar (RF-11).
@@ -152,13 +152,13 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - Pulsar «Atrás» tras registrarse: no vuelve al formulario (RF-10).
 - Salir falla por red, por un error del servidor o porque vence a los 10 s: la barra sigue en «Salir», el foco queda en «Salir» y se muestra y anuncia el error con «Reintentar» (RF-12).
 - Pulsar la marca de la barra: lleva a la página del mapa con navegación interna, y desde el mapa no cambia nada (RF-9).
-- Cerrar sesión en una pestaña y pulsar «Salir» en otra que aún muestra «Salir»: funciona sin error y la barra pasa a «Registrarse» (RF-5, RF-12).
+- Cerrar sesión en una pestaña y pulsar «Salir» en otra que aún muestra «Salir»: funciona sin error y la barra pasa a «Entrar» y «Registrarse» (RF-5, RF-12).
 - Abrir `/register` con sesión: va al mapa sin añadir una entrada al historial. Abrirlo sin sesión y que la sesión llegue después de pintar el formulario: igual (RF-13). `/register/` se normaliza a `/register` (RF-13).
-- A 375 px la barra superior no desborda, ni con «Registrarse» ni con «Salir» (RF-9).
+- A 375 px la barra superior no desborda, ni con «Entrar» y «Registrarse» ni con «Salir» (RF-9).
 - La lista pública pedida con una sesión abierta: respuesta idéntica a la del anónimo, sin cookies (no funcionales).
 
 ## Fuera de alcance
-- **Entrada**: iniciar sesión, el error uniforme de credenciales incorrectas, los límites de intentos de entrada (por IP, y por IP y email), la página `/login` y «Entrar» en la barra superior (spec 015). Hasta entonces, quien sale de una cuenta no puede volver a entrar en ella.
+- **Entrada**: iniciar sesión, el error uniforme de credenciales incorrectas, los límites de intentos de entrada (por IP, y por IP y email) y la página `/login` (spec 015). Esta spec solo recoge cómo la entrada cambia la barra superior (RF-9 y RF-12) y el formulario de registro (RF-10).
 - **Verificación del email y recuperación de contraseña** (spec 013): el registro no comprueba que el email sea de quien lo escribe, y quien olvide su contraseña no puede recuperar la cuenta.
 - **Borrado de cuenta, política de privacidad y aviso legal** (spec 014): el formulario de registro no enlaza todavía los textos legales. Es un requisito obligatorio antes de abrir el registro al público.
 - Cambio de contraseña, cambio de email, ver o cerrar otras sesiones y cerrar todas las sesiones.
@@ -190,7 +190,7 @@ Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 
 - **Enumeración de emails**: el registro revela si un email existe (`email_taken`). Se mitiga con el límite de 10 registros por hora y IP. La spec 013 lo corrige.
 - **Suplantación del email**: sin verificación, alguien puede registrar el email de otra persona y bloquear que ella lo use. Lo corrige la spec 013.
 - **Sin recuperación de contraseña** hasta la 013: quien la pierda pierde la cuenta. No afecta a nadie real, porque el registro no se abre al público antes.
-- **Cuentas de prueba**: sin entrada hasta la 015, cada comprobación usa una cuenta nueva `@example.com`, y esas cuentas no se reutilizan tras salir.
+- **Cuentas de prueba**: la validación de esta spec, todavía sin entrada, usó una cuenta nueva `@example.com` en cada comprobación, sin reutilizarla tras salir. Desde la spec 015 se puede volver a entrar en ellas.
 - **Registro agotable bajo IP compartida**: detrás de un proxy (`NUM_PROXIES = 0`) o de un NAT, todos los visitantes comparten IP, y cualquiera agota el cupo de registro de los demás. La 011 fija el proxy de confianza.
 - **Almacén de contadores**: sin caché configurada, los contadores viven en memoria por proceso, con expulsión de entradas al llenarse y sin atomicidad. El límite efectivo se multiplica por el número de procesos y una ráfaga de peticiones simultáneas puede superar las 10. La 011 lo resuelve.
 - **Coste del hash**: cada registro válido calcula un hash costoso; solo lo frena el límite por IP. «Salir» y «quién soy» no tienen límite.
@@ -202,7 +202,7 @@ Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 
 - **Sin textos legales en el registro** hasta la 014. Solo hay datos de desarrollo.
 - **Caché compartida con la lista pública**: la lista pública cuenta por dirección IPv6 completa en la misma caché en memoria (300 entradas). Quien controle un /64 puede llenarla y expulsar el contador de registro. La 011 lo resuelve con una caché compartida.
 - **Cuerpo troceado**: bajo WSGI, un cuerpo sin longitud declarada llega vacío y no se puede medir. Se rechaza toda petición con `Transfer-Encoding`, y el tope real lo pone el proxy (spec 011).
-- **Cuenta huérfana**: si falla el guardado de la sesión después de crear la cuenta, existe la cuenta sin sesión; sin entrada (spec 015) no se puede usar.
+- **Cuenta huérfana**: si falla el guardado de la sesión después de crear la cuenta, existe la cuenta sin sesión; se usa entrando con su email y su contraseña (spec 015).
 - **Registro tras un proxy HTTPS**: hasta que la 011 fije `SECURE_PROXY_SSL_HEADER` y los orígenes de confianza, el registro y la salida fallan con `csrf_failed` en ese despliegue.
 - **Vistas futuras con la autenticación por sesión de serie**: solo comprobaría CSRF a los usuarios ya autenticados y respondería `forbidden`. Una guarda sobre las rutas obliga a las vistas que cambian el estado a usar la comprobación explícita (specs 010 y 015).
 - **Contraseñas del terminal**: `createsuperuser` interactivo y `changepassword` pasan a aplicar los validadores de contraseña.
@@ -218,7 +218,7 @@ Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 
   - `no-store`, respuesta mínima y ningún error del servidor con contenido nulo o sustitutos sueltos.
 - La suite de tests, el análisis estático, la comprobación de migraciones y el control de desfase del contrato están en verde. Frontend: vitest, build y eslint de los ficheros tocados.
 - **Comprobación en el navegador**, a 1280 y 375 px, con la consola sin errores propios de la aplicación (las respuestas 4xx esperadas al probar errores se anotan) y un recorrido solo con teclado, a través del proxy de Vite y sin añadir orígenes de confianza a la configuración de Django (Django recibe `Host: localhost:5173`): registrarse, ver «Salir» en la barra superior, recargar y seguir con sesión, salir, y comprobar un error de cada tipo (email repetido, contraseña débil, límite superado). El límite de registro se prueba el último, porque las pruebas salen de la misma IP; si hace falta repetirlo, se reinicia el backend, que pone a cero el contador en memoria. Registrarse crea cuentas en la base de datos de desarrollo: el desarrollador lo autoriza expresamente en ese momento y las cuentas usan el dominio `example.com`. Esas cuentas se acumulan en la base de datos de desarrollo hasta que haga falta limpiarlas; entonces se borran una vez con orden expresa del desarrollador, o se reinicia el volumen y se ejecutan `migrate` y el comando de demostración.
-- Las specs 004 y 006 quedan actualizadas con `/sdd-change` (Cambios en otras specs), y las notas de la 015 siguen el orden de comprobaciones de esta spec.
+- Las specs 004 y 006 quedan actualizadas con `/sdd-change` (Cambios en otras specs), y la spec 015 sigue el orden de comprobaciones de esta spec.
 - Se revisa que ningún bien, mapa ni panel de la 006 cambie su comportamiento, salvo el que ocupen la zona bajo la barra superior, sin scroll de página.
 
 ## Dudas abiertas

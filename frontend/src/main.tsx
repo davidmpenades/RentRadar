@@ -11,7 +11,11 @@ import "./styles/index.css";
 const root = document.getElementById("root");
 if (!root) throw new Error("Falta el contenedor raíz");
 
-const REDIRECTS: Partial<Record<Route, string>> = { redirectToMap: "/map", redirectToRegister: "/register" };
+const REDIRECTS: Partial<Record<Route, string>> = {
+  redirectToMap: "/map",
+  redirectToRegister: "/register",
+  redirectToLogin: "/login",
+};
 
 // replaceState y no pushState: Atrás no debe devolver a la dirección sin normalizar
 const redirectTarget = REDIRECTS[resolveRoute(window.location.pathname)];

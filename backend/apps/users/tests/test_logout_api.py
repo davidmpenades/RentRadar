@@ -1,9 +1,9 @@
-from contextlib import ExitStack, contextmanager
 from datetime import timedelta
 from unittest import mock
 
 import pytest
 from django.conf import settings as django_settings
+from django.contrib.auth.signals import user_logged_out
 from django.contrib.sessions.backends.db import SessionStore
 from django.contrib.sessions.models import Session
 from django.core.handlers.wsgi import LimitedStream
@@ -11,7 +11,12 @@ from django.test import Client
 from django.utils import timezone
 
 from apps.users.models import User
-from apps.users.tests.helpers import assert_no_store
+from apps.users.tests.helpers import (
+    assert_no_store,
+    cross_origin_headers,
+    stored_sessions,
+    untouchable_session_store,
+)
 
 pytestmark = pytest.mark.django_db
 
@@ -43,38 +48,12 @@ def log_in(client, email=EMAIL, **fields):
     return client.cookies[SESSION_COOKIE].value
 
 
-def stored_sessions():
-    return list(
-        Session.objects.order_by("session_key").values_list(
-            "session_key", "session_data", "expire_date"
-        )
-    )
-
-
 def stored_accounts():
     return list(
         User.objects.order_by("pk").values_list(
             "pk", "email", "password", "is_active", "is_staff", "last_login"
         )
     )
-
-
-@contextmanager
-def untouchable_session_store():
-    # Cualquier lectura o escritura de la sesión hace fallar la petición
-    names = ("load", "save", "create", "delete", "flush", "cycle_key", "clear")
-    with ExitStack() as stack:
-        for name in names:
-            stack.enter_context(
-                mock.patch.object(
-                    SessionStore, name, side_effect=AssertionError(f"session.{name}")
-                )
-            )
-        yield
-
-
-def cross_origin_headers(response):
-    return [n for n in response.headers if n.lower().startswith("access-control-")]
 
 
 def assert_session_cookie_deleted(response):
@@ -136,6 +115,23 @@ def test_the_csrf_cookie_is_left_untouched(csrf_client):
     assert response.status_code == 204
     assert CSRF_COOKIE not in response.cookies
     assert csrf_client.cookies[CSRF_COOKIE].value == TOKEN
+
+
+def test_logging_out_does_not_send_user_logged_out(csrf_client):
+    log_in(csrf_client)
+    received = []
+
+    def receiver(sender, **kwargs):
+        received.append(kwargs)
+
+    user_logged_out.connect(receiver, weak=False)
+    try:
+        response = logout(csrf_client)
+    finally:
+        user_logged_out.disconnect(receiver)
+
+    assert response.status_code == 204
+    assert received == []
 
 
 def test_an_expired_session_row_is_deleted_too(csrf_client):

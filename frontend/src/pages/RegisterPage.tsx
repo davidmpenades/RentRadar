@@ -7,12 +7,11 @@ import {
   emptyFieldErrors,
   formStateAfter,
   formStateForEmpty,
-  settleRegistration,
-  shouldLeaveRegister,
   type FocusTarget,
   type FormState,
 } from "../register/registerForm";
 import { useSession } from "../session/SessionProvider";
+import { settleUnexpected, shouldLeaveAuthForm } from "../session/sessionState";
 
 type RegisterPageProps = {
   onLeave: () => void;
@@ -41,7 +40,7 @@ export function RegisterPage({ onLeave }: RegisterPageProps) {
 
   // El formulario se pinta sin esperar a quién soy; si la sesión ya existe o llega después, se sale
   useEffect(() => {
-    if (shouldLeaveRegister(session.status)) onLeave();
+    if (shouldLeaveAuthForm(session.status)) onLeave();
   }, [session.status, onLeave]);
 
   useEffect(() => {
@@ -76,14 +75,10 @@ export function RegisterPage({ onLeave }: RegisterPageProps) {
     setErrors(NO_ERRORS);
     void (async () => {
       try {
-        const outcome = await settleRegistration({
-          register: sessionClient.register,
-          credentials: { email, password },
-          logError,
-        });
+        const outcome = await settleUnexpected(() => sessionClient.register({ email, password }), logError);
         if (outcome.kind === "registered") {
           if (passwordInput) passwordInput.value = "";
-          session.markRegistered();
+          session.markAuthenticated("registered");
           return;
         }
         const state = formStateAfter(outcome);
@@ -96,7 +91,7 @@ export function RegisterPage({ onLeave }: RegisterPageProps) {
     })();
   };
 
-  if (shouldLeaveRegister(session.status)) return null;
+  if (shouldLeaveAuthForm(session.status)) return null;
 
   return (
     <RegistrationForm

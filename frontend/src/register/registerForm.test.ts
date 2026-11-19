@@ -1,4 +1,4 @@
-import { describe, expect, it, vi } from "vitest";
+import { describe, expect, it } from "vitest";
 
 import {
   EMAIL_ERROR_CODES,
@@ -21,8 +21,6 @@ import {
   firstFocusTarget,
   formStateAfter,
   formStateForEmpty,
-  settleRegistration,
-  shouldLeaveRegister,
   type SettledRegistration,
 } from "./registerForm";
 
@@ -301,53 +299,6 @@ describe("formStateForEmpty: los campos vacíos se avisan sin enviar nada", () =
   });
 });
 
-describe("settleRegistration", () => {
-  const credentials = { email: "ana@example.com", password: "secreto-muy-largo" };
-
-  it("devuelve el resultado del cliente sin registrar nada", async () => {
-    const logError = vi.fn();
-    const register = vi.fn(async (): Promise<RegisterOutcome> => ({ kind: "registered" }));
-
-    await expect(settleRegistration({ register, credentials, logError })).resolves.toEqual({ kind: "registered" });
-    expect(register).toHaveBeenCalledExactlyOnceWith(credentials);
-    expect(logError).not.toHaveBeenCalled();
-  });
-
-  it("un rechazo es un fallo inesperado: lo registra una vez y nunca lanza", async () => {
-    const logError = vi.fn();
-    const error = new RangeError("fallo del código");
-
-    await expect(
-      settleRegistration({ register: async () => Promise.reject(error), credentials, logError }),
-    ).resolves.toEqual({ kind: "failed", reason: "unexpected" });
-    expect(logError).toHaveBeenCalledTimes(1);
-    expect(logError.mock.calls[0]).toEqual([error]);
-  });
-
-  it("lo que se registra no incluye el email ni la contraseña", async () => {
-    const logError = vi.fn();
-
-    await settleRegistration({ register: async () => Promise.reject(new Error("boom")), credentials, logError });
-
-    const logged = JSON.stringify(logError.mock.calls, (_key, value: unknown) =>
-      value instanceof Error ? { name: value.name, message: value.message } : value,
-    );
-    expect(logged).not.toContain(credentials.password);
-    expect(logged).not.toContain(credentials.email);
-  });
-
-  it("un rechazo síncrono del cliente también se convierte en fallo", async () => {
-    const register = vi.fn((): Promise<RegisterOutcome> => {
-      throw new TypeError("síncrono");
-    });
-
-    await expect(settleRegistration({ register, credentials, logError: vi.fn() })).resolves.toEqual({
-      kind: "failed",
-      reason: "unexpected",
-    });
-  });
-});
-
 describe("createSubmitGuard: un envío a la vez", () => {
   it("el primer envío pasa y el segundo, con el primero en curso, no", () => {
     const guard = createSubmitGuard();
@@ -383,13 +334,5 @@ describe("createSubmitGuard: un envío a la vez", () => {
     const second = createSubmitGuard();
     first.tryStart();
     expect(second.tryStart()).toBe(true);
-  });
-});
-
-describe("shouldLeaveRegister", () => {
-  it("solo con sesión abierta se sale del registro", () => {
-    expect(shouldLeaveRegister("authenticated")).toBe(true);
-    expect(shouldLeaveRegister("anonymous")).toBe(false);
-    expect(shouldLeaveRegister("unknown")).toBe(false);
   });
 });

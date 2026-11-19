@@ -4,11 +4,12 @@ from django.core.exceptions import NON_FIELD_ERRORS
 from django.db import transaction
 from django.middleware.csrf import get_token
 from django.utils.cache import patch_cache_control, patch_vary_headers
+from django.views.decorators.debug import sensitive_variables
 from drf_spectacular.types import OpenApiTypes
 from drf_spectacular.utils import OpenApiParameter, extend_schema
 from rest_framework import status
 from rest_framework.authentication import SessionAuthentication
-from rest_framework.exceptions import MethodNotAllowed
+from rest_framework.exceptions import MethodNotAllowed, Throttled
 from rest_framework.permissions import AllowAny
 from rest_framework.response import Response
 from rest_framework.views import APIView
@@ -18,15 +19,25 @@ from apps.core.csrf import CsrfEnforcedMixin
 from apps.core.errors import DomainValidationError
 from apps.core.request_body import read_json_object, read_text_fields
 from apps.core.serializers import ApiErrorSerializer
+from apps.users.login import CREDENTIALS_INVALID, check_credentials
 from apps.users.serializers import (
+    LoginErrorSerializer,
+    LoginRequestSerializer,
     RegistrationErrorSerializer,
     RegistrationRequestSerializer,
     SessionSerializer,
 )
 from apps.users.services import register_user
-from apps.users.throttling import RegistrationThrottle
+from apps.users.throttling import (
+    LoginFailureLimit,
+    LoginIpThrottle,
+    RegistrationThrottle,
+    client_bucket,
+    login_pair_key,
+)
 
 REGISTRATION_MAX_BYTES = 4096
+LOGIN_MAX_BYTES = 4096
 
 # (clave del error de dominio, clave pública), en el orden en que se responden
 PUBLIC_FIELDS = (
@@ -61,6 +72,9 @@ SESSION_COOKIES = set_cookie_header(
     200, "Cookie csrftoken; borra sessionid si la sesión no es válida."
 )
 LOGOUT_COOKIES = set_cookie_header(204, "Borra la cookie sessionid.")
+LOGIN_COOKIES = set_cookie_header(
+    200, "Cookies sessionid (HttpOnly) y csrftoken nuevas."
+)
 
 
 def public_field_errors(message_dict):
@@ -117,6 +131,59 @@ class RegisterView(CsrfEnforcedMixin, APIView):
         response = Response(
             SessionSerializer({"user": user}).data, status=status.HTTP_201_CREATED
         )
+        patch_cache_control(response, no_store=True)
+        return response
+
+
+def _open_session(http_request, user):
+    with transaction.atomic():
+        # Sin flush(), login() conservaría la clave y los datos con la misma cuenta
+        http_request.session.flush()
+        login(http_request, user)
+
+
+class LoginView(CsrfEnforcedMixin, APIView):
+    # Sin autenticación: la entrada sustituye la sesión, nunca la lee
+    authentication_classes = []
+    permission_classes = [AllowAny]
+    throttle_classes = [LoginIpThrottle]
+    http_method_names = ["post"]
+
+    @extend_schema(
+        operation_id="login",
+        tags=["auth"],
+        parameters=[CSRF_HEADER, LOGIN_COOKIES],
+        request=LoginRequestSerializer,
+        responses={
+            200: SessionSerializer,
+            400: LoginErrorSerializer,
+            403: ApiErrorSerializer,
+            405: ApiErrorSerializer,
+            413: ApiErrorSerializer,
+            429: ApiErrorSerializer,
+        },
+    )
+    @sensitive_variables("fields")
+    def post(self, request):
+        http_request = request._request
+        fields = read_text_fields(
+            read_json_object(http_request, max_bytes=LOGIN_MAX_BYTES),
+            ("email", "password"),
+        )
+        failures = LoginFailureLimit()
+        pair_key = login_pair_key(client_bucket(request), fields["email"])
+        wait = failures.wait(pair_key)
+        if wait is not None:
+            raise Throttled(wait)
+        user = check_credentials(http_request, **fields)
+        # Todas las causas dan la misma respuesta y ninguna toca la sesión
+        if user is None:
+            # Solo un fallo de credenciales cuenta; un acierto no reinicia el contador
+            failures.record_failure(pair_key)
+            raise ApiError("invalid_fields", {"non_field": [CREDENTIALS_INVALID]})
+
+        _open_session(http_request, user)
+        response = Response(SessionSerializer({"user": user}).data)
         patch_cache_control(response, no_store=True)
         return response
 
