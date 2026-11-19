@@ -12,7 +12,7 @@ import {
   type SessionStatus,
 } from "./sessionState";
 
-type FocusRequest = { target: "register" | "logout" };
+type FocusRequest = { target: "login" | "logout" };
 
 export type SessionContextValue = {
   status: SessionStatus;

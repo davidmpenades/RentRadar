@@ -4,7 +4,7 @@ import { es } from "../i18n/es";
 // Sin email: lo que el cliente no guarda no puede pintarse por error
 export type SessionStatus = "unknown" | "anonymous" | "authenticated";
 
-export type TopBarAction = "none" | "register" | "logout";
+export type TopBarAction = "none" | "anonymous" | "logout";
 
 export type LogoutNoticeKind = "logout_failed";
 
@@ -14,12 +14,12 @@ export type LogoutResult = {
   status: SessionStatus;
   // El fallo no va a la región global: lo anuncia la propia región del aviso
   announcement: string | null;
-  focus: "register" | "logout";
+  focus: "login" | "logout";
   notice: LogoutNoticeKind | null;
 };
 
 export function topBarAction(status: SessionStatus): TopBarAction {
-  if (status === "anonymous") return "register";
+  if (status === "anonymous") return "anonymous";
   if (status === "authenticated") return "logout";
   return "none";
 }
@@ -64,7 +64,7 @@ export async function settleUnexpected<Outcome>(
 // Tras un fallo o un tiempo vencido no se pregunta quién soy: reintentar sin sesión también sale bien
 export function logoutResult(outcome: SettledLogout): LogoutResult {
   if (outcome.kind === "loggedOut") {
-    return { status: "anonymous", announcement: es.session.loggedOut, focus: "register", notice: null };
+    return { status: "anonymous", announcement: es.session.loggedOut, focus: "login", notice: null };
   }
   return { status: "authenticated", announcement: null, focus: "logout", notice: "logout_failed" };
 }

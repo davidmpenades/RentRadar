@@ -23,7 +23,7 @@ function abortError() {
 describe("topBarAction", () => {
   it.each<[SessionStatus, ReturnType<typeof topBarAction>]>([
     ["unknown", "none"],
-    ["anonymous", "register"],
+    ["anonymous", "anonymous"],
     ["authenticated", "logout"],
   ])("con el estado %s la barra muestra %s", (status, action) => {
     expect(topBarAction(status)).toBe(action);
@@ -158,11 +158,11 @@ describe("loadSessionStatus", () => {
 });
 
 describe("logoutResult", () => {
-  it("al salir: sin sesión, anuncia «Has salido», foco en Registrarse y sin aviso", () => {
+  it("al salir: sin sesión, anuncia «Has salido», foco en Entrar y sin aviso", () => {
     expect(logoutResult({ kind: "loggedOut" })).toEqual({
       status: "anonymous",
       announcement: es.session.loggedOut,
-      focus: "register",
+      focus: "login",
       notice: null,
     });
     expect(es.session.loggedOut).toBe("Has salido");

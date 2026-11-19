@@ -5,6 +5,7 @@ export const es = {
   },
   topBar: {
     brand: "RentRadar",
+    login: "Entrar",
     register: "Registrarse",
     logout: "Salir",
   },

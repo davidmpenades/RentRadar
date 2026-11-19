@@ -26,7 +26,7 @@ function Page({ route, onLeaveToMap }: { route: Route; onLeaveToMap: () => void 
 export function AppShell({ navigator }: AppShellProps) {
   const path = useSyncExternalStore(navigator.subscribe, navigator.getPath);
   const session = useSession();
-  const registerRef = useRef<HTMLAnchorElement>(null);
+  const loginRef = useRef<HTMLAnchorElement>(null);
   const logoutRef = useRef<HTMLButtonElement>(null);
   const zoneRef = useRef<HTMLDivElement>(null);
   const shownPath = useRef(path);
@@ -37,7 +37,7 @@ export function AppShell({ navigator }: AppShellProps) {
   // El destino del foco solo existe tras pintar el nuevo estado de la barra
   useEffect(() => {
     if (!session.focusRequest) return;
-    const target = session.focusRequest.target === "register" ? registerRef : logoutRef;
+    const target = session.focusRequest.target === "login" ? loginRef : logoutRef;
     target.current?.focus();
   }, [session.focusRequest]);
 
@@ -55,7 +55,7 @@ export function AppShell({ navigator }: AppShellProps) {
         logoutPending={session.logoutPending}
         onNavigate={navigator.navigate}
         onLogout={session.logout}
-        registerRef={registerRef}
+        loginRef={loginRef}
         logoutRef={logoutRef}
       />
       {/* Recibe el foco por código y no es un control; el ! es necesario porque la regla global :focus-visible no va en una capa */}
