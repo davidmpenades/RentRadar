@@ -6,7 +6,7 @@ from django.test import RequestFactory
 from rest_framework.request import Request
 
 from apps.users.models import User
-from apps.users.tests.helpers import Clock, assert_throttled
+from apps.users.tests.helpers import assert_throttled, use_clock
 from apps.users.throttling import RegistrationThrottle, ip_bucket
 
 PATH = "/register-like/"
@@ -26,10 +26,7 @@ def test_urls(settings):
 
 @pytest.fixture
 def clock(monkeypatch):
-    fake = Clock()
-    # staticmethod: sin él Python pasaría la instancia como primer argumento
-    monkeypatch.setattr(RegistrationThrottle, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, RegistrationThrottle)
 
 
 def post(client, body=BODY, *, token=TOKEN, ip=IP, path=PATH, **extra):

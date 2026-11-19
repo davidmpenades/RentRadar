@@ -21,12 +21,12 @@ from django.views.debug import ExceptionReporter
 from apps.users import views
 from apps.users.models import User
 from apps.users.tests.helpers import (
-    Clock,
     assert_no_store,
     assert_throttled,
     cross_origin_headers,
     stored_sessions,
     untouchable_session_store,
+    use_clock,
 )
 from apps.users.throttling import (
     LOGIN_CACHE_ALIAS,
@@ -153,11 +153,7 @@ def credentials_never_checked(monkeypatch):
 @pytest.fixture(autouse=True)
 def clock(monkeypatch):
     # Un solo reloj para los dos límites: las esperas no dependen de la hora real
-    fake = Clock()
-    # staticmethod: sin él Python pasaría la instancia como primer argumento
-    monkeypatch.setattr(LoginIpThrottle, "timer", staticmethod(fake))
-    monkeypatch.setattr(LoginFailureLimit, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, LoginIpThrottle, LoginFailureLimit)
 
 
 def fail(client, body=WRONG_PASSWORD_BODY, *, times=PAIR_LIMIT, **extra):

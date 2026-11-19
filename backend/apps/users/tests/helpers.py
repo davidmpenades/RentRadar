@@ -37,6 +37,14 @@ class Clock:
         self.now += seconds
 
 
+def use_clock(monkeypatch, *limits):
+    clock = Clock()
+    for limit in limits:
+        # staticmethod: sin él Python pasaría la instancia como primer argumento
+        monkeypatch.setattr(limit, "timer", staticmethod(clock))
+    return clock
+
+
 def stored_sessions():
     return list(
         Session.objects.order_by("session_key").values_list(

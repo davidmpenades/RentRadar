@@ -8,7 +8,7 @@ from django.utils.crypto import salted_hmac
 from rest_framework.request import Request
 
 from apps.users.models import User
-from apps.users.tests.helpers import Clock, assert_throttled
+from apps.users.tests.helpers import assert_throttled, use_clock
 from apps.users.throttling import (
     LOGIN_CACHE_ALIAS,
     LoginFailureLimit,
@@ -37,10 +37,7 @@ def test_urls(settings):
 
 @pytest.fixture
 def clock(monkeypatch):
-    fake = Clock()
-    # staticmethod: sin él Python pasaría la instancia como primer argumento
-    monkeypatch.setattr(LoginIpThrottle, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, LoginIpThrottle)
 
 
 def post(client, body=BODY, *, token=TOKEN, ip=IP, path=PATH, **extra):
@@ -439,9 +436,7 @@ WINDOW = 15 * 60
 
 @pytest.fixture
 def failure_clock(monkeypatch):
-    fake = Clock()
-    monkeypatch.setattr(LoginFailureLimit, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, LoginFailureLimit)
 
 
 def record_failures(limit, clock, count, key=PAIR_KEY):

@@ -15,12 +15,12 @@ from django.db import connection
 from apps.users import views
 from apps.users.models import User
 from apps.users.tests.helpers import (
-    Clock,
     assert_no_store,
     assert_throttled,
     cross_origin_headers,
     stored_sessions,
     untouchable_session_store,
+    use_clock,
 )
 from apps.users.throttling import RegistrationThrottle
 from apps.users.views import public_field_errors
@@ -518,10 +518,7 @@ def test_the_body_is_not_read_before_the_csrf_check(csrf_client):
 
 @pytest.fixture
 def clock(monkeypatch):
-    fake = Clock()
-    # staticmethod: sin él Python pasaría la instancia como primer argumento
-    monkeypatch.setattr(RegistrationThrottle, "timer", staticmethod(fake))
-    return fake
+    return use_clock(monkeypatch, RegistrationThrottle)
 
 
 def assert_register_throttled(response):
