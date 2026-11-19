@@ -365,3 +365,49 @@ No aplica (plan).
 - **La salida tras entrar**: el test comprueba que la cookie leída tras entrar (`TOKEN_B`) es distinta de la de antes (`TOKEN_A`) y que la salida envía la nueva.
 - **`retry_after` en dos sitios**: la comprobación del 429 es igual en el registro y en la entrada; son dos usos y se extrae en el tercero.
 - **Registro de comprobaciones**: va en un commit de documentación aparte del `feat`.
+
+## T8. Página `/login` y enlaces cruzados
+Fecha: 2026-11-19 · Commits: `b9bc37a` (`feat`: lógica del formulario, funciones comunes de sesión y `loginForm.ts`) y `145de07` (`feat`: ruta `/login`, `LoginForm`, `LoginPage` y enlaces cruzados).
+
+### Rojo del primer commit (`b9bc37a`)
+- `sessionState.test.ts`, `loginForm.test.ts` y `registerForm.test.ts`: `19 failed | 120 passed (139)`.
+- Los 19 fallos están en los bloques nuevos: 4 en `authenticatedResult`, 1 en `shouldLeaveAuthForm` y 14 en `settleUnexpected`, con `TypeError: … is not a function`. `loginForm.test.ts` no llega a cargar: `Cannot find module './loginForm' imported from src/login/loginForm.test.ts`.
+- Los tests de las cuatro funciones que se sustituyen siguen en verde: `settleLogout` (8), `registrationResult` (2), `settleRegistration` (4) y `shouldLeaveRegister` (1).
+
+### Verde del primer commit (`b9bc37a`)
+- vitest entero: `35 passed` ficheros y `1285 passed` tests (1250 de la T7 − 15 borrados de las funciones sustituidas + 50 nuevos = 1285; los casos de los 15 están dentro de los 50). `loginForm.test.ts`: `31 passed`.
+- `npm run build` con `exit=0`; eslint de los 9 ficheros tocados y `npm run api:check` con `exit=0`.
+- Backend, aunque no cambia: `2524 passed`, ruff en verde, migraciones (`No changes detected`) y desfase de `openapi.json` (`exit=0`, sin `diff`).
+- Un `grep` de `registrationResult`, `settleLogout`, `settleRegistration`, `shouldLeaveRegister` y `markRegistered` en `frontend/src` no da resultados.
+
+### Rojo del segundo commit (`145de07`)
+- `route.test.ts`, `LoginForm.test.ts` y `RegistrationForm.test.ts` (el filtro recoge también `loginForm.test.ts`, que pasa): `3 failed | 94 passed (97)`.
+- `resolveRoute`: `expected 'notFound' to be 'login'` y `expected 'notFound' to be 'redirectToLogin'`. Enlace del registro: `expected '' to be undefined` (no existen ni el enlace ni su texto). `LoginForm.test.ts` no llega a cargar: `Cannot find module './LoginForm'`.
+- `/login//`, `/LOGIN`, `/login/x`, `/logins`, `//login` y `/login.html` ya dan la página no encontrada: pasan en rojo y son de caracterización.
+
+### Verde del segundo commit (`145de07`)
+- vitest entero: `36 passed` ficheros y `1322 passed` tests: 1285 + 28 (`LoginForm.test.ts`) + 2 (rutas `/login` y `/login/`) + 6 (casos nuevos de página no encontrada) + 1 (enlace del registro) = 1322. `loginFormState.test.ts`: `31 passed`, los mismos de `b9bc37a`.
+- `npm run build` con `exit=0`; eslint de los 12 ficheros tocados y `npm run api:check` con `exit=0`.
+- Backend, aunque no cambia: `2524 passed`, ruff en verde, migraciones (`No changes detected`) y desfase de `openapi.json` (`exit=0`, sin `diff`).
+
+### Pruebas de mecanismo
+Una sola ejecución sobre el código del commit `145de07`, con la mutación del plan: la contraseña de `LoginForm` pasa a ser un campo controlado (`useState` en el componente, y `value` y `onChange` en el campo de `LoginForm.tsx:76` en `145de07`). Se hizo con copia previa fuera del repo y fuera de `/tmp`, sin `sed -i`, con sha256 antes y después y restauración desde la copia.
+
+| Fichero | sha256 |
+|---|---|
+| `LoginForm.tsx` en `145de07` (`git show`), antes y después | `dc093c8c3d23c3f101bd24ce2feaa0b47c3fefa516eca6583447b90182434367` |
+| `LoginForm.tsx` mutado | `d4cd58508c1e787d3dfc2c2a8e2c79ef014940c263ca9d40f04cc128e49db886` |
+
+`LoginForm.test.ts`: `6 failed | 22 passed (28)`. Mueren con ella los 6 casos de «la contraseña nunca llega al HTML» (`LoginForm.test.ts:116` en `145de07`); no falla ningún otro test. Tras restaurar, `git status --short` sale vacío.
+
+### Desviaciones y añadidos respecto del plan
+- **Corrección de lint de un test ya aprobado**: en «lo que se registra no incluye el email ni la contraseña que lleva la llamada», el doble se tipa con `vi.fn<(sent: typeof credentials) => Promise<LoginOutcome>>(…)` en lugar de con un parámetro sin uso que eslint rechazaba (`sessionState.test.ts:264` en `b9bc37a`). El test comprueba lo mismo; es el único cambio en los tests después del rojo, aparte de la importación del renombrado.
+- **Textos de `es.ts` en el commit que los usa**: `session.loggedIn` y `login.credentialsInvalid` en `b9bc37a`; `login.title`, `login.submit`, `login.submitting`, `login.toRegister` y `register.toLogin` en `145de07`, en lugar de todos en el primero.
+- **Caso de `settleRegistration` sin sustituto exacto**: el test que comprobaba que `register` recibía las credenciales (borrado en `b9bc37a`) solo comprobaba que `settleRegistration` reenviaba sus argumentos. Cómo monta `RegisterPage` las credenciales nunca tuvo test unitario, y el envío real del registro y de la entrada se comprueba en el navegador en la T10. Sus demás casos pasan a `settleUnexpected`.
+- **TS1149**: `loginForm.test.ts` y `LoginForm.test.ts` solo difieren en mayúsculas y `tsc` los rechaza, aunque vitest no lo detecta (riesgo ya recogido en MEMORY.md). El módulo de lógica se renombra dentro de `145de07` a `loginFormState.ts` y `loginFormState.test.ts`; en el test solo cambia la línea de importación. `plan.md` y `tasks.md` conservan los nombres anteriores.
+
+### Decisión
+- **Enlaces cruzados**: «¿No tienes cuenta? Regístrate» (`LoginForm.tsx:115` en `145de07`) y «¿Ya tienes cuenta? Entra» (`RegistrationForm.tsx:135` en `145de07`) son enlaces normales que recargan la página; el plan solo fija la navegación interna para la barra superior. Pasa a «Próximos pasos» en la T10.
+
+### Nota para la T10
+- Comprobar en Chrome que el gestor de contraseñas ofrece guardar las credenciales al entrar y las rellena en `/login`, con el email marcado como `autocomplete="email"` y no como `"username"`.
