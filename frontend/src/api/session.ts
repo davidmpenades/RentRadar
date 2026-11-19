@@ -9,6 +9,7 @@ type Session = components["schemas"]["Session"];
 const SESSION_URL = "/api/v1/auth/session/";
 const REGISTER_URL = "/api/v1/auth/register/";
 const LOGOUT_URL = "/api/v1/auth/logout/";
+const LOGIN_URL = "/api/v1/auth/login/";
 const WHO_AM_I_TIMEOUT_MS = 5_000;
 const WRITE_TIMEOUT_MS = 10_000;
 const MAX_RETRY_AFTER_SECONDS = 86_400;
@@ -47,11 +48,18 @@ export type RegisterOutcome =
 
 export type LogoutOutcome = { kind: "loggedOut" } | { kind: "failed"; reason: FailureReason };
 
+export type LoginOutcome =
+  | { kind: "loggedIn" }
+  | { kind: "credentialsInvalid" }
+  | { kind: "throttled"; retryAfterSeconds: number }
+  | { kind: "failed"; reason: FailureReason };
+
 export type WhoAmIResult = "authenticated" | "anonymous";
 
 export type SessionClient = {
   whoAmI(signal?: AbortSignal): Promise<WhoAmIResult>;
   register(credentials: { email: string; password: string }): Promise<RegisterOutcome>;
+  login(credentials: { email: string; password: string }): Promise<LoginOutcome>;
   logout(): Promise<LogoutOutcome>;
 };
 
@@ -75,7 +83,7 @@ type SessionClientOptions<Handle> = {
 
 const sessionUserSchema = z.strictObject({ email: z.string().min(1) });
 const sessionSchema = z.strictObject({ user: sessionUserSchema.nullable() });
-// El 201 del registro exige la cuenta: un user nulo no es un registro correcto
+// El éxito del registro y el de la entrada exigen la cuenta: un user nulo no es un éxito
 const registeredSchema = z.strictObject({ user: sessionUserSchema });
 const apiErrorSchema = z.strictObject({
   code: z.string(),
@@ -83,6 +91,8 @@ const apiErrorSchema = z.strictObject({
   retry_after: z.int().min(1).optional(),
 });
 const fieldParamsSchema = z.record(z.string(), z.array(z.string()));
+// La entrada solo tiene un error de credenciales: cualquier otra forma es una respuesta inválida
+const credentialsInvalidParamsSchema = z.strictObject({ non_field: z.tuple([z.literal("credentials_invalid")]) });
 
 // Los errores propios llevan solo la causa: ni el cuerpo ni la dirección pedida
 class SessionTimeoutError extends Error {
@@ -157,6 +167,10 @@ function fieldErrorsFrom(params: unknown): RegisterOutcome {
   return { kind: "fieldErrors", email, password, other };
 }
 
+function isCredentialsInvalid(params: unknown): boolean {
+  return credentialsInvalidParamsSchema.safeParse(params).success;
+}
+
 // Solo el vencimiento y la red son fallos conocidos; cualquier otro error es del código y se propaga
 function failureReason(error: unknown): "timeout" | "network" {
   if (error instanceof SessionTimeoutError) return "timeout";
@@ -168,6 +182,9 @@ type Attempt<Outcome> = Outcome | { kind: "csrf" };
 type RegisterAttempt =
   | Attempt<RegisterOutcome>
   | { kind: "askWhoAmI"; failure: "invalid" | "timeout" | "network" };
+type LoginAttempt =
+  | Attempt<LoginOutcome>
+  | { kind: "askWhoAmI"; failure: "invalid" | "server" | "timeout" | "network" };
 
 function isCsrf(attempt: { kind: string }): attempt is { kind: "csrf" } {
   return attempt.kind === "csrf";
@@ -307,6 +324,52 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
       : { kind: "failed", reason: attempt.failure };
   }
 
+  async function interpretLogin(response: Response): Promise<LoginAttempt> {
+    const { status } = response;
+    // El servidor pudo abrir la sesión antes de fallar: sin leer el cuerpo, se pregunta quién soy
+    if (isServerError(status)) return { kind: "askWhoAmI", failure: "server" };
+    if (status === 200) {
+      return registeredSchema.safeParse(await readJson(response)).success
+        ? { kind: "loggedIn" }
+        : { kind: "askWhoAmI", failure: "invalid" };
+    }
+    if (!isClientError(status)) return { kind: "failed", reason: "invalid" };
+
+    const error = await readApiError(response);
+    if (!error) return { kind: "failed", reason: "invalid" };
+    if (status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    if (status === 429) {
+      // Cuenta el cuerpo; la cabecera Retry-After se ignora
+      const seconds = error.retry_after;
+      if (seconds === undefined || seconds > MAX_RETRY_AFTER_SECONDS) return { kind: "failed", reason: "invalid" };
+      return { kind: "throttled", retryAfterSeconds: seconds };
+    }
+    if (status === 400 && error.code === "invalid_fields") {
+      return isCredentialsInvalid(error.params) ? { kind: "credentialsInvalid" } : { kind: "failed", reason: "invalid" };
+    }
+    return { kind: "failed", reason: "request" };
+  }
+
+  async function attemptLogin(credentials: { email: string; password: string }): Promise<LoginAttempt> {
+    try {
+      return await postWithin(LOGIN_URL, interpretLogin, {
+        email: credentials.email,
+        password: credentials.password,
+      });
+    } catch (error) {
+      // Con la red caída, el cuerpo cortado o el plazo vencido, el servidor pudo abrir la sesión
+      return { kind: "askWhoAmI", failure: failureReason(error) };
+    }
+  }
+
+  async function login(credentials: { email: string; password: string }): Promise<LoginOutcome> {
+    const attempt = await retryOnceOnCsrf(() => attemptLogin(credentials));
+    if (attempt.kind !== "askWhoAmI") return attempt;
+    return (await whoAmI()) === "authenticated"
+      ? { kind: "loggedIn" }
+      : { kind: "failed", reason: attempt.failure };
+  }
+
   async function interpretLogout(response: Response): Promise<Attempt<LogoutOutcome>> {
     const { status } = response;
     if (status === 204) return { kind: "loggedOut" };
@@ -331,7 +394,7 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
     return retryOnceOnCsrf(attemptLogout);
   }
 
-  return { whoAmI, register, logout };
+  return { whoAmI, register, login, logout };
 }
 
 export const sessionClient = createSessionClient({

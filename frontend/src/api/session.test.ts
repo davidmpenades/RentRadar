@@ -11,6 +11,7 @@ import {
 const SESSION_URL = "/api/v1/auth/session/";
 const REGISTER_URL = "/api/v1/auth/register/";
 const LOGOUT_URL = "/api/v1/auth/logout/";
+const LOGIN_URL = "/api/v1/auth/login/";
 
 const WHO_AM_I_MS = 5_000;
 const WRITE_MS = 10_000;
@@ -100,6 +101,8 @@ const authenticated = () => json({ user: { email: "ana@example.com" } });
 const anonymous = () => json({ user: null });
 const csrfFailed = () => json({ code: "csrf_failed" }, 403);
 const loggedOut = () => new Response(null, { status: 204 });
+const loggedIn = () => json({ user: { email: "ana@example.com" } });
+const credentialsInvalid = () => json({ code: "invalid_fields", params: { non_field: ["credentials_invalid"] } }, 400);
 
 // Un fetch que respeta la señal: no responde hasta que se aborta
 const hang: Responder = (init) =>
@@ -1188,6 +1191,322 @@ describe("logout", () => {
     ]);
 
     expect(await rejection(client.logout())).toBe(failure);
+  });
+});
+
+describe("login: la petición", () => {
+  it("hace un POST JSON a la ruta con barra final, con el token y las cookies del mismo origen", async () => {
+    const { client, calls, timers } = setup([loggedIn]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "loggedIn" });
+
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.url).toBe(LOGIN_URL);
+    expect(calls[0]?.init.method).toBe("POST");
+    expect(calls[0]?.init.credentials).toBe("same-origin");
+    expect(calls[0]?.init.signal).toBeInstanceOf(AbortSignal);
+    expect(headersOf(calls[0])).toEqual({ "Content-Type": "application/json", "X-CSRFToken": TOKEN_A });
+    expect(JSON.parse(calls[0]?.init.body ?? "null")).toEqual(CREDENTIALS);
+    expect(Object.keys(JSON.parse(calls[0]?.init.body ?? "{}")).sort()).toEqual(["email", "password"]);
+    expect(timers.armedWith).toEqual([WRITE_MS]);
+    expect(timers.clearCalls).toBe(1);
+  });
+
+  it("sin un token válido en la cookie no envía la cabecera X-CSRFToken", async () => {
+    const { client, calls } = setup([loggedIn], ["csrftoken=corto"]);
+
+    await client.login(CREDENTIALS);
+
+    expect(headersOf(calls[0])).toEqual({ "Content-Type": "application/json" });
+  });
+
+  it("tras entrar, la salida envía el token nuevo de la cookie, distinto del de antes", async () => {
+    const { client, calls, readCookies } = setup([loggedIn, loggedOut], [COOKIE_A, COOKIE_B]);
+    expect(TOKEN_B).not.toBe(TOKEN_A);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "loggedIn" });
+    expect(await client.logout()).toEqual({ kind: "loggedOut" });
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, LOGOUT_URL]);
+    expect(readCookies).toHaveBeenCalledTimes(2);
+    expect(headersOf(calls[0])["X-CSRFToken"]).toBe(TOKEN_A);
+    expect(headersOf(calls[1])["X-CSRFToken"]).toBe(TOKEN_B);
+  });
+});
+
+describe("login: el reintento ante csrf_failed", () => {
+  it("pregunta quién soy y reintenta una sola vez, releyendo el token en el reintento", async () => {
+    const { client, calls, readCookies, timers } = setup([csrfFailed, anonymous, loggedIn], [COOKIE_A, COOKIE_B]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "loggedIn" });
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL, LOGIN_URL]);
+    expect(readCookies).toHaveBeenCalledTimes(2);
+    expect(headersOf(calls[0])["X-CSRFToken"]).toBe(TOKEN_A);
+    expect(headersOf(calls[2])["X-CSRFToken"]).toBe(TOKEN_B);
+    expect(JSON.parse(calls[2]?.init.body ?? "null")).toEqual(CREDENTIALS);
+    expect(timers.armedWith).toEqual([WRITE_MS, WHO_AM_I_MS, WRITE_MS]);
+    expect(timers.clearCalls).toBe(3);
+  });
+
+  it("si el segundo intento vuelve a dar csrf_failed, es failed csrf y no hay un tercer envío", async () => {
+    const { client, calls } = setup([csrfFailed, anonymous, csrfFailed, authenticated, loggedIn]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "csrf" });
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL, LOGIN_URL]);
+  });
+
+  it("el resultado del reintento se trata como el de cualquier envío", async () => {
+    const { client } = setup([csrfFailed, anonymous, credentialsInvalid]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "credentialsInvalid" });
+  });
+
+  it("un 403 con otro código no se reintenta", async () => {
+    const { client, calls } = setup([() => json({ code: "forbidden" }, 403), anonymous, loggedIn]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "request" });
+
+    expect(calls).toHaveLength(1);
+  });
+});
+
+describe("login: el tiempo máximo", () => {
+  it("espera 10 s, aborta la petición y, con sesión, es loggedIn", async () => {
+    const { client, calls, timers } = setup([hang, authenticated]);
+
+    const pending = client.login(CREDENTIALS);
+    timers.fire();
+
+    expect(await pending).toEqual({ kind: "loggedIn" });
+    expect(timers.armedWith).toEqual([WRITE_MS, WHO_AM_I_MS]);
+    expect(calls[0]?.init.signal.aborted).toBe(true);
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+    expect(timers.clearCalls).toBe(2);
+  });
+
+  it.each([
+    ["sin sesión", anonymous],
+    ["con un error del servidor", () => json({ code: "x" }, 500)],
+    ["con la red caída", networkDown],
+  ] as const)("vencido y con quién soy %s es failed timeout", async (_name, whoAmI) => {
+    const { client, timers } = setup([hang, whoAmI]);
+
+    const pending = client.login(CREDENTIALS);
+    timers.fire();
+
+    expect(await pending).toEqual({ kind: "failed", reason: "timeout" });
+  });
+
+  it("un cuerpo que llegó a medias también vence a los 10 s", async () => {
+    const { client, timers } = setup([bodyThatNeverArrives(200), authenticated]);
+
+    const pending = client.login(CREDENTIALS);
+    await tick();
+    expect(timers.clearCalls).toBe(0);
+    timers.fire();
+
+    expect(await pending).toEqual({ kind: "loggedIn" });
+  });
+});
+
+describe("login: la respuesta", () => {
+  it("un 200 válido es loggedIn y no pregunta quién soy", async () => {
+    const { client, calls } = setup([loggedIn, anonymous]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "loggedIn" });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  const invalidShapes = [
+    ["user nulo", () => json({ user: null })],
+    ["un objeto vacío", () => json({})],
+    ["email vacío", () => json({ user: { email: "" } })],
+    ["campo desconocido en user", () => json({ user: { email: "ana@example.com", id: 1 } })],
+    ["campo desconocido en la raíz", () => json({ user: { email: "ana@example.com" }, extra: 1 })],
+    ["un Content-Type ajeno", () => new Response('{"user":{"email":"a@b.c"}}', { headers: { "Content-Type": "text/html" } })],
+    ["JSON roto", () => new Response('{"user":', { headers: { "Content-Type": "application/json" } })],
+  ] as const;
+
+  it.each(invalidShapes)("un 200 con %s pregunta quién soy: con sesión es loggedIn", async (_name, respond) => {
+    const { client, calls } = setup([respond, authenticated]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "loggedIn" });
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+  });
+
+  it.each(invalidShapes)("un 200 con %s y sin sesión es failed invalid", async (_name, respond) => {
+    const { client, calls } = setup([respond, anonymous]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "invalid" });
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+  });
+
+  it.each([
+    ["con sesión", authenticated, { kind: "loggedIn" }],
+    ["sin sesión", anonymous, { kind: "failed", reason: "network" }],
+  ] as const)("un 200 con el cuerpo cortado pregunta quién soy y, %s, da su resultado", async (_name, whoAmI, expected) => {
+    const spies = watchConsole();
+    const { client, calls, timers } = setup([bodyThatIsCutOff(200), whoAmI]);
+
+    expect(await client.login(CREDENTIALS)).toEqual(expected);
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+    expect(timers.armedWith).toEqual([WRITE_MS, WHO_AM_I_MS]);
+    expect(timers.clearCalls).toBe(2);
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it.each([400, 403, 429])(
+    "un %d con el cuerpo cortado pregunta quién soy, sin reintentar: sin sesión es failed network",
+    async (status) => {
+      const { client, calls } = setup([bodyThatIsCutOff(status), anonymous, loggedIn]);
+
+      expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "network" });
+
+      expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+    },
+  );
+
+  it.each([
+    ["con sesión", authenticated, { kind: "loggedIn" }],
+    ["sin sesión", anonymous, { kind: "failed", reason: "network" }],
+  ] as const)("un TypeError de fetch pregunta quién soy y, %s, da su resultado", async (_name, whoAmI, expected) => {
+    const spies = watchConsole();
+    const { client, calls } = setup([networkDown, whoAmI, loggedIn]);
+
+    expect(await client.login(CREDENTIALS)).toEqual(expected);
+
+    expect(calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+    for (const spy of spies) expect(spy).not.toHaveBeenCalled();
+  });
+
+  it.each([500, 502, 503, 504, 599])(
+    "un %d no lee el cuerpo y pregunta quién soy: con sesión es loggedIn y sin ella failed server",
+    async (status) => {
+      const withSession = new Response('{"code":"x', { status, headers: { "Content-Type": "application/json" } });
+      const withoutSession = new Response('{"code":"x', { status, headers: { "Content-Type": "application/json" } });
+      const first = setup([() => withSession, authenticated]);
+      const second = setup([() => withoutSession, anonymous]);
+
+      expect(await first.client.login(CREDENTIALS)).toEqual({ kind: "loggedIn" });
+      expect(await second.client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "server" });
+
+      expect(withSession.bodyUsed).toBe(false);
+      expect(withoutSession.bodyUsed).toBe(false);
+      expect(second.calls.map((call) => call.url)).toEqual([LOGIN_URL, SESSION_URL]);
+    },
+  );
+
+  it("un 400 con exactamente credentials_invalid en non_field es credentialsInvalid, sin preguntar quién soy", async () => {
+    const { client, calls } = setup([credentialsInvalid, authenticated]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "credentialsInvalid" });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each([
+    ["una clave de más junto a non_field", { non_field: ["credentials_invalid"], email: ["email_invalid"] }],
+    ["dos códigos en non_field", { non_field: ["credentials_invalid", "credentials_invalid"] }],
+    ["non_field con una lista vacía", { non_field: [] }],
+    ["otro código en non_field", { non_field: ["constraint_violated"] }],
+    ["el código en otro campo", { email: ["credentials_invalid"] }],
+    ["params vacío", {}],
+    ["sin params", undefined],
+    ["non_field como texto", { non_field: "credentials_invalid" }],
+    ["el código con otra capitalización", { non_field: ["CREDENTIALS_INVALID"] }],
+  ])("un 400 invalid_fields con %s es failed invalid", async (_name, params) => {
+    const { client, calls } = setup([
+      () => json({ code: "invalid_fields", ...(params === undefined ? {} : { params }) }, 400),
+      authenticated,
+    ]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "invalid" });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it("credentials_invalid con otro estado no es credentialsInvalid", async () => {
+    const { client } = setup([() => json({ code: "invalid_fields", params: { non_field: ["credentials_invalid"] } }, 403)]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "request" });
+  });
+
+  it.each([
+    [400, "invalid_request"],
+    [405, "method_not_allowed"],
+    [413, "payload_too_large"],
+    [404, "not_found"],
+  ])("un %d con el código %s es failed request, sin reintento ni quién soy", async (status, code) => {
+    const { client, calls } = setup([() => json({ code }, status), anonymous, loggedIn]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "request" });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each([
+    ["HTML", () => new Response("<html></html>", { status: 400, headers: { "Content-Type": "text/html" } })],
+    ["sin code", () => json({}, 400)],
+    ["campo desconocido", () => json({ code: "invalid_fields", detail: "x" }, 400)],
+  ])("un 4xx con un cuerpo que es %s es failed invalid", async (_name, respond) => {
+    const { client, calls } = setup([respond]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "invalid" });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each([1, 60, 900, 86400])("un 429 con retry_after %d es throttled con ese valor", async (seconds) => {
+    const { client, calls } = setup([() => json({ code: "throttled", retry_after: seconds }, 429), authenticated]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "throttled", retryAfterSeconds: seconds });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each(["algo_nuevo", "rate_limited"])("un 429 con el code %s también es throttled: no se exige el code", async (code) => {
+    const { client, calls } = setup([() => json({ code, retry_after: 120 }, 429), authenticated]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "throttled", retryAfterSeconds: 120 });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each([
+    ["sin retry_after pero con la cabecera", () => json({ code: "throttled" }, 429, { "Retry-After": "30" })],
+    ["con retry_after cero", () => json({ code: "throttled", retry_after: 0 }, 429)],
+    ["con retry_after negativo", () => json({ code: "throttled", retry_after: -5 }, 429)],
+    ["con retry_after por encima de un día", () => json({ code: "throttled", retry_after: 86401 }, 429)],
+    ["con retry_after decimal", () => json({ code: "throttled", retry_after: 1.5 }, 429)],
+    ["con retry_after como texto", () => json({ code: "throttled", retry_after: "60" }, 429)],
+    ["con retry_after nulo", () => json({ code: "throttled", retry_after: null }, 429)],
+  ])("un 429 %s es failed invalid", async (_name, respond) => {
+    const { client } = setup([respond]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "invalid" });
+  });
+
+  it.each([201, 204, 301])("un estado %d inesperado es failed invalid, sin preguntar quién soy", async (status) => {
+    const { client, calls } = setup([() => new Response(status === 204 ? null : "{}", { status }), authenticated]);
+
+    expect(await client.login(CREDENTIALS)).toEqual({ kind: "failed", reason: "invalid" });
+
+    expect(calls).toHaveLength(1);
+  });
+
+  it.each([200, 400, 429])("un error que no es un TypeError al leer el cuerpo de un %d se propaga", async (status) => {
+    const failure = new RangeError("fallo propio");
+    const { client, calls } = setup([bodyThatFailsInTheCode(status, failure), anonymous]);
+
+    expect(await rejection(client.login(CREDENTIALS))).toBe(failure);
+
+    expect(calls).toHaveLength(1);
   });
 });
 
