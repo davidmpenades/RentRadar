@@ -185,6 +185,10 @@ type RegisterAttempt =
 type LoginAttempt =
   | Attempt<LoginOutcome>
   | { kind: "askWhoAmI"; failure: "invalid" | "server" | "timeout" | "network" };
+type ClientErrorReading =
+  | { kind: "failed"; reason: "invalid" }
+  | { kind: "csrf" }
+  | { kind: "apiError"; error: z.infer<typeof apiErrorSchema> };
 
 function isCsrf(attempt: { kind: string }): attempt is { kind: "csrf" } {
   return attempt.kind === "csrf";
@@ -272,6 +276,15 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
     }
   }
 
+  // Lo común a los 4xx de las escrituras: sin un error válido la respuesta es inválida y csrf_failed se reintenta
+  async function readClientError(response: Response): Promise<ClientErrorReading> {
+    if (!isClientError(response.status)) return { kind: "failed", reason: "invalid" };
+    const error = await readApiError(response);
+    if (!error) return { kind: "failed", reason: "invalid" };
+    if (response.status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    return { kind: "apiError", error };
+  }
+
   async function interpretRegister(response: Response): Promise<RegisterAttempt> {
     const { status } = response;
     // El cuerpo de un error del servidor no se lee: nunca llega a la pantalla
@@ -287,11 +300,9 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
         throw error;
       }
     }
-    if (!isClientError(status)) return { kind: "failed", reason: "invalid" };
-
-    const error = await readApiError(response);
-    if (!error) return { kind: "failed", reason: "invalid" };
-    if (status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    const read = await readClientError(response);
+    if (read.kind !== "apiError") return read;
+    const { error } = read;
     if (status === 429) {
       // Cuenta el cuerpo; la cabecera Retry-After se ignora
       const seconds = error.retry_after;
@@ -333,11 +344,9 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
         ? { kind: "loggedIn" }
         : { kind: "askWhoAmI", failure: "invalid" };
     }
-    if (!isClientError(status)) return { kind: "failed", reason: "invalid" };
-
-    const error = await readApiError(response);
-    if (!error) return { kind: "failed", reason: "invalid" };
-    if (status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    const read = await readClientError(response);
+    if (read.kind !== "apiError") return read;
+    const { error } = read;
     if (status === 429) {
       // Cuenta el cuerpo; la cabecera Retry-After se ignora
       const seconds = error.retry_after;
@@ -374,11 +383,8 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
     const { status } = response;
     if (status === 204) return { kind: "loggedOut" };
     if (isServerError(status)) return { kind: "failed", reason: "server" };
-    if (!isClientError(status)) return { kind: "failed", reason: "invalid" };
-
-    const error = await readApiError(response);
-    if (!error) return { kind: "failed", reason: "invalid" };
-    if (status === 403 && error.code === "csrf_failed") return { kind: "csrf" };
+    const read = await readClientError(response);
+    if (read.kind !== "apiError") return read;
     return { kind: "failed", reason: "request" };
   }
 
