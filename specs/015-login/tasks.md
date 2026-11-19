@@ -107,7 +107,7 @@ Reglas comunes:
   - Commits, en este orden: `test(users): share assert_throttled` y `feat(users): rate limit the login endpoint`.
   - Hecho cuando: tras el primer commit, la suite, ruff y las migraciones siguen en verde con los mismos casos; los tests del `feat` fallan primero sobre la vista de la T5 y luego pasan; `openapi.json` no cambia; suite, ruff y migraciones en verde; `validation.md` reúne las mutaciones de T2 a T6.
 
-- [ ] **T7. Entrada en el cliente de sesión.** RF-8
+- [x] **T7. Entrada en el cliente de sesión.** RF-8
   - Ficheros: `frontend/src/api/session.ts` (`LOGIN_URL`, `LoginOutcome`, `login()`, `interpretLogin`, `isCredentialsInvalid`; extracción de `postWithin` y `retryOnceOnCsrf`, tercer uso, que pasan a usar el registro y la salida) y `session.test.ts`.
   - Tests (primero; fallan porque `login` no existe):
     - 200 válido → `loggedIn`; 200 con forma inválida o cuerpo cortado → «quién soy» (con sesión `loggedIn`, sin ella `failed`); red, cuerpo cortado y 5xx → «quién soy»; vencimiento a los 10 s con temporizador inyectado → «quién soy»; 400 exacto → `credentialsInvalid`; 400 con otra forma o código → `failed("invalid")`; 429 con `retry_after` válido → `throttled`, fuera de rango → `failed("invalid")`; un `csrf_failed` → un solo reintento tras «quién soy»; dos → `failed("csrf")`.
