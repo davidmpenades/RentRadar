@@ -411,3 +411,25 @@ Una sola ejecución sobre el código del commit `145de07`, con la mutación del 
 
 ### Nota para la T10
 - Comprobar en Chrome que el gestor de contraseñas ofrece guardar las credenciales al entrar y las rellena en `/login`, con el email marcado como `autocomplete="email"` y no como `"username"`.
+
+## T9. Barra superior con «Entrar» y foco tras salir
+Fecha: 2026-11-19 · Commit: `e4bc905` (`feat`: `topBarAction` con `"anonymous"`, «Entrar» y «Registrarse» en la barra sin sesión, y el foco tras salir a «Entrar»).
+
+### Rojo, antes del código
+- `sessionState.test.ts` y `TopBar.test.ts`: `5 failed | 62 passed (67)`, todos por el comportamiento anterior:
+  - `topBarAction("anonymous")`: `expected 'register' to be 'anonymous'`.
+  - `logoutResult` tras salir: el foco sigue en `"register"` (`expected { status: 'anonymous', …(3) } to deeply equal { status: 'anonymous', …(3) }`).
+  - Barra sin sesión (3): no pinta «Entrar» (`expected '' to match /href="\/login"/`), ni el grupo con los dos enlaces (`expected -1 to be greater than -1`), ni sus clases `btn` (`expected [ '' ] to include 'btn'`).
+
+### Verde, después del código (`e4bc905`)
+- `sessionState.test.ts` y `TopBar.test.ts`: `67 passed`. vitest entero: `36 passed` ficheros y `1324 passed` tests: 1322 de la T8 + 2, porque el test de «Registrarse» sin sesión se sustituye por tres (enlaces y clases; orden y grupo; 44 px).
+- El test comprueba la clase `btn` en «Entrar» y «Registrarse»; los 44 px los fija la regla `.btn` de `buttons.css:6-7` en `e4bc905` (`min-width` y `min-height` en `2.75rem`) y se miden en el navegador en la T10.
+- `npm run build` con `exit=0`; eslint de los 7 ficheros tocados y `npm run api:check` con `exit=0`.
+- Backend, aunque no cambia: `2524 passed`, ruff en verde, migraciones (`No changes detected`) y desfase de `openapi.json` (`exit=0`, sin `diff`).
+- Barra sin sesión: grupo `flex items-center gap-2` con «Entrar» (secundario) y «Registrarse» (principal), en `TopBar.tsx:36-43` en `e4bc905`. Foco tras salir: `focus: "login"` en `sessionState.ts:67` y `loginRef` en `AppShell.tsx:40`, en `e4bc905`. Ya no queda `registerRef`.
+
+### Pruebas de mecanismo
+No aplica (interfaz; plan).
+
+### Desviaciones y añadidos respecto del plan
+- Ninguna.
