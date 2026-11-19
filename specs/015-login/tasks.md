@@ -141,7 +141,7 @@ Reglas comunes:
     2. `feat(frontend): add the login page`: `route.ts` y `main.tsx` (`login` y `redirectToLogin`), `AppShell.tsx`, `LoginForm.tsx`, `LoginPage.tsx` y el enlace «¿Ya tienes cuenta? Entra» en `RegistrationForm.tsx`, con sus tests.
   - Hecho cuando: los tests fallan primero y luego pasan; tras cada commit, vitest, build y eslint de los ficheros tocados en verde; tras el primero, los del registro y la salida siguen en verde con las funciones comunes y no queda ningún uso de las cuatro sustituidas; ningún commit deja duplicados ni una ruta `/login` que pinte el mapa; la mutación, en `validation.md`.
 
-- [ ] **T9. Barra superior con «Entrar» y foco tras salir.** RF-7
+- [x] **T9. Barra superior con «Entrar» y foco tras salir.** RF-7
   - Ficheros: `sessionState.ts` y su test (`TopBarAction` con `"anonymous"`; `logoutResult` con `focus: "login"`); `SessionProvider.tsx` (`FocusRequest.target: "login" | "logout"`); `AppShell.tsx` (`loginRef` y foco a «Entrar»); `frontend/src/app/TopBar.tsx` y `TopBar.test.ts`; `es.ts` (`topBar.login`).
   - Tests (primero; fallan porque `topBarAction` aún devuelve la acción de registro y el foco va a «Registrarse»):
     - `topBarAction`: `"none"` en `unknown`, `"anonymous"` sin sesión y `"logout"` con sesión; `logoutResult` con `focus: "login"` tras salir y en «Salir» si falla.
