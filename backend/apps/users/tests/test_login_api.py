@@ -18,6 +18,7 @@ from django.test import Client
 from django.utils import timezone
 from django.views.debug import ExceptionReporter
 
+from apps.core.tests.helpers import KEY_WITHOUT_ROW
 from apps.users import views
 from apps.users.models import User
 from apps.users.tests.helpers import (
@@ -54,8 +55,6 @@ MAX_BYTES = 4096
 SURROGATE = chr(0xD800)
 # Barra invertida con chr: el escape octal de la cookie no debe interpretarse aquí
 OCTAL_NULL = chr(92) + "000"
-# Formato válido de clave de sesión, sin fila en la BD
-KEY_WITHOUT_ROW = "k3y5in4f1l4" * 3
 CREDENTIALS_REJECTED = {
     "code": "invalid_fields",
     "params": {"non_field": ["credentials_invalid"]},

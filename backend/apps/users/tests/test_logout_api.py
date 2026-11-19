@@ -10,6 +10,7 @@ from django.core.handlers.wsgi import LimitedStream
 from django.test import Client
 from django.utils import timezone
 
+from apps.core.tests.helpers import KEY_WITHOUT_ROW
 from apps.users.models import User
 from apps.users.tests.helpers import (
     assert_no_store,
@@ -28,8 +29,6 @@ TOKEN = "a1B2c3D4" * 4
 OTHER_TOKEN = "z9Y8x7W6" * 4
 SESSION_COOKIE = django_settings.SESSION_COOKIE_NAME
 CSRF_COOKIE = django_settings.CSRF_COOKIE_NAME
-# Formato válido de clave de sesión, sin fila en la BD
-KEY_WITHOUT_ROW = "k3y5in4f1l4" * 3
 
 
 def logout(client, *, token=TOKEN, cookie=TOKEN, method="post", body="", **extra):
@@ -168,7 +167,7 @@ def no_session_cookie(client):
 WITHOUT_A_VALID_SESSION = pytest.mark.parametrize(
     "prepare",
     [short_cookie, long_malformed_cookie, key_without_row, no_session_cookie],
-    ids=["shorter-than-8", "long-malformed", "closed-in-another-tab", "no-cookie"],
+    ids=["too-short", "long-malformed", "closed-in-another-tab", "no-cookie"],
 )
 
 

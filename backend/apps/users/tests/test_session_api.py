@@ -7,6 +7,7 @@ from django.contrib.sessions.models import Session
 from django.utils import timezone
 from django.utils.cache import cc_delim_re
 
+from apps.core.tests.helpers import KEY_WITHOUT_ROW
 from apps.users.models import User
 from apps.users.tests.helpers import assert_no_store
 
@@ -20,8 +21,6 @@ PASSWORD = "vela roja en el puerto"
 TOKEN = "a1B2c3D4" * 4
 SESSION_COOKIE = django_settings.SESSION_COOKIE_NAME
 CSRF_COOKIE = django_settings.CSRF_COOKIE_NAME
-# Formato válido de clave de sesión, sin fila en la BD
-KEY_WITHOUT_ROW = "k3y5in4f1l4" * 3
 
 
 def who_am_i(client, method="get", **extra):
@@ -74,7 +73,7 @@ def expired_session(client):
 
 
 def short_cookie(client):
-    # Django descarta sin consultar la BD una clave de menos de 8 caracteres
+    # Mal formada: más corta que una clave de sesión
     client.cookies[SESSION_COOKIE] = "abc1234"
     return "abc1234"
 
@@ -93,7 +92,7 @@ def key_without_row(client):
 EMPTY_SESSIONS = pytest.mark.parametrize(
     "prepare",
     [expired_session, short_cookie, long_malformed_cookie, key_without_row],
-    ids=["expired", "shorter-than-8", "long-malformed", "key-without-row"],
+    ids=["expired", "too-short", "long-malformed", "key-without-row"],
 )
 
 EVERY_STATE = pytest.mark.parametrize(
@@ -112,11 +111,16 @@ EVERY_STATE = pytest.mark.parametrize(
         "valid",
         "deactivated",
         "expired",
-        "shorter-than-8",
+        "too-short",
         "long-malformed",
         "key-without-row",
     ],
 )
+
+
+def test_the_key_without_row_is_well_formed_and_has_no_row():
+    assert re.fullmatch(r"[a-z0-9]{32}", KEY_WITHOUT_ROW)
+    assert not Session.objects.filter(session_key=KEY_WITHOUT_ROW).exists()
 
 
 # --- Respuesta ----------------------------------------------------------------
