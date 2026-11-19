@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
 
 import { useFreeZoneTop } from "../map/useFreeZoneTop";
+import { LoginPage } from "../pages/LoginPage";
 import { MapPage } from "../pages/MapPage";
 import { RegisterPage } from "../pages/RegisterPage";
 import { useSession } from "../session/SessionProvider";
@@ -15,9 +16,10 @@ type AppShellProps = {
   navigator: AppNavigator;
 };
 
-function Page({ route, onLeaveRegister }: { route: Route; onLeaveRegister: () => void }) {
+function Page({ route, onLeaveToMap }: { route: Route; onLeaveToMap: () => void }) {
   if (route === "notFound") return <NotFoundPage />;
-  if (route === "register" || route === "redirectToRegister") return <RegisterPage onLeave={onLeaveRegister} />;
+  if (route === "register" || route === "redirectToRegister") return <RegisterPage onLeave={onLeaveToMap} />;
+  if (route === "login" || route === "redirectToLogin") return <LoginPage onLeave={onLeaveToMap} />;
   return <MapPage />;
 }
 
@@ -29,7 +31,7 @@ export function AppShell({ navigator }: AppShellProps) {
   const zoneRef = useRef<HTMLDivElement>(null);
   const shownPath = useRef(path);
   // replace y no navigate: Atrás no debe volver al formulario
-  const leaveRegister = useCallback(() => navigator.replace("/map"), [navigator]);
+  const leaveToMap = useCallback(() => navigator.replace("/map"), [navigator]);
   useFreeZoneTop(zoneRef);
 
   // El destino del foco solo existe tras pintar el nuevo estado de la barra
@@ -59,7 +61,7 @@ export function AppShell({ navigator }: AppShellProps) {
       {/* Recibe el foco por código y no es un control; el ! es necesario porque la regla global :focus-visible no va en una capa */}
       <div ref={zoneRef} tabIndex={-1} className="notice-host relative min-h-0 flex-1 outline-none!">
         <LogoutNotice notice={session.notice} onRetry={session.logout} onDismiss={session.dismissNotice} />
-        <Page route={resolveRoute(path)} onLeaveRegister={leaveRegister} />
+        <Page route={resolveRoute(path)} onLeaveToMap={leaveToMap} />
       </div>
       <div role="status" className="sr-only">
         {session.announcement}

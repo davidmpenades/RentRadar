@@ -30,6 +30,7 @@ export const es = {
     // {min} y {max} salen de PASSWORD_MIN_LENGTH y PASSWORD_MAX_LENGTH
     passwordHint: "Al menos {min} caracteres.",
     summary: "Revisa los campos marcados.",
+    toLogin: "¿Ya tienes cuenta? Entra",
     errors: {
       timeout: "La petición ha tardado demasiado. Inténtalo de nuevo.",
       csrf: "No se ha podido enviar el formulario. Recarga la página e inténtalo de nuevo.",
@@ -58,7 +59,11 @@ export const es = {
     },
   },
   login: {
+    title: "Entrar",
+    submit: "Entrar",
+    submitting: "Entrando…",
     credentialsInvalid: "El email o la contraseña no son correctos.",
+    toRegister: "¿No tienes cuenta? Regístrate",
   },
   panel: {
     label: "Bienes en esta zona",

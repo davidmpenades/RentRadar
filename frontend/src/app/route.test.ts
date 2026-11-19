@@ -20,6 +20,14 @@ describe("resolveRoute", () => {
     expect(resolveRoute("/register")).toBe("register");
   });
 
+  it("normaliza la dirección de la entrada con barra final", () => {
+    expect(resolveRoute("/login/")).toBe("redirectToLogin");
+  });
+
+  it("muestra la entrada en /login", () => {
+    expect(resolveRoute("/login")).toBe("login");
+  });
+
   it.each([
     "/otra",
     "/map//",
@@ -36,6 +44,12 @@ describe("resolveRoute", () => {
     "/registers",
     "//register",
     "/register.html",
+    "/login//",
+    "/LOGIN",
+    "/login/x",
+    "/logins",
+    "//login",
+    "/login.html",
   ])(
     "muestra la página no encontrada en %j",
     (pathname) => {

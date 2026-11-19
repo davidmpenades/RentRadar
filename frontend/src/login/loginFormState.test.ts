@@ -3,7 +3,7 @@ import { describe, expect, it } from "vitest";
 import type { FailureReason } from "../api/session";
 import { es } from "../i18n/es";
 import { throttledMessage } from "../i18n/format";
-import { formStateAfterLogin, type SettledLogin } from "./loginForm";
+import { formStateAfterLogin, type SettledLogin } from "./loginFormState";
 
 type LoginFailure = Exclude<SettledLogin, { kind: "loggedIn" }>;
 

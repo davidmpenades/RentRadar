@@ -20,7 +20,7 @@ type RegistrationFormProps = {
   statusRef?: Ref<HTMLDivElement>;
 };
 
-function Messages({ id, messages }: { id: string; messages: readonly string[] }) {
+export function Messages({ id, messages }: { id: string; messages: readonly string[] }) {
   if (messages.length === 0) return null;
   return (
     <ul id={id} className="flex flex-col gap-1 text-sm font-semibold text-danger">
@@ -132,6 +132,9 @@ export function RegistrationForm({
             {es.register.submit}
           </button>
         </form>
+        <a href="/login" className="mt-4 inline-flex min-h-11 items-center font-semibold underline underline-offset-4">
+          {es.register.toLogin}
+        </a>
       </div>
     </main>
   );
