@@ -120,7 +120,7 @@ Reglas comunes:
     2. `feat(frontend): add login to the session client`: `login()` y sus tests; el rojo, porque `login` no existe.
   - Hecho cuando: tras el refactor, los tests del registro y de la salida siguen en verde sin cambiar ni una línea; los tests nuevos fallan primero y luego pasan; tras cada commit, vitest, build, eslint de los ficheros tocados y `api:check` en verde.
 
-- [ ] **T8. Página `/login` y enlaces cruzados.** RF-8, RF-9
+- [x] **T8. Página `/login` y enlaces cruzados.** RF-8, RF-9
   - Ficheros:
     - `frontend/src/session/sessionState.ts` y su test: `authenticatedResult(how)` (sustituye a `registrationResult`), `shouldLeaveAuthForm` (movida desde `registerForm.ts`) y `settleUnexpected` (tercer uso; sustituye a `settleLogout` y `settleRegistration`).
     - `SessionProvider.tsx`: `markRegistered` pasa a `markAuthenticated(how)`.
