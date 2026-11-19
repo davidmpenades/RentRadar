@@ -163,5 +163,5 @@ Reglas comunes:
   - `docs/architecture.md`: la entrada, sus dos límites, el almacén `login`, `login.py`, la nota de la señal de salida y el árbol del frontend.
   - `MEMORY.md`: la 015 pasa a completada y «Spec activa: ninguna».
   - OK necesario: al empezar la tarea, para los `exec` de pytest y ruff; orden a orden: levantar el stack si está parado; el registro de la cuenta de prueba y cada entrada, que escriben en la BD de desarrollo (cuenta y `last_login`); y, si hay que repetir el límite, el reinicio del backend.
-  - Commits, en este orden: `docs(spec-015): validation`, `docs(architecture): describe login`, `docs(memory): close spec 015`; el paso de la spec a «implementada», con la aprobación del desarrollador, en `docs(spec-015): mark spec implemented`, como en la 017 y la 018.
+  - Commits, en este orden: `docs(spec-015): validation`, `docs(architecture): describe login`, `docs(memory): close spec 015`; el paso de la spec a «implementada», con la aprobación del desarrollador, en `docs(spec-015): mark spec implemented`.
   - Hecho cuando: `validation.md` recorre RF-1 a RF-9 y los no funcionales con su test o su comprobación, reúne las mutaciones de T2 a T6 y T8 y termina con un veredicto; el `git diff` de `requirements*` y `package*.json` respecto de `dev` está vacío.
