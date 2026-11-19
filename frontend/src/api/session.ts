@@ -169,6 +169,10 @@ type RegisterAttempt =
   | Attempt<RegisterOutcome>
   | { kind: "askWhoAmI"; failure: "invalid" | "timeout" | "network" };
 
+function isCsrf(attempt: { kind: string }): attempt is { kind: "csrf" } {
+  return attempt.kind === "csrf";
+}
+
 export function createSessionClient<Handle>(options: SessionClientOptions<Handle>): SessionClient {
   const { fetch, readCookies, setTimer, clearTimer, whoAmITimeoutMs, writeTimeoutMs } = options;
 
@@ -200,6 +204,37 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
       ...(hasJsonBody ? { "Content-Type": "application/json" } : {}),
       ...(token ? { "X-CSRFToken": token } : {}),
     };
+  }
+
+  // El intérprete lee el cuerpo dentro del mismo plazo que el envío
+  function postWithin<T>(
+    url: string,
+    interpret: (response: Response) => Promise<T>,
+    body?: Record<string, string>,
+  ): Promise<T> {
+    return withTimeout(writeTimeoutMs, async (inner) =>
+      interpret(
+        await send(url, {
+          method: "POST",
+          credentials: "same-origin",
+          signal: inner,
+          headers: postHeaders(body !== undefined),
+          ...(body !== undefined ? { body: JSON.stringify(body) } : {}),
+        }),
+      ),
+    );
+  }
+
+  // Un solo reintento: quién soy deja una cookie nueva, que se relee al enviar
+  async function retryOnceOnCsrf<Outcome extends { kind: string }>(
+    attempt: () => Promise<Attempt<Outcome>>,
+  ): Promise<Outcome | { kind: "failed"; reason: "csrf" }> {
+    let result = await attempt();
+    if (isCsrf(result)) {
+      await whoAmI();
+      result = await attempt();
+    }
+    return isCsrf(result) ? { kind: "failed", reason: "csrf" } : result;
   }
 
   async function whoAmI(signal?: AbortSignal): Promise<WhoAmIResult> {
@@ -252,17 +287,10 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
 
   async function attemptRegister(credentials: { email: string; password: string }): Promise<RegisterAttempt> {
     try {
-      return await withTimeout(writeTimeoutMs, async (inner) =>
-        interpretRegister(
-          await send(REGISTER_URL, {
-            method: "POST",
-            credentials: "same-origin",
-            signal: inner,
-            headers: postHeaders(true),
-            body: JSON.stringify({ email: credentials.email, password: credentials.password }),
-          }),
-        ),
-      );
+      return await postWithin(REGISTER_URL, interpretRegister, {
+        email: credentials.email,
+        password: credentials.password,
+      });
     } catch (error) {
       // El servidor pudo completar el registro: antes de dar el error se pregunta quién soy
       return failureReason(error) === "timeout"
@@ -272,13 +300,7 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
   }
 
   async function register(credentials: { email: string; password: string }): Promise<RegisterOutcome> {
-    let attempt = await attemptRegister(credentials);
-    // Un solo reintento: quién soy deja una cookie nueva, que se relee al enviar
-    if (attempt.kind === "csrf") {
-      await whoAmI();
-      attempt = await attemptRegister(credentials);
-    }
-    if (attempt.kind === "csrf") return { kind: "failed", reason: "csrf" };
+    const attempt = await retryOnceOnCsrf(() => attemptRegister(credentials));
     if (attempt.kind !== "askWhoAmI") return attempt;
     return (await whoAmI()) === "authenticated"
       ? { kind: "registered" }
@@ -299,28 +321,14 @@ export function createSessionClient<Handle>(options: SessionClientOptions<Handle
 
   async function attemptLogout(): Promise<Attempt<LogoutOutcome>> {
     try {
-      return await withTimeout(writeTimeoutMs, async (inner) =>
-        interpretLogout(
-          await send(LOGOUT_URL, {
-            method: "POST",
-            credentials: "same-origin",
-            signal: inner,
-            headers: postHeaders(false),
-          }),
-        ),
-      );
+      return await postWithin(LOGOUT_URL, interpretLogout);
     } catch (error) {
       return { kind: "failed", reason: failureReason(error) };
     }
   }
 
-  async function logout(): Promise<LogoutOutcome> {
-    let attempt = await attemptLogout();
-    if (attempt.kind === "csrf") {
-      await whoAmI();
-      attempt = await attemptLogout();
-    }
-    return attempt.kind === "csrf" ? { kind: "failed", reason: "csrf" } : attempt;
+  function logout(): Promise<LogoutOutcome> {
+    return retryOnceOnCsrf(attemptLogout);
   }
 
   return { whoAmI, register, logout };
