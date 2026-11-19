@@ -34,10 +34,11 @@ backend/
     ├── users/             # Usuario identificado por email
     │   ├── models.py      # User y su gestor (normaliza el email y delega el alta en el servicio)
     │   ├── services.py    # Alta de usuarios y superusuarios, registro (register_user y reglas de contraseña), cambio de email
-    │   ├── throttling.py  # ip_bucket (IPv6 por /64) y RegistrationThrottle: límite de registro por IP
-    │   ├── serializers.py # Lista blanca de la sesión (solo el email) y esquemas de la documentación del registro
-    │   ├── views.py       # RegisterView, CurrentSessionView («quién soy») y LogoutView
-    │   └── urls.py        # auth/register/, auth/session/ y auth/logout/, montadas bajo api/v1/ en config/urls.py
+    │   ├── login.py       # Prefiltro de forma (is_queryable_email, is_checkable_password) y check_credentials
+    │   ├── throttling.py  # ip_bucket (IPv6 por /64), RegistrationThrottle y los límites de la entrada: LoginIpThrottle, login_pair_key y LoginFailureLimit
+    │   ├── serializers.py # Lista blanca de la sesión (solo el email) y esquemas de la documentación del registro y de la entrada
+    │   ├── views.py       # RegisterView, LoginView, CurrentSessionView («quién soy») y LogoutView
+    │   └── urls.py        # auth/register/, auth/session/, auth/logout/ y auth/login/, montadas bajo api/v1/ en config/urls.py
     ├── categories/        # Lista cerrada de categorías
     │   ├── models.py      # Category y la normalización de su nombre
     │   ├── services.py    # save_category: valida, normaliza y guarda
@@ -91,17 +92,26 @@ Los servicios no devuelven los errores de Django tal cual: los traducen a `Domai
 La lista pública (`GET|HEAD /api/v1/public/assets/`) no autentica al visitante ni toca la sesión: `authentication_classes` está vacío y la respuesta no depende de cookies ni de cabeceras. El límite de peticiones (`PublicListThrottle`) se aplica antes de comprobar el método y de validar la zona, y cuenta por `REMOTE_ADDR` (`NUM_PROXIES = 0`). Todas las respuestas de la vista, errores incluidos, llevan la marca de `mark_response_cookieless` y salen sin cookies. Los errores salen con `Cache-Control: no-store`, y solo el 200 es cacheable. El módulo de negociación no importa `rest_framework.views`: DRF resuelve esa clase al importar la vista. Aunque exista el middleware de autenticación, la vista sigue sin leer la sesión: un test cuenta sus consultas y exige que ninguna toque `django_session`, también con una cookie de sesión válida, caducada o mal formada.
 
 ## Autenticación y sesión
-Registro, «quién soy» y salida (`/api/v1/auth/register/`, `/session/` y `/logout/`, en `apps/users`). La autenticación es la sesión de Django con CSRF, en el mismo origen que la página; JWT y la aplicación móvil quedan fuera por ahora.
+Registro, entrada, «quién soy» y salida (`/api/v1/auth/register/`, `/login/`, `/session/` y `/logout/`, en `apps/users`). La autenticación es la sesión de Django con CSRF, en el mismo origen que la página; JWT y la aplicación móvil quedan fuera por ahora.
 - **Sesión**: motor de BD de `django.contrib.sessions`. La cookie es `HttpOnly` y `SameSite=Lax` (y `Secure` en producción), y caduca a los 14 días fijos: `SESSION_SAVE_EVERY_REQUEST` está apagado y la actividad no la renueva. Una sesión es válida si existe, no ha caducado y su cuenta está activa.
-- **Middleware y autenticación por vista**: `AuthenticationMiddleware` va justo después de `CsrfViewMiddleware`, pero `DEFAULT_AUTHENTICATION_CLASSES` sigue vacío: cada vista declara la suya. Solo «quién soy» usa `SessionAuthentication`; el registro, la salida y la lista pública no leen la sesión al autenticar.
+- **Middleware y autenticación por vista**: `AuthenticationMiddleware` va justo después de `CsrfViewMiddleware`, pero `DEFAULT_AUTHENTICATION_CLASSES` sigue vacío: cada vista declara la suya. Solo «quién soy» usa `SessionAuthentication`; el registro, la entrada, la salida y la lista pública no leen la sesión al autenticar.
 - **CSRF de doble envío**: la cookie `csrftoken` es legible por la página y la petición debe repetirla en la cabecera `X-CSRFToken`. El token no está ligado a la sesión; lo que se garantiza es que cambia al abrir una sesión. «Quién soy» lo deja en la cookie con `get_token`.
-- **CSRF explícito en vistas anónimas** (`core/csrf.py`): DRF marca sus vistas como exentas y su autenticación por sesión solo comprueba el token a quien ya está autenticado, así que el registro y la salida, que son anónimos, heredan `CsrfEnforcedMixin`. Este ejecuta `CSRFCheck` sobre el `HttpRequest` de Django con `POST` vacío, en `initial()` y para los métodos no seguros que la vista admite, y lanza `csrf_failed` (403, distinto de `forbidden`) sin el motivo. Un test recorre el URLconf y exige el mixin a toda vista con un método no seguro: si se monta el admin o una `ViewSet`, esa guarda falla y hay que decidir.
+- **CSRF explícito en vistas anónimas** (`core/csrf.py`): DRF marca sus vistas como exentas y su autenticación por sesión solo comprueba el token a quien ya está autenticado, así que el registro, la entrada y la salida, que son anónimos, heredan `CsrfEnforcedMixin`. Este ejecuta `CSRFCheck` sobre el `HttpRequest` de Django con `POST` vacío, en `initial()` y para los métodos no seguros que la vista admite, y lanza `csrf_failed` (403, distinto de `forbidden`) sin el motivo. Un test recorre el URLconf y exige el mixin a toda vista con un método no seguro: si se monta el admin o una `ViewSet`, esa guarda falla y hay que decidir.
 - **Cuerpo acotado** (`core/request_body.py`): `read_json_object` lee como mucho 4096 bytes (más uno, para detectar el exceso), rechaza `Transfer-Encoding` y una longitud declarada mayor con `payload_too_large` (413), y todo lo que no sea un objeto JSON con `invalid_request` (400). `read_text_fields` exige texto o nulo en cada campo. Estas vistas no usan `request.data` ni `request.body`.
 - **Límite de registro** (`users/throttling.py`): `RegistrationThrottle` (un `SimpleRateThrottle`) permite 10 peticiones por hora y por IP, la de la conexión (`NUM_PROXIES = 0`). `ip_bucket` agrupa las direcciones IPv6 por su prefijo /64, desenvuelve las IPv4 mapeadas y manda las vacías o no válidas a un cubo fijo. Solo anota las peticiones que deja pasar: las que rechaza él mismo no cuentan, y DRF no devuelve `retry_after` si el historial pasara de 10. Los contadores viven en la caché por defecto, en memoria y por proceso, hasta la spec de despliegue.
-- **Orden de comprobaciones del registro**: límite → método → CSRF → tamaño y forma del cuerpo → validación → creación. La salida va método → CSRF. Con el límite superado, cualquier método del registro recibe el error de límite.
+- **Límites de la entrada** (`users/throttling.py`), los dos en el almacén `login`:
+  - `LoginIpThrottle`: 20 peticiones por minuto y por IP (`ip_bucket`), con ventana deslizante. Cuenta toda petición que deja pasar, también las que acaban en otro rechazo; las que rechaza él mismo no cuentan ni alargan la espera.
+  - `LoginFailureLimit`: 5 entradas fallidas en 15 minutos por par de IP y email normalizado. Solo anota los fallos de credenciales; un acierto no reinicia el contador, y con el par bloqueado se rechaza también la contraseña correcta, sin comprobarla. La clave (`login_pair_key`) es `login_pair:<cubo de la IP>:<HMAC-SHA256 del email normalizado>`, con sal propia y `SECRET_KEY` en el HMAC: lleva el cubo de la IP en claro y no lleva el email, y al cambiar `SECRET_KEY` los contadores anteriores dejan de contar.
+  - La espera de los dos sale de la anotación que deja el recuento por debajo del límite (`wait_seconds`), no de la más antigua.
+- **Almacén `login`** (`CACHES` en `config/settings/base.py`): `LocMemCache` aparte de `default`, con `LOCATION` propia, 20 000 entradas y `CULL_FREQUENCY` 10, para que el tráfico del mapa y del registro no expulse sus contadores. Está en memoria y por proceso, como el de `default`, hasta la spec de despliegue.
+- **Orden de comprobaciones**: el registro va límite → método → CSRF → tamaño y forma del cuerpo → validación → creación. La entrada va límite por IP → método → CSRF → tamaño y forma del cuerpo → límite del par → credenciales → sesión nueva. La salida va método → CSRF. Con el límite superado (el del registro o el de la IP en la entrada), cualquier método recibe el error de límite.
+- **Entrada**: `check_credentials` (`users/login.py`) descarta sin consultas ni hash un email no consultable (nulo, vacío o solo con espacios, con un carácter nulo o con un sustituto suelto) o una contraseña no comprobable (nula, vacía, de más de 128 caracteres o con un sustituto suelto). Si no, llama a `authenticate` con el email crudo, que `ModelBackend` normaliza una sola vez; así se calcula un solo hash con email desconocido, contraseña errónea, cuenta desactivada o contraseña inutilizable. Todas las causas dan la misma respuesta (`invalid_fields` con `credentials_invalid` en `non_field`) y ninguna toca la sesión. Con éxito, `flush()` y `login()` en una transacción, como en el registro: cambian el identificador de sesión y el token CSRF aunque fuera la misma cuenta.
+- **Informe de error**: con `DEBUG=False`, `@sensitive_variables` tapa el email y la contraseña en los marcos de `check_credentials` y `LoginView.post`. Los de `ModelBackend.authenticate` y del hasher no se tapan; hoy no salen de ningún sitio (en producción no hay `ADMINS` y el handler de `mail_admins` se sustituye), pero quien conecte un servicio de errores que lea las variables de los marcos tiene que tenerlo en cuenta.
+- **Internos de Django y DRF**: `LoginIpThrottle.wait` usa atributos no documentados de `SimpleRateThrottle` (`history`, `now`, `num_requests` y `duration`), y `login_pair_key` usa `salted_hmac`, que tampoco está en la referencia de Django. Los fijan tests y mutaciones, pero hay que revisarlos al actualizar Django o DRF.
+- **Señales**: la salida (`flush()`) y la entrada que sustituye la sesión de otra cuenta no emiten `user_logged_out`; un test lo fija y no se emite a mano, así que un receptor de esa señal no se llamará. `user_login_failed` solo se emite cuando se llama a `authenticate` (los descartes del prefiltro no la emiten) y lleva el email crudo en `credentials`: Django solo tapa la contraseña. Hoy ningún receptor se conecta a ella, y ninguno debe registrar `credentials`.
 - **Registro**: `register_user` (servicio) valida el email y la contraseña con las reglas de la 004 más los validadores de contraseña de Django, en el orden fijo de `AUTH_PASSWORD_VALIDATORS` y con un máximo de 128 caracteres que se comprueba sin calcular el hash. Una contraseña con un nulo o un sustituto suelto da `password_invalid`, sola. La vista abre la sesión dentro de una transacción: crea la cuenta, `flush()` de la sesión anterior y `login()`, de modo que cambian el identificador y el token CSRF aunque fuera la misma cuenta. Un registro rechazado no toca la sesión.
 - **Salida y «quién soy»**: la salida hace `flush()` (borra la fila aunque esté caducada) y retira siempre la cookie de sesión; sin sesión responde bien y no cambia nada. «Quién soy» responde `{"user": null}` sin error cuando no hay sesión válida, para que una visita anónima no deje errores en la consola, y rechaza con 405 un método no admitido antes de autenticar.
-- **Respuestas**: las de éxito llevan solo el email de la propia cuenta o `null`, y todas, errores incluidos, `Cache-Control: no-store`; la de «quién soy» declara además `Vary: Cookie`. Los errores usan el formato único (`code`, `params`, `retry_after`) con los códigos `invalid_fields`, `invalid_request`, `payload_too_large` y `csrf_failed`, y nunca incluyen el valor recibido.
+- **Respuestas**: las de éxito llevan solo el email de la propia cuenta o `null`, y todas, errores incluidos, `Cache-Control: no-store`; la de «quién soy» declara además `Vary: Cookie`. Los errores usan el formato único (`code`, `params`, `retry_after`) con los códigos `invalid_fields`, `invalid_request`, `payload_too_large`, `csrf_failed` y `throttled` (429, con `retry_after` y la cabecera `Retry-After`), y nunca incluyen el valor recibido.
 
 ## Logs
 `django.db.backends` está fijado en INFO en los tres entornos (en producción, con el handler que redacta secretos): con DEBUG, Django registra cada consulta con sus valores, entre ellos el email y el hash.
@@ -127,23 +137,27 @@ frontend/
     │   ├── schema.gen.ts    # Tipos generados desde backend/openapi.json (no se edita a mano)
     │   ├── validate.ts      # Esquema Zod estricto de la lista pública y validateResponse
     │   ├── publicAssets.ts  # Cliente de la lista pública (sin cookies) y clasificación de sus fallos
-    │   ├── session.ts       # Cliente de sesión (cookies del mismo origen): «quién soy» (5 s), registro y salida (10 s), con un reintento ante csrf_failed y esquemas Zod
+    │   ├── session.ts       # Cliente de sesión (cookies del mismo origen): «quién soy» (5 s), registro, entrada y salida (10 s), con un reintento ante csrf_failed y esquemas Zod
     │   ├── timeout.ts       # runWithTimeout: el tiempo máximo común de todos los clientes
     │   └── http.ts          # hasJsonContentType
     ├── app/            # Cáscara de la aplicación
-    │   ├── AppShell.tsx     # Columna con la barra, la zona de contenido y la región de estado global; el foco va a la zona al cambiar de página
-    │   ├── TopBar.tsx       # Barra de 56 px: la marca (enlace a /map) y «Registrarse» o «Salir»
+    │   ├── AppShell.tsx     # Columna con la barra, la zona de contenido y la región de estado global; el foco va a la zona al cambiar de página y a «Entrar» tras salir
+    │   ├── TopBar.tsx       # Barra de 56 px: la marca (enlace a /map) y «Entrar» y «Registrarse», o «Salir»
     │   ├── LogoutNotice.tsx # Aviso de fallo de «Salir», con «Reintentar»
     │   ├── NotFoundPage.tsx # «Página no encontrada», con desplazamiento propio
     │   ├── navigation.ts    # createNavigator: History API (pushState, replaceState y popstate) sin librería de rutas
-    │   └── route.ts         # resolveRoute: de la dirección a la ruta (/map, /register, redirecciones y no encontrada)
+    │   └── route.ts         # resolveRoute: de la dirección a la ruta (/map, /register, /login, redirecciones y no encontrada)
     ├── session/        # Estado de la sesión
-    │   ├── sessionState.ts      # Lógica pura: estado (desconocido, sin sesión, con sesión), acción de la barra y resultado de la salida
-    │   └── SessionProvider.tsx  # Contexto: «quién soy» al montar, salida y registro
+    │   ├── sessionState.ts      # Lógica pura: estado (desconocido, sin sesión, con sesión), acción de la barra, resultado de la salida y del registro o la entrada, settleUnexpected y salida de los formularios con sesión
+    │   └── SessionProvider.tsx  # Contexto: «quién soy» al montar, salida y sesión abierta por el registro o la entrada
     ├── register/       # Página de registro
     │   ├── registerForm.ts      # Lógica pura: errores por campo, foco, estado tras el resultado y guarda del doble envío
-    │   └── RegistrationForm.tsx # Solo marcado (probado con react-dom/server); la contraseña no tiene valor en el DOM
-    ├── pages/          # MapPage.tsx (mapa y panel) y RegisterPage.tsx (estado, sesión, guarda y foco del formulario)
+    │   ├── EyeIcons.tsx         # Iconos de «Mostrar contraseña», que usa también la entrada
+    │   └── RegistrationForm.tsx # Solo marcado (probado con react-dom/server); la contraseña no tiene valor en el DOM. Exporta Messages, que usa también la entrada
+    ├── login/          # Página de entrada
+    │   ├── loginFormState.ts    # Lógica pura: estado del formulario tras cada resultado de la entrada (la contraseña solo se borra con credenciales incorrectas)
+    │   └── LoginForm.tsx        # Solo marcado (probado con react-dom/server): email con autocomplete="email" y contraseña no controlada con "current-password"
+    ├── pages/          # MapPage.tsx (mapa y panel), RegisterPage.tsx y LoginPage.tsx (estado, sesión, guarda y foco del formulario)
     ├── map/            # Mapa MapLibre
     │   ├── MapView.tsx      # Crea y libera el mapa, la capa de círculos y los controles
     │   ├── style.ts         # Validación del estilo y de las URL permitidas, atribución fija
@@ -164,6 +178,6 @@ frontend/
 - **Navegación propia**: `createNavigator` usa la History API, sin librería de rutas. `pushState` no emite `popstate`, así que notifica a mano; las redirecciones usan `replaceState` y no añaden entradas al historial.
 - **Barra y zona de contenido**: columna `h-dvh` con la barra de 56 px (`shrink-0`) y la zona (`min-h-0 flex-1`), de modo que las páginas ocupan la zona con `h-full` y la página nunca hace scroll. La zona recibe el foco por código al cambiar de página y no dibuja contorno (`outline-none!`: la regla global `:focus-visible` no va en una capa de Tailwind y solo le gana una utilidad importante).
 - **Contraseña fuera del DOM**: el campo es no controlado y se lee de un `ref` al enviar, porque React copia el valor de un campo controlado al atributo `value`, también en `type="password"`.
-- **Tiempos máximos y errores de red**: todos los clientes pasan por `runWithTimeout`. Con el backend parado, el proxy de Vite responde 502 `text/plain` sin cuerpo, así que el registro da el error de servidor y «quién soy» da sin sesión; el error de red solo aparece si cae el propio Vite o falla la conexión del navegador.
+- **Tiempos máximos y errores de red**: todos los clientes pasan por `runWithTimeout`. Con el backend parado, el proxy de Vite responde 502 `text/plain` sin cuerpo, así que el registro y la entrada dan el error de servidor (la entrada, después de preguntar «quién soy» y no encontrar sesión) y «quién soy» da sin sesión; el error de red solo aparece si cae el propio Vite o falla la conexión del navegador.
 - **Comandos** (desde `frontend/`): `npm run dev`, `npx vitest run`, `npm run build`, `npx eslint .`, `npm run api:gen` y `npm run api:check`.
 - **Puertas de CI**: el backend regenera la descripción en `/tmp` y la compara con `backend/openapi.json` con `diff`; el job `frontend-quality` ejecuta vitest, build, eslint, `api:check` (los tipos generados corresponden al `openapi.json`) y `npm audit --omit=dev`.
