@@ -1,13 +1,14 @@
 import { describe, expect, it, vi } from "vitest";
 
-import type { FailureReason, LogoutOutcome, WhoAmIResult } from "../api/session";
+import type { FailureReason, LoginOutcome, LogoutOutcome, RegisterOutcome, WhoAmIResult } from "../api/session";
 import { es } from "../i18n/es";
 import {
+  authenticatedResult,
   dismissResult,
   loadSessionStatus,
   logoutResult,
-  registrationResult,
-  settleLogout,
+  settleUnexpected,
+  shouldLeaveAuthForm,
   statusAfterWhoAmI,
   topBarAction,
   type SessionStatus,
@@ -202,39 +203,85 @@ describe("dismissResult", () => {
   });
 });
 
-describe("settleLogout", () => {
-  it.each<LogoutOutcome>([{ kind: "loggedOut" }, ...FAILURE_REASONS.map((reason) => ({ kind: "failed" as const, reason }))])(
-    "devuelve tal cual %o sin registrar nada",
-    async (outcome) => {
-      const logError = vi.fn();
-      await expect(settleLogout({ logout: async () => outcome, logError })).resolves.toEqual(outcome);
-      expect(logError).not.toHaveBeenCalled();
+describe("authenticatedResult: lo que hace markAuthenticated", () => {
+  it.each([
+    ["registered", es.session.registered, "Cuenta creada."],
+    ["loggedIn", es.session.loggedIn, "Has entrado."],
+  ] as const)("con %s pasa a la sesión abierta y anuncia su texto", (how, announcement, text) => {
+    expect(authenticatedResult(how)).toEqual({ status: "authenticated", announcement });
+    expect(announcement).toBe(text);
+  });
+
+  it.each(["registered", "loggedIn"] as const)(
+    "con %s, la respuesta de quién soy del arranque que llega después no la deshace",
+    (how) => {
+      expect(statusAfterWhoAmI(authenticatedResult(how).status, "anonymous")).toBe("authenticated");
     },
   );
+});
 
-  it("un rechazo es un fallo del código: failed(unexpected) y registrado una vez", async () => {
+describe("shouldLeaveAuthForm", () => {
+  it("solo con sesión abierta se sale del formulario de registro o de entrada", () => {
+    expect(shouldLeaveAuthForm("authenticated")).toBe(true);
+    expect(shouldLeaveAuthForm("anonymous")).toBe(false);
+    expect(shouldLeaveAuthForm("unknown")).toBe(false);
+  });
+});
+
+describe("settleUnexpected", () => {
+  const credentials = { email: "ana@example.com", password: "secreto-muy-largo" };
+
+  it.each<LogoutOutcome | RegisterOutcome | LoginOutcome>([
+    { kind: "loggedOut" },
+    ...FAILURE_REASONS.map((reason) => ({ kind: "failed" as const, reason })),
+    { kind: "registered" },
+    { kind: "loggedIn" },
+    { kind: "credentialsInvalid" },
+    { kind: "throttled", retryAfterSeconds: 60 },
+  ])("devuelve tal cual %o, con una sola llamada y sin registrar nada", async (outcome) => {
+    const run = vi.fn(async () => outcome);
+    const logError = vi.fn();
+
+    await expect(settleUnexpected(run, logError)).resolves.toEqual(outcome);
+    expect(run).toHaveBeenCalledTimes(1);
+    expect(logError).not.toHaveBeenCalled();
+  });
+
+  it("un rechazo es un fallo del código: failed(unexpected), registrado una vez con ese error y sin lanzar", async () => {
     const failure = new RangeError("fallo del código");
     const logError = vi.fn();
 
-    const outcome = await settleLogout({
-      logout: async () => {
-        throw failure;
-      },
-      logError,
-    });
+    const outcome = await settleUnexpected(async () => {
+      throw failure;
+    }, logError);
 
     expect(outcome).toEqual({ kind: "failed", reason: "unexpected" });
     expect(logError).toHaveBeenCalledExactlyOnceWith(failure);
   });
-});
 
-describe("registrationResult: lo que hace markRegistered", () => {
-  it("pasa a la sesión abierta y anuncia «Cuenta creada.»", () => {
-    expect(registrationResult()).toEqual({ status: "authenticated", announcement: es.session.registered });
-    expect(es.session.registered).toBe("Cuenta creada.");
+  it("lo que se registra no incluye el email ni la contraseña que lleva la llamada", async () => {
+    const logError = vi.fn();
+    const send = vi.fn<(sent: typeof credentials) => Promise<LoginOutcome>>(async () => {
+      throw new Error("boom");
+    });
+
+    await settleUnexpected(() => send(credentials), logError);
+
+    expect(send).toHaveBeenCalledExactlyOnceWith(credentials);
+    const logged = JSON.stringify(logError.mock.calls, (_key, value: unknown) =>
+      value instanceof Error ? { name: value.name, message: value.message } : value,
+    );
+    expect(logged).not.toContain(credentials.password);
+    expect(logged).not.toContain(credentials.email);
   });
 
-  it("la respuesta de quién soy del arranque que llega después no la deshace", () => {
-    expect(statusAfterWhoAmI(registrationResult().status, "anonymous")).toBe("authenticated");
+  it("una llamada que lanza de forma síncrona también da failed(unexpected)", async () => {
+    const logError = vi.fn();
+    const run = vi.fn((): Promise<LoginOutcome> => {
+      throw new TypeError("síncrono");
+    });
+
+    await expect(settleUnexpected(run, logError)).resolves.toEqual({ kind: "failed", reason: "unexpected" });
+    expect(logError).toHaveBeenCalledTimes(1);
   });
 });

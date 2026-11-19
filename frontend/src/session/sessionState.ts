@@ -48,15 +48,13 @@ export async function loadSessionStatus({ whoAmI, signal, logError }: LoadSessio
   }
 }
 
-type SettleLogoutOptions = {
-  logout: () => Promise<LogoutOutcome>;
-  logError: (error: unknown) => void;
-};
-
-// Un rechazo de la salida no puede dejar «Salir» deshabilitado para siempre
-export async function settleLogout({ logout, logError }: SettleLogoutOptions): Promise<SettledLogout> {
+// Un rechazo del cliente no puede dejar un envío bloqueado; se registra el error, nunca lo que lleva la llamada
+export async function settleUnexpected<Outcome>(
+  run: () => Promise<Outcome>,
+  logError: (error: unknown) => void,
+): Promise<Outcome | { kind: "failed"; reason: "unexpected" }> {
   try {
-    return await logout();
+    return await run();
   } catch (error) {
     logError(error);
     return { kind: "failed", reason: "unexpected" };
@@ -76,6 +74,10 @@ export function dismissResult(): { notice: null; focus: "logout" } {
   return { notice: null, focus: "logout" };
 }
 
-export function registrationResult(): { status: SessionStatus; announcement: string } {
-  return { status: "authenticated", announcement: es.session.registered };
+export function authenticatedResult(how: "registered" | "loggedIn"): { status: SessionStatus; announcement: string } {
+  return { status: "authenticated", announcement: how === "registered" ? es.session.registered : es.session.loggedIn };
+}
+
+export function shouldLeaveAuthForm(status: SessionStatus): boolean {
+  return status === "authenticated";
 }

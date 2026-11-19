@@ -1,7 +1,6 @@
 import type { EmailError, PasswordError, RegisterOutcome } from "../api/session";
 import { es } from "../i18n/es";
 import { throttledMessage } from "../i18n/format";
-import type { SessionStatus } from "../session/sessionState";
 
 // Copia de MinimumLengthValidator en backend/config/settings/base.py: solo alimenta la pista y los textos, no valida
 export const PASSWORD_MIN_LENGTH = 10;
@@ -78,7 +77,7 @@ export function formStateForEmpty(errors: FieldErrors): FormState {
   return { ...stateFromFieldCodes(errors.email, errors.password, false), clearPassword: false };
 }
 
-function generalMessage(reason: Extract<SettledRegistration, { kind: "failed" }>["reason"]): string {
+export function generalMessage(reason: Extract<SettledRegistration, { kind: "failed" }>["reason"]): string {
   switch (reason) {
     case "csrf":
       return es.register.errors.csrf;
@@ -108,30 +107,6 @@ export function formStateAfter(outcome: Exclude<SettledRegistration, { kind: "re
     focus: "status",
     submitting: false,
   };
-}
-
-type SettleRegistrationOptions = {
-  register: (credentials: Credentials) => Promise<RegisterOutcome>;
-  credentials: Credentials;
-  logError: (error: unknown) => void;
-};
-
-// Un rechazo del cliente no puede dejar el envío bloqueado; lo que se registra es el error, nunca las credenciales
-export async function settleRegistration({
-  register,
-  credentials,
-  logError,
-}: SettleRegistrationOptions): Promise<SettledRegistration> {
-  try {
-    return await register(credentials);
-  } catch (error) {
-    logError(error);
-    return { kind: "failed", reason: "unexpected" };
-  }
-}
-
-export function shouldLeaveRegister(status: SessionStatus): boolean {
-  return status === "authenticated";
 }
 
 // El estado de React llega en el siguiente render: un doble clic o un doble Intro lo verían aún libre

@@ -11,6 +11,7 @@ export const es = {
   session: {
     loggedOut: "Has salido",
     registered: "Cuenta creada.",
+    loggedIn: "Has entrado.",
     logoutFailed: "No se ha podido salir. Inténtalo de nuevo.",
     retry: "Reintentar",
     dismiss: "Cerrar aviso",
@@ -55,6 +56,9 @@ export const es = {
       password_too_similar: "La contraseña se parece demasiado al email.",
       unknown: "Revisa la contraseña.",
     },
+  },
+  login: {
+    credentialsInvalid: "El email o la contraseña no son correctos.",
   },
   panel: {
     label: "Bienes en esta zona",

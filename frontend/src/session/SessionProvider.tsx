@@ -2,11 +2,11 @@ import { createContext, useCallback, useContext, useEffect, useMemo, useRef, use
 
 import type { SessionClient } from "../api/session";
 import {
+  authenticatedResult,
   dismissResult,
   loadSessionStatus,
   logoutResult,
-  registrationResult,
-  settleLogout,
+  settleUnexpected,
   statusAfterWhoAmI,
   type LogoutNoticeKind,
   type SessionStatus,
@@ -23,7 +23,7 @@ export type SessionContextValue = {
   focusRequest: FocusRequest | null;
   logout: () => void;
   dismissNotice: () => void;
-  markRegistered: () => void;
+  markAuthenticated: (how: "registered" | "loggedIn") => void;
 };
 
 const SessionContext = createContext<SessionContextValue | null>(null);
@@ -58,7 +58,7 @@ export function SessionProvider({ client, logError, children }: SessionProviderP
     // Vaciar el aviso al empezar hace que un segundo fallo igual vuelva a anunciarse
     setNotice(null);
     setAnnouncement("");
-    void settleLogout({ logout: client.logout, logError }).then((outcome) => {
+    void settleUnexpected(client.logout, logError).then((outcome) => {
       const result = logoutResult(outcome);
       logoutInFlight.current = false;
       setLogoutPending(false);
@@ -75,16 +75,16 @@ export function SessionProvider({ client, logError, children }: SessionProviderP
     setFocusRequest({ target: result.focus });
   }, []);
 
-  const markRegistered = useCallback(() => {
-    const result = registrationResult();
+  const markAuthenticated = useCallback((how: "registered" | "loggedIn") => {
+    const result = authenticatedResult(how);
     setStatus(result.status);
     setNotice(null);
     setAnnouncement(result.announcement);
   }, []);
 
   const value = useMemo(
-    () => ({ status, announcement, notice, logoutPending, focusRequest, logout, dismissNotice, markRegistered }),
-    [status, announcement, notice, logoutPending, focusRequest, logout, dismissNotice, markRegistered],
+    () => ({ status, announcement, notice, logoutPending, focusRequest, logout, dismissNotice, markAuthenticated }),
+    [status, announcement, notice, logoutPending, focusRequest, logout, dismissNotice, markAuthenticated],
   );
 
   return <SessionContext.Provider value={value}>{children}</SessionContext.Provider>;
