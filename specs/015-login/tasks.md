@@ -151,7 +151,7 @@ Reglas comunes:
   - Commit: `feat(frontend): show login next to register in the top bar`
   - Hecho cuando: los tests fallan primero y luego pasan; vitest, build y eslint de los ficheros tocados en verde.
 
-- [ ] **T10. Validación en el navegador, arquitectura y cierre.** RF-1…RF-9 y RNF
+- [x] **T10. Validación en el navegador, arquitectura y cierre.** RF-1…RF-9 y RNF
   - `/sdd-validate` con los revisores en paralelo.
   - Chrome DevTools a 1280 y 375 px (la barra sin sesión, en un navegador real a 375 px), con la consola sin errores propios, un recorrido solo con teclado y a través del proxy de Vite:
     - registrarse con una cuenta `@example.com`, salir, entrar y pulsar «Salir» a continuación (una sola petición de salida, sin `csrf_failed` ni reintento);
