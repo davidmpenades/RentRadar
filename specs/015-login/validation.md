@@ -433,3 +433,84 @@ No aplica (interfaz; plan).
 
 ### Desviaciones y añadidos respecto del plan
 - Ninguna.
+
+## T10. Validación de punta a punta y cierre
+Fecha: 2026-11-19 · Código validado: `8f0f8c1` (sin cambios de código respecto de `e4bc905`) para las puertas, los revisores y el navegador; después, las dos correcciones de calidad, `d18ace7` y `446cd05`, con sus propias comprobaciones (ver «Correcciones tras la revisión»).
+
+### Puertas
+- `docker compose exec backend pytest -q`: `2524 passed`. `ruff check .` (`All checks passed!`) y `ruff format --check .` (`149 files already formatted`).
+- vitest entero: `36 passed` ficheros y `1324 passed` tests. `npm run build` con `exit=0`, `npx eslint .` con `exit=0` y `npm run api:check` con `exit=0`.
+- Migraciones (`No changes detected`) y desfase de `openapi.json` (`exit=0`, sin `diff`): se citan los resultados de `e4bc905` (T9), sin volver a lanzar los `docker compose run`. Siguen valiendo para `8f0f8c1`: `git diff --stat e4bc905 8f0f8c1 -- backend frontend` sale vacío. Tras `d18ace7` se volvieron a lanzar.
+- `git diff dev -- 'backend/requirements*' 'frontend/package*.json'`: vacío. Ninguna dependencia nueva.
+
+### Revisores (`/sdd-validate`)
+- **Calidad**: cambios necesarios. Un bloqueante, y uno de sus opcionales (el fixture del reloj) resulta ser el mismo caso: los dos, corregidos en «Correcciones tras la revisión».
+- **Seguridad**: cumple, sin bloqueantes. Ejecutó `pytest` sobre `test_login_api.py`, `test_login_throttling.py`, `test_login_credentials.py` y `test_cache_settings.py`: `293 passed`.
+- **Documentación** (Context7: Django 5.2.18, DRF 3.18.3, drf-spectacular, Zod 4.6.7, React 19.3.1 y Vite 8.3.5): cumple, sin bloqueantes.
+- Opcionales con seguimiento: los del 429 repetido, `Messages` y `EyeIcons` importados desde `register/` y la clave de sesión con nulos pasan a «Próximos pasos» de `MEMORY.md`; el de los marcos de `ModelBackend.authenticate` sin tapar en el informe de error, a «Riesgos aceptados» de la spec y a `docs/architecture.md`, y los internos sin documentar de DRF y Django (`SimpleRateThrottle` y `salted_hmac`), a `docs/architecture.md`. El `sessionid` con nulos se corrige con la /sdd-change de la 009 después del PR, como en la hoja de ruta. Los demás quedan en el informe de la validación, sin cambio en esta spec.
+
+### Navegador
+Chrome 156 del MCP de Chrome DevTools, en un contexto aislado, siempre por `http://localhost:5173` (proxy de Vite), a 375 × 667 (móvil, táctil, DPR 2) y a 1280 × 800.
+
+Escrituras en la BD de desarrollo: el registro de la cuenta de prueba `t10-entrada@example.com`, tres entradas con éxito y cuatro salidas. Autorizado por el desarrollador por adelantado el 19-11-2026, para el recorrido de la T10. La contraseña es aleatoria y no se anota. Los cinco fallos y el 429 no escriben en la BD. La cuenta sigue en la BD de desarrollo. Para la fila 19, el desarrollador registró desde su Chromium la cuenta `t10-chrome@example.com`, escritura suya en la BD de desarrollo; la contraseña no se anota.
+
+| # | Comprobación | Resultado |
+|---|---|---|
+| 1 | Barra sin sesión a 1280 px | «Entrar» (`btn btn-secondary`, 102,34 × 44) y «Registrarse» (`btn btn-primary`, 143,06 × 44), en ese orden, dentro de `flex items-center gap-2`; `scrollWidth` 1280 = `clientWidth` |
+| 2 | Barra sin sesión a 375 px | «Entrar» 102,34 × 44 (x 105,59–207,94) y «Registrarse» 143,06 × 44 (x 215,94–359); marca 16–60; barra 375 × 56; `scrollWidth` 375 = `clientWidth`: los dos miden al menos 44 × 44 y no desbordan |
+| 3 | Registro real (375 px) | Un `POST /api/v1/auth/register/` 201; «Creando la cuenta…» y «Cuenta creada.»; mapa con «Salir» |
+| 4 | «Salir» con teclado | Mayús+Tab hasta «Salir» (contorno sólido de 2 px), Intro: un `POST /logout/` 204, «Has salido» y el foco en «Entrar» (`:focus-visible`) |
+| 5 | `/login` (Intro sobre «Entrar») | `form method="post"`; email `type="email"`, `autocomplete="email"`; contraseña `type="password"`, `autocomplete="current-password"`, sin atributo `value`; campos y envío de 48 px de alto, «Mostrar contraseña» 44 × 44, «¿No tienes cuenta? Regístrate» 226,73 × 44; sin desbordar |
+| 6 | Pegar | Control+V real desde el portapapeles en el email y en la contraseña: el valor llega a los dos; ningún `paste` se cancela |
+| 7 | Envío real de la entrada (Intro) | Un `POST /login/` 200 con `{"user":{"email":"t10-entrada@example.com"}}`, `Cache-Control: no-store`, `Vary: Cookie`, `csrftoken` nueva y `sessionid` `HttpOnly`, `Max-Age=1209600`, `Path=/`, `SameSite=Lax`; «Entrando…» y «Has entrado.», una vez cada uno («Has entrado.» en la región global); mapa con «Salir»; `history.length` igual antes y después |
+| 8 | «Salir» justo después | Un solo `POST /logout/` 204, sin `csrf_failed` ni reintento; foco en «Entrar» |
+| 9 | Doble clic real en «Entrar» | Un solo `POST /login/` 200; anuncios una vez; `history.length` igual |
+| 10 | Recarga y «Atrás» | Tras recargar sigue la sesión («quién soy» 200, «Salir»). «Atrás» lleva al mapa, no al formulario |
+| 11 | `/login` con sesión (carga completa) | Lleva a `/map`; con `?next=https://otro.sitio`, una sola llamada `replaceState('/map')`, ningún `pushState` y `history.length` igual; no sale del origen. `/login/` con sesión: `replaceState('/login')` y `replaceState('/map')` |
+| 12 | `/login/` sin sesión | Una sola llamada `replaceState('/login')`, `history.length` igual y el formulario pintado |
+| 13 | «Quién soy» bloqueado | Con un `fetch` de `/api/v1/auth/session/` que no responde nunca (script de inicio), el formulario está pintado y editable, y la barra no muestra acciones |
+| 14 | Doble Intro | Con la red en «Slow 3G», escribiendo con el teclado: el segundo Intro llega con los campos en solo lectura y el envío con `aria-disabled="true"`; un solo `POST /login/` 200; anuncios una vez |
+| 15 | Contraste AA (colores calculados) | Título, etiquetas, enlace y texto de estado `rgb(20,24,31)` sobre la tarjeta blanca: 17,79:1. «Entrar» secundario sobre `rgb(223,232,255)`: 14,51:1. Texto blanco de los botones principales sobre el degradado `rgb(52,104,219)`→`rgb(22,71,184)`: 5,06:1 y 7,99:1 |
+| 16 | Credenciales incorrectas (1280 px, dos veces) | `POST /login/` 400 con `{"code":"invalid_fields","params":{"non_field":["credentials_invalid"]}}` y `no-store`; «El email o la contraseña no son correctos.» una vez por petición, también la segunda; foco en la región de estado (`:focus-visible`); email conservado y contraseña vacía |
+| 17 | Límite del par, el último | Fallos 3.º y 4.º a 1280 px y 5.º a 375 px (400). El 6.º, con la contraseña correcta, a 375 px: `POST /login/` 429 con `{"code":"throttled","retry_after":854}`, `Retry-After: 854`, `no-store` y sin `Set-Cookie`; «Demasiados intentos. Inténtalo de nuevo en 15 minutos.» una vez, foco en la región de estado, los dos campos conservados y sin sesión; sin desbordar. No hizo falta reiniciar el backend |
+| 18 | Consola | Sin errores de la aplicación a 375 y 1280 px. Aparecen los dos avisos del estilo del mapa de OpenFreeMap (`layers[highway-shield-…].filter[1]`), ajenos a la aplicación, y `Failed to load resource` de los 400 y del 429 provocados a propósito, que es el registro de red de Chrome, como en la 009 |
+| 19 | Gestor de contraseñas (Chromium 157.0.8103.50, comprobación del desarrollador) | Ofrece guardar al entrar y rellena `/login` con el email como `autocomplete="email"`. Nota de método: con localhost en la lista de sitios rechazados no ofrece nada; hay que comprobar esa lista antes de dar el fallo por bueno |
+
+### Cobertura de los requisitos
+| Requisito | Tests | Navegador |
+|---|---|---|
+| RF-1 | `test_login_api.py` (200 con solo el email guardado, cookie de sesión, sesión de la cuenta, «quién soy» después, cuenta de staff) y `test_login_credentials.py` (formas equivalentes del email) | 7 |
+| RF-2 | `test_login_api.py` (`test_every_wrong_credential_gets_the_same_answer`, por causa y estado de cookie) y `test_login_credentials.py` (prefiltro sin consultas ni hash, un hash por causa, 128 puntos de código, sin errores del servidor) | 16 |
+| RF-3 | `test_login_throttling.py` (ventana deslizante, todo cuenta, rechazos que no cuentan, espera, /64) y `test_login_api.py` (límite antes de las credenciales, rechazos del par que cuentan, cualquier método, `X-Forwarded-For`) | — |
+| RF-4 | `test_login_throttling.py` (clave sin el email y con el secreto, espera, ventana) y `test_login_api.py` (contraseña correcta bloqueada, acierto que no reinicia, otra red, /64) | 17 |
+| RF-5 | `test_login_api.py` (sesión sustituida, cookie caducada o mal formada, fallo y límite que no tocan la sesión, sin `user_logged_out`) y `test_logout_api.py` | 7, 8 |
+| RF-6 | `test_login_api.py` (CSRF antes del cuerpo, origen ajeno, cuerpos mal formados, 4096 y 4097 bytes, campos ignorados, 405, `no-store`, rechazos sin fallo anotado) y `test_csrf_guard.py` | 7, 16, 17 |
+| RF-7 | `TopBar.test.ts` y `sessionState.test.ts` | 1, 2, 4, 8, 13 |
+| RF-8 | `session.test.ts`, `loginFormState.test.ts`, `LoginForm.test.ts`, `sessionState.test.ts` y `RegistrationForm.test.ts` | 5–10, 14, 16, 17 |
+| RF-9 | `route.test.ts` y `sessionState.test.ts` (`shouldLeaveAuthForm`) | 11–13 |
+| Permisos, orden de comprobaciones y respuestas mínimas | `test_login_api.py` | 7, 17 |
+| Igualdad de tiempo | `test_login_credentials.py` (recuento de hashes, rehash) | — |
+| Privacidad y logs | `test_login_api.py` (`test_no_answer_log_or_limit_store_contains_the_email_or_the_password`, informe de error con `DEBUG=False`) y `test_login_credentials.py` | — |
+| Errores y validación en el cliente | `test_auth_contract.py`, `session.test.ts` | 16, 17 |
+| Contrato | `test_auth_contract.py`, `api:check` y el desfase de `openapi.json` | — |
+| Dependencias | — | `git diff` vacío |
+| Accesibilidad, móvil e idioma | `LoginForm.test.ts`, `TopBar.test.ts` | 1–19 |
+
+### Pruebas de mecanismo
+Están registradas en la sección de cada tarea, cada una con su copia, sha256 antes y después y restauración: T2 (12 mutaciones, de M1 a M8 con sus variantes), T3 (18), T4 (13), T5 (14), T6 (13) y T8 (1). Todas mueren con los tests de su fila; la única con una sola barrera, M4 de la T6, está explicada en su sección (M3 la matan dos tests). Cubren lo que piden los criterios de finalización: la respuesta idéntica, el tope de 128 y el hash único, cada límite con su ventana y su espera, la clave del contador, la sesión nueva y la intacta, CSRF y `no-store`, y la salida sin la señal.
+
+### Correcciones tras la revisión
+- **`d18ace7`** (`refactor(frontend): share client error reading in the session client`). `interpretRegister`, `interpretLogin` e `interpretLogout` repetían las mismas cuatro líneas de lectura del error (dos copias en `dev` y la tercera de la 015). Ahora las tres llaman a `readClientError`, dentro de `createSessionClient`, que devuelve `{ kind: "failed", reason: "invalid" }`, `{ kind: "csrf" }` o el error leído. Sin cambio de comportamiento: `session.test.ts` no cambia (`git diff --stat` vacío) y pasa entero (`315 passed`).
+  - Puertas: `2524 passed`; ruff en verde; `makemigrations --check --dry-run` en un contenedor suelto (`No changes detected`); desfase de `openapi.json` (`exit=0`, sin `diff`); vitest entero (`36` ficheros y `1324` tests); build, eslint de `session.ts` y `api:check` con `exit=0`.
+  - Navegador, a 375 px y con el código nuevo servido por Vite: solo se repitió la entrada con credenciales incorrectas. `POST /login/` 400; «Entrando…» y «El email o la contraseña no son correctos.» una vez cada uno; foco en la región de estado; email conservado y contraseña vacía. El resto del recorrido es de `8f0f8c1`.
+- **`446cd05`** (`test(users): share the fake clock fixture`). El fixture que sustituye el `timer` de un límite por un reloj falso ya estaba tres veces en `dev`: `test_public_list_api.py`, `test_register_api.py` y `test_throttling.py`. La 015 añadía otras tres: `clock` en `test_login_api.py` (autouse, con los dos límites) y en `test_login_throttling.py`, y `failure_clock` en `test_login_throttling.py`. Ahora las cinco copias de `users` llaman a `use_clock(monkeypatch, *limits)` de `helpers.py`; conservan su nombre, su decorador y el autouse, y no cambia ningún caso. `test_public_list_api.py`, de `assets`, sigue con su `FakeClock`.
+  - Red: `pytest --collect-only -q apps/users` antes y después, sin diferencias (`767` tests); suite entera, `2524 passed`; ruff en verde.
+  - Mutación: `use_clock` deja sin sustituir el último límite que recibe. Se hizo con copia previa de `helpers.py`, con restauración en `finally` y sha256 `4100fef3eecabcb2d10f0bf07c29515666241a2a14a03927d6ed9c8a1b1c4227` antes y después, igual que el de `git show 446cd05:backend/apps/users/tests/helpers.py`. Sobre los cuatro ficheros, `18 failed, 393 passed`, justo los 18 previstos:
+    - `test_throttling.py` (4): `test_the_wait_shrinks_as_the_clock_advances`, `test_throttled_requests_do_not_count_and_do_not_extend_the_wait`, `test_the_window_frees_up_as_the_clock_advances` y `test_the_window_slides_instead_of_resetting`.
+    - `test_login_throttling.py` con `clock` (6): `test_the_counters_live_in_the_login_cache_and_not_in_default`, `test_the_wait_shrinks_as_the_clock_advances`, `test_the_wait_comes_from_the_entry_that_leaves_the_count_below_the_limit`, `test_throttled_requests_do_not_count_and_do_not_extend_the_wait`, `test_the_window_frees_up_as_the_clock_advances` y `test_the_window_slides_instead_of_resetting`.
+    - `test_login_throttling.py` con `failure_clock` (5): `test_wait_with_exactly_the_limit_returns_the_wait`, `test_wait_with_seven_entries_counts_from_the_fifth_most_recent`, `test_record_failure_stores_newest_first_in_the_login_cache_for_the_window`, `test_the_window_slides_and_the_entry_on_the_boundary_leaves` y `test_record_failure_drops_the_entries_that_left_the_window`.
+    - `test_login_api.py` (3), donde queda sin sustituir el reloj del par: `test_the_pair_wait_counts_from_the_fifth_most_recent_failure`, `test_fifteen_minutes_after_the_first_failure_the_account_can_log_in` y `test_pair_rejections_are_not_counted_as_failures`.
+  - La copia de `test_register_api.py` solo la cubre la comparación de `--collect-only`, no la mutación. Sus cuatro tests con `clock` (`test_ten_rejected_requests_use_up_the_quota_of_the_real_endpoint`, `test_ten_registrations_use_up_the_quota_and_the_eleventh_creates_nothing`, `test_no_answer_can_be_stored_by_a_cache` y `test_no_answer_grants_cross_origin_access`) no adelantan el reloj ni comparan esperas con él. Solo miran estados, códigos y que `retry_after` sea un entero de al menos 1, así que pasan también con la hora real.
+
+### Veredicto
+Cumple. RF-1 a RF-9 y los no funcionales tienen su test o su comprobación en el navegador, las puertas están en verde y los dos bloqueantes de calidad están corregidos (`d18ace7` y `446cd05`) y revisados por el desarrollador.
