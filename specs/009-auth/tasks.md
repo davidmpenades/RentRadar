@@ -113,7 +113,7 @@ Cada tarea deja en verde pytest, ruff, la comprobación de migraciones, el desfa
 ## Cambio: clave de sesión
 Cambio posterior a la implementación (RF-14), con su plan en «Cambio: clave de sesión (RF-14)» de `plan.md`. Sus tareas se numeran aparte de T1 a T9. Cada una deja en verde lo mismo que las anteriores; sin migraciones, y `openapi.json` y el frontend no cambian. Los números de línea citados son los de 37cadc9.
 
-- [ ] **C1. Clave sin fila bien formada y compartida.** RF-14 (preparación), RF-5, RF-6
+- [x] **C1. Clave sin fila bien formada y compartida.** RF-14 (preparación), RF-5, RF-6
   - Solo tests, con todo en verde, antes de cualquier rojo.
   - `KEY_WITHOUT_ROW = "0123456789abcdefghijklmnopqrstuv"` en `apps/core/tests/helpers.py`, que se crea, con el comentario «Bien formada (32 caracteres de a-z y 0-9) y sin fila en la BD». Lo importan `test_session_api.py`, `test_logout_api.py` y `test_login_api.py`, que pierden su definición (l.23-24, 31-32 y 57-58).
   - `test_the_key_without_row_is_well_formed_and_has_no_row` en `test_session_api.py`: `re.fullmatch` y ninguna fila.
