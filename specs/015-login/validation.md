@@ -333,3 +333,35 @@ Con esta sección, `validation.md` reúne las mutaciones de T2 a T6: cada tarea 
 - **Reloj y ayudantes**: un solo `Clock`, autouse en `test_login_api.py`, sustituye el `timer` de `LoginIpThrottle` y de `LoginFailureLimit`, así que los 429 añadidos a los tests de la T5 no dependen de la hora real. `forbid_credential_checks` sale del fixture `credentials_never_checked` (tercer uso), sin cambiar su comportamiento.
 - **Registro de comprobaciones**: va en un commit de documentación aparte del `feat`, no dentro de él.
 - **Añadido**: la mutación M12 (email en un log).
+
+## T7. Entrada en el cliente de sesión
+Fecha: 2026-11-19 · Commits: `b630cf6` (`refactor`: `postWithin` y `retryOnceOnCsrf`, que pasan a usar el registro y la salida) y `23cd020` (`feat`: `LOGIN_URL`, `LoginOutcome`, `login()`, `interpretLogin`, `isCredentialsInvalid` y sus tests).
+
+### Refactor (`b630cf6`)
+- Solo cambia `frontend/src/api/session.ts`: `git diff` de `session.test.ts` vacío, así que los tests del registro y de la salida no cambian ni una línea.
+- `session.test.ts`: `239 passed`, los mismos que antes. vitest entero: `34 passed` ficheros y `1174 passed` tests.
+- `npm run build` con `exit=0`; la comprobación de tipos va dentro (`tsc -b && vite build`). `eslint` de `session.ts` y `npm run api:check` con `exit=0`.
+- Backend, aunque no cambia: `2524 passed`, ruff en verde, migraciones (`makemigrations --check --dry-run` en un contenedor suelto: `No changes detected`) y desfase de `openapi.json` (`exit=0`, sin `diff`).
+
+### Rojo, antes del código
+- `session.test.ts` con los tests nuevos: `74 failed | 239 passed (313)`. Todos los fallos están en los bloques `login:` y su único error es `TypeError: client.login is not a function`.
+- Test añadido después (429 con otro `code`, dos casos), ejecutado con su filtro: `2 failed` con el mismo error; los dos casos del registro con ese nombre, `2 passed`.
+- En total, 76 tests nuevos fallan solo porque `login` no existe; los 239 anteriores siguen en verde.
+
+### Verde, después del código (`23cd020`)
+- `session.test.ts`: `315 passed` (239 y 76 nuevos), con la misma sha256 antes y después de escribir `login()`. vitest entero: `34 passed` ficheros y `1250 passed` tests.
+- `npm run build` con `exit=0`; `eslint` de `session.ts` y `session.test.ts` y `npm run api:check` con `exit=0`.
+- Backend, aunque no cambia: `2524 passed`. `ruff check .`: `All checks passed!`; `ruff format --check .`: `149 files already formatted`. Migraciones: `No changes detected`. Desfase de `openapi.json`: `exit=0`, sin ninguna línea de `diff`.
+
+### Pruebas de mecanismo
+No aplica (plan).
+
+### Desviaciones y añadidos respecto del plan
+- **Firma de `postWithin`**: `postWithin(url, interpret, body?)` en lugar de `postWithin(url, body?)`, porque el intérprete lee el cuerpo dentro de los 10 s, como ya hacían el registro y la salida. Corregido en el plan y en las tareas en `d454cc5`.
+- **Refactor en un commit propio**: la extracción va en `b630cf6`, separada del `feat`, para que los tests del registro y de la salida la vigilen sola (`d454cc5`).
+- **«Otra forma o código»** (`tasks.md:113` en `d454cc5`): se lee como el código dentro de `params`. Un 400 `invalid_fields` cuyo `params` no es exactamente `{"non_field": ["credentials_invalid"]}` da `failed("invalid")`; un 400 con otro `code` de primer nivel da `failed("request")`, como fija `plan.md:121` en `d454cc5` y como hace el registro.
+- **Variantes de `credentials_invalid`**: nueve casos de `invalid_fields` que dan `failed("invalid")`: una clave de más junto a `non_field`, dos códigos en `non_field`, `non_field` con una lista vacía, otro código en `non_field`, el código en otro campo, `params` vacío, sin `params`, `non_field` como texto y el código en mayúsculas.
+- **429 con otro `code`**: es `throttled` si `retry_after` es válido, como en el registro, porque la rama del 429 no mira el `code` (en `23cd020`, `session.ts:295-299` en el registro y `session.ts:341-345` en la entrada).
+- **La salida tras entrar**: el test comprueba que la cookie leída tras entrar (`TOKEN_B`) es distinta de la de antes (`TOKEN_A`) y que la salida envía la nueva.
+- **`retry_after` en dos sitios**: la comprobación del 429 es igual en el registro y en la entrada; son dos usos y se extrae en el tercero.
+- **Registro de comprobaciones**: va en un commit de documentación aparte del `feat`.
