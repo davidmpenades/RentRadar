@@ -776,3 +776,128 @@ Cada una con copia del fichero, sha256 antes y después y restauración; el deta
 
 ### Veredicto
 Todos los requisitos tienen test automático y comprobación en el navegador (el recorrido completo, solo con teclado, a 1280 px; el registro, los errores, el límite y el diseño también a 375 px), con la puerta final en verde y sin dependencias nuevas. La fila 57 (`/register` con sesión) era la última comprobación pendiente y salió como se esperaba. **Veredicto: la spec 009 está implementada y validada.**
+
+## Cambio: clave de sesión (RF-14)
+Fecha: 2026-11-20 · Commits: `14b536e` (C1, 2026-11-19) y `3796a19` (C2) · Ficheros: C1, `backend/apps/{core/tests/helpers.py, users/tests/{test_session_api.py, test_logout_api.py, test_login_api.py}}`; C2, `backend/apps/core/{session_store.py, tests/{helpers.py, test_session_store.py, test_api_import.py}}`, `backend/config/{settings/base.py, tests/test_auth_settings.py}`, los cuatro tests de `backend/apps/users/tests/` de operaciones, `backend/apps/assets/tests/{test_public_list_api.py, test_public_list_session.py}` y `docs/architecture.md`. Sin migraciones; `openapi.json` y `frontend/` no cambian.
+
+### C1 y C2: tests y recuentos
+| Comprobación | Resultado |
+|---|---|
+| C1, `KEY_WITHOUT_ROW` compartida (`backend/apps/core/tests/helpers.py@14b536e:2`) | Solo tests y con todo en verde. Tests recogidos: 2524 → 2525 (el de la precondición). Mutación sobre una copia de `helpers.py`: falla 1 test, el de la precondición, sin errores; restaurado, con `helpers.py` idéntico a la copia previa |
+| C2, rojo antes del código | Suite sin `test_session_store.py`: `52 failed, 2533 passed`, sin ERROR. Los 52: 15 del registro, 15 de la entrada, 10 de la salida, 10 de «quién soy» y 2 de ajustes |
+| C2, `test_session_store.py` antes del código | Solo da `ModuleNotFoundError` al recogerlo; es un error de colección, por eso el rojo va en dos ejecuciones |
+| C2, tests recogidos | 2525 → 2607. La diferencia de identificadores tiene 3 «<» (el test viejo del 500 y 2 renombrados) y 85 «>»: neto +82. Tras el refactor, la colección es idéntica |
+| Suite completa tras C2 | Backend: 2607 passed |
+| Frontend | Sin cambios en C1, C2 ni C3 |
+
+Afirmaciones del plan que respaldan tests:
+
+| Afirmación del plan | Test que la ejerce |
+|---|---|
+| Con psycopg 3, `CaptureQueriesContext` captura el SQL con los valores interpolados | `session_queries_with` (`backend/apps/core/tests/helpers.py@3796a19:55`) busca el valor dentro del SQL y los contrapesos con `KEY_WITHOUT_ROW` lo encuentran |
+| `parse_cookie` convierte `\361` en `ñ` | Id `non-ascii` (`backend/apps/core/tests/helpers.py@3796a19:16`), enviado en octal por `raw_cookie_header` (`@3796a19:32`) |
+| `client.defaults["HTTP_COOKIE"]` pisa la cabecera del almacén de cookies del cliente | `set_cookies` (`backend/apps/assets/tests/test_public_list_api.py@3796a19:689-691`): la cookie de nulos llega en bruto a los dos tests que lo parametrizan, y M5 hace fallar sus ids `null-characters` |
+
+### Desviaciones de C2
+- **No se crea `OCTAL_NULL`**: `raw_cookie_header` genera los escapes y habría quedado sin uso.
+- **El contrapeso de la salida comprueba una consulta con `KEY_WITHOUT_ROW`, no un `DELETE`**: `delete()` del motor de BD hace `objects.get(...)` (un `SELECT`) y, sin fila, no borra. El «`DELETE` de `flush()`» del plan es ese `SELECT`, y de ahí venía el 500 con nulos.
+- **Dos ids renombrados** en `backend/apps/assets/tests/test_public_list_session.py@3796a19:121` al poner ids explícitos: el de 40 `!` pasa a `exclamation-marks` y el de 32 `a`, a `unknown-key`.
+- **Extracciones no pedidas por la regla del tercer uso**: `assert_session_cookie_deleted` (`backend/apps/core/tests/helpers.py@3796a19:63`), `EACH_MALFORMED_SESSION_VALUE` (`@3796a19:19`) y `post_with_raw_cookie` (`@3796a19:39`). `MALFORMED_SESSION_VALUES` (`@3796a19:11`) se llama así para no tapar el diccionario `MALFORMED` de cuerpos de `backend/apps/users/tests/test_login_api.py@3796a19:551` y `test_register_api.py@3796a19:462`.
+- **`docs/architecture.md@3796a19:111` cita `SessionBase.__bool__` de Django 6.1** (`versionadded 6.1`). Hoy no hay ningún `if request.session:` en el código de la aplicación.
+
+### `Client.session` y `force_login` con una cookie mal formada
+Ninguno de los dos busca ni borra en la BD la clave mal formada. Respaldo: el código de Django 5.2.18 y un test existente.
+- **`Client.session`**: con la cookie puesta, devuelve `engine.SessionStore(cookie.value)` (`django/test/client.py:808-813`), que no hace ninguna consulta. El constructor asigna `_session_key`, y su setter (`django/contrib/sessions/backends/base.py:225-232`) deja `None` si `_validate_session_key` es falso. `test_a_malformed_key_is_no_session` (`backend/apps/core/tests/test_session_store.py@3796a19:41`, 16 ids) comprueba `SessionStore(key).session_key is None` sin `django_db`, así que no podría tocar la BD.
+- **`force_login`**: `_login` usa ese almacén (`django/test/client.py:874-887`) y `login()` hace `SESSION_KEY in request.session` (`django/contrib/auth/__init__.py:175`). Con la clave en `None`, `_get_session` devuelve `{}` sin cargar (`base.py:246-247`), y `cycle_key()` no borra nada porque la clave es `None` (`base.py:426-435`). Lo que sí hace es **escribir**: `create()` inserta una fila con una clave nueva (`django/contrib/sessions/backends/db.py:68-74`) y la cookie del cliente pasa a esa clave. Es una escritura con la clave nueva, no una consulta de la mal formada.
+
+### Mutaciones de C3
+Las predicciones se sellaron antes de ejecutar y no se volvieron a sellar. En la ronda 2 se añadió el test de ruff, que falla si la mutación deja un import sin usar: M5 pasó de 20 a 21, y el texto de M2 quedó sellado con su sangría. Cada mutación se hizo sobre una copia de seguridad guardada fuera del repo, con sha256 antes y después, y empezó con el árbol limpio. Cada ejecución válida terminó sin ERROR de pytest y con la lista de fallos idéntica a la sellada, salvo la de «quitar la comprobación de la forma».
+
+| Mutación | Cambio | Sellado | Obtenido |
+|---|---|---|---|
+| quitar la forma | `_validate_session_key` devuelve `super()._validate_session_key(key)` (`backend/apps/core/session_store.py@3796a19:9`) | 63 | 64: los 63 y `test_ruff_accepts_the_backend_code`, porque el import de `re` queda sin usar. No se repitió ni se volvió a sellar |
+| M1 | Quitar `SESSION_ENGINE` (`backend/config/settings/base.py@3796a19:43`) | 52 | 52 |
+| M2 | `PublicAssetListView.get` lee `request._request.session.get("x")` antes de `parse_zone` (`backend/apps/assets/views.py@3796a19:60`) | 5 | 5 |
+| M2b | `marked_view` llama a `request.session.load()` (`backend/apps/core/tests/test_middleware.py@3796a19:19`) | 18 | 18 |
+| M3a | `flush()` al principio de `post` en el registro (`backend/apps/users/views.py@3796a19:124`) | 3 | 3 |
+| M3b | Leer la sesión antes de `flush()` en la salida (`backend/apps/users/views.py@3796a19:234`) | 1 | 1 |
+| M4 | `def load(self): return super().load()` en la subclase (`backend/apps/core/session_store.py@3796a19:6`) | 1 | 1 |
+| M5 | Quitar `mark_response_cookieless` de la lista pública (`backend/apps/assets/views.py@3796a19:78`) | 21 | 21 |
+
+Discrepancias con el plan:
+- **M2**: el plan daba 4 y son 5. El quinto, `test_the_view_itself_marks_every_response_and_declares_only_its_own_vary`, no estaba en el plan: `call_view` sin middleware no tiene `request.session`.
+- **M2b y M5**: el plan no les ponía número.
+- **M2, sangría**: la primera ronda la describió sin sangría. Dentro de `get` solo la de 8 espacios da código válido, y el texto literal se selló en la ronda 2 antes de ejecutar.
+- **M4**: una primera ejecución no llegó a correr pytest, porque el equipo se apagó y el stack quedó parado. Se repitió con la misma predicción.
+
+Listas de fallos obtenidas, que coinciden con las selladas salvo la extra de «quitar la forma». Las de «quitar la forma», M1, M2b y M5 van agrupadas por función de test, con su recuento; las de M2, M3a, M3b y M4, completas.
+
+- **Quitar la forma, 64**:
+  - 13 × `test_session_store.py::test_a_malformed_key_is_no_session`
+  - 5 × cada una de `test_register_api.py::test_a_malformed_session_cookie_is_ignored_when_registering`, `::test_a_rejected_registration_removes_a_malformed_session_cookie` y `::test_without_a_token_a_malformed_session_cookie_is_removed`
+  - 5 × cada una de `test_login_api.py::test_a_malformed_session_cookie_is_ignored_when_logging_in`, `::test_a_failed_login_removes_a_malformed_session_cookie` y `::test_without_a_token_a_malformed_session_cookie_is_removed`
+  - 5 × cada una de `test_logout_api.py::test_a_malformed_session_cookie_is_ignored_when_logging_out` y `::test_without_a_token_a_malformed_session_cookie_is_removed`
+  - 10 × `test_session_api.py::test_a_malformed_session_cookie_is_ignored_when_asking`
+  - 1 × `test_tooling.py::test_ruff_accepts_the_backend_code` (la extra: no estaba entre los 63 sellados)
+- **M1, 52**:
+  - 5 × cada una de las tres funciones de `test_login_api.py`, las dos de `test_logout_api.py` y las tres de `test_register_api.py` de la lista anterior (40)
+  - 10 × `test_session_api.py::test_a_malformed_session_cookie_is_ignored_when_asking`
+  - 1 × `test_auth_settings.py::test_the_session_engine_is_the_project_store`
+  - 1 × `test_auth_settings.py::test_the_test_client_uses_the_project_store`
+- **M2, 5**:
+  - `test_public_list_api.py::test_the_session_is_never_read_and_the_answer_is_the_same`
+  - `test_public_list_api.py::test_the_view_itself_marks_every_response_and_declares_only_its_own_vary`
+  - `test_public_list_session.py::test_a_malformed_or_unknown_cookie_changes_nothing[unknown-key]`
+  - `test_public_list_session.py::test_a_valid_session_is_never_read_and_the_answer_is_the_same`
+  - `test_public_list_session.py::test_an_expired_session_is_never_read_and_the_answer_is_the_same`
+- **M2b, 18**, todas en `test_middleware.py`:
+  - 9 × `test_marked_error_responses_leave_without_cookies_nor_vary`
+  - 7 × `test_marked_view_leaves_without_cookies_for_every_method`
+  - 1 × `test_marked_view_does_not_load_the_session`
+  - 1 × `test_marked_view_with_malformed_cookies_leaves_without_cookies_nor_vary`
+- **M3a, 3**: `test_register_api.py::test_a_rejected_registration_leaves_the_session_untouched[anonymous-session]`, `[logged-in-session]` y `[without-session]`.
+- **M3b, 1**: `test_logout_api.py::test_an_expired_session_row_is_deleted_too`.
+- **M4, 1**: `test_session_store.py::test_the_store_only_redefines_the_key_validation`.
+- **M5, 21**, con los 5 ids `null-characters` de las guardas de la lista pública:
+  - 12 × `test_public_list_api.py::test_error_responses_of_the_view_leave_without_cookies` (3 con `null-characters`: 400, 405 y 429)
+  - 4 × `test_public_list_api.py::test_malformed_cookies_do_not_make_the_success_response_set_cookies` (1 con `null-characters`)
+  - 1 × `test_public_list_api.py::test_the_view_itself_marks_every_response_and_declares_only_its_own_vary`
+  - 3 × `test_public_list_session.py::test_a_malformed_or_unknown_cookie_changes_nothing` (1 con `null-characters`)
+  - 1 × `test_tooling.py::test_ruff_accepts_the_backend_code`
+
+sha256 antes y después (idénticos en todas):
+
+| Fichero | sha256 |
+|---|---|
+| `backend/apps/core/session_store.py` (quitar la forma y M4) | `4659f7e0db5e9d02eeab15f2aa43a10c8e9e6595b4836d3402e78814fe042b4e` |
+| `backend/config/settings/base.py` (M1) | `28d29742fa0c5882e6a9b9a8285a626d31220742d389ec1c9655dac2db92022e` |
+| `backend/apps/assets/views.py` (M2 y M5) | `1e64747d58f4977df739674a4daf043b935ce1301623bfcf49dbb3b4714a5388` |
+| `backend/apps/core/tests/test_middleware.py` (M2b) | `8dff5c90f20d882c51b59ec0969c6958b9e244b9fa18ce58915780d825f0ffdc` |
+| `backend/apps/users/views.py` (M3a y M3b) | `4be86758dde5a1f600b9866925e3cf1212d5a11799ce85deb6462964a9ec0203` |
+
+### Navegador
+Chrome 158 del MCP de Chrome DevTools, en un contexto aislado y por `http://localhost:5173` (proxy de Vite al backend del 8000). Anónimo en todo el recorrido: sin registrar cuentas, sin iniciar sesión y sin escribir en la BD de desarrollo. Dos pasadas, cada una en un contexto aislado nuevo. Vite se lanzó con `npm run dev` y se paró al terminar cada una; el 5173 quedó libre las dos veces. El valor de `csrftoken` se abrevia como `<token>`. `SESSION` es `ABCDEFGHIJKLMNOPQRSTUVWXYZABCDEF`.
+
+A 1280 × 800:
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 1 | Carga de `/map` | `document.cookie`: `csrftoken=<token>`. «Quién soy»: 200 con `{"user":null}`, `Cache-Control: no-store` y un solo `Set-Cookie`: `csrftoken=<token>; expires=Fri, 19 Nov 2027 10:09:51 GMT; Max-Age=31449600; Path=/; SameSite=Lax`. Lista pública: 200 sin `Set-Cookie` |
+| 2 | Cookie de nulos con `document.cookie` (afirmación pendiente del plan) | **Chrome la rechaza**: `sessionid=` con 8 y con 32 caracteres `\u0000`, `path=/`; `document.cookie` sigue en `csrftoken=<token>`. Los nulos solo se pueden probar con los tests de C2, que mandan la cabecera en bruto. En su lugar, `sessionid=SESSION` (32 mayúsculas, mal formada y con más de 8 caracteres): Chrome la acepta y `document.cookie` pasa a `csrftoken=<token>; sessionid=SESSION` |
+| 3 | «Quién soy» con la cookie | Petición con `Cookie: csrftoken=<token>; sessionid=SESSION`. Respuesta 200 con `{"user":null}` y `Cache-Control: no-store`; dos `Set-Cookie`: `csrftoken=<token>; expires=Fri, 19 Nov 2027 10:10:15 GMT; Max-Age=31449600; Path=/; SameSite=Lax` y `sessionid=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/; SameSite=Lax`. `document.cookie` antes: `csrftoken=<token>; sessionid=SESSION`; después: `csrftoken=<token>` |
+| 4 | Salida | Con `sessionid=SESSION` puesta otra vez, `POST /api/v1/auth/logout/` desde la página, con `X-CSRFToken: <token>` y `Cookie: csrftoken=<token>; sessionid=SESSION`: 204 y un solo `Set-Cookie`: `sessionid=""; expires=Thu, 01 Jan 1970 00:00:00 GMT; Max-Age=0; Path=/; SameSite=Lax`. `document.cookie` antes: `csrftoken=<token>; sessionid=SESSION`; después: `csrftoken=<token>` |
+| 5 | Lista pública con la cookie (`cache: "no-store"`, para no usar la caché de 60 s) | La petición lleva `Cookie: csrftoken=<token>; sessionid=SESSION`. 200, `Cache-Control: public, max-age=60` y ninguna línea `Set-Cookie`. `document.cookie` igual antes y después: `csrftoken=<token>; sessionid=SESSION` |
+| 6 | `sessionid` nueva | Ninguna de las respuestas de las filas 1, 3, 4 y 5 trae una `sessionid` con valor: las de «quién soy» y de la salida la retiran con `Max-Age=0` y la de la lista pública no lleva cookies |
+| 7 | Cabecera y consola con la cookie puesta (segunda pasada) | Con `sessionid=SESSION` puesta y tras recargar, el árbol de accesibilidad muestra en `banner` los enlaces «RentRadar», «Entrar» (`/login`) y «Registrarse» (`/register`), y ningún «Salir». «Entrar» mide 102,34 × 44 y «Registrarse» 143,06 × 44; `scrollWidth` 1280 = `clientWidth`. La petición de «quién soy» lleva `Cookie: csrftoken=<token>; sessionid=SESSION` y la respuesta es la de la fila 3: 200 con `{"user":null}` y los mismos dos `Set-Cookie`. `document.cookie` después: `csrftoken=<token>`. Consola: sin errores; los dos avisos de OpenFreeMap de la fila 10 y los mensajes de depuración de Vite y de React DevTools |
+
+A 375 × 667 (móvil, táctil, DPR 2):
+
+| # | Comprobación | Observado |
+|---|---|---|
+| 8 | Carga con la cookie puesta | `document.cookie` antes: `csrftoken=<token>; sessionid=SESSION`; después de recargar: `csrftoken=<token>`. La petición de «quién soy» lleva las dos cookies y la respuesta es la de la fila 3: 200 con `{"user":null}` y los mismos dos `Set-Cookie`, uno de ellos con `sessionid=""` y `Max-Age=0`. La lista pública responde 200 sin `Set-Cookie` |
+| 9 | Desbordamiento | `scrollWidth` 375 = `clientWidth` 375 en el documento y en `body` |
+| 10 | Consola | Sin errores. Dos avisos del estilo del mapa de OpenFreeMap (`layers[highway-shield-non-us].filter[1]` y `layers[highway-shield-us-interstate].filter[1]`), ajenos a la aplicación |
+| 11 | Cabecera con la cookie puesta (segunda pasada) | Tras poner `sessionid=SESSION` y recargar: «Entrar» (x 105,59 a 207,94, de 102,34 × 44) y «Registrarse» (x 215,94 a 359, de 143,06 × 44), y ningún «Salir». `document.cookie` antes de recargar: `csrftoken=<token>; sessionid=SESSION`; después: `csrftoken=<token>`. `scrollWidth` 375 = `clientWidth`. Consola sin errores, con los mismos dos avisos de OpenFreeMap |
+
+### Veredicto
+Las cuatro operaciones y la lista pública ignoran la cookie mal formada: con la suite en 2607 passed, las ocho mutaciones dando la lista sellada (la de «quitar la forma», con un fallo extra explicado) y la comprobación en el navegador a 1280 y 375 px; los nulos solo los cubren los tests, porque Chrome los rechaza. **Veredicto: RF-14 implementado y validado.**
