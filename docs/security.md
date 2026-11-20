@@ -21,10 +21,12 @@ Spec siguiente a la 015 y a la /sdd-change de la 009.
 - `ALLOWED_HOSTS`.
 - Servidor de producción: gunicorn síncrono y solo WSGI; valorar borrar `config/asgi.py`. Hoy no hay ninguno: Compose usa `runserver` y gunicorn no está en requirements.
 - HTTPS, HSTS, `SECURE_SSL_REDIRECT`, `SECURE_PROXY_SSL_HEADER` y `CSRF_TRUSTED_ORIGINS`, con un test sobre el módulo de producción.
+- Tras un proxy HTTPS, sin `SECURE_PROXY_SSL_HEADER` ni `CSRF_TRUSTED_ORIGINS`, la entrada también falla con `csrf_failed`, igual que el registro y la salida: los tres usan el mismo mixin.
+- Hasta que haya redirección a HTTPS y HSTS, la primera visita por `http://` va en claro.
 - Cookies `Secure` y con el prefijo `__Host-`. Obliga a cambiar el nombre de la cookie CSRF que lee `session.ts`.
 - CSP y cabeceras. `img-src` necesita `data:` por los 39 iconos SVG del CSS de maplibre-gl y por un png de 1 × 1 de maplibre-gl; comprobar si también hace falta `blob:`, o sustituirlos por ficheros propios.
 - `NUM_PROXIES` y el proxy de confianza.
-- Contadores de los límites en Redis, compartidos entre procesos. Hoy son LocMem, por proceso.
+- Contadores de los límites en Redis, compartidos entre procesos y con el intento reservado de forma atómica antes del hash (incrementar y comparar con el límite): un incremento después del hash no cierra la ventana. Con un test de peticiones concurrentes que demuestre que no pasan más de 5. Cómo se trata un acierto lo decide la 011. Hoy son LocMem, por proceso.
 - PostgreSQL con los mínimos privilegios, sin exponer y con un log sin valores.
 - `DB_PASSWORD` de 16 caracteres o más, con una /sdd-change.
 - Contenedores sin root y con el sistema de ficheros de solo lectura.
@@ -34,8 +36,8 @@ Spec siguiente a la 015 y a la /sdd-change de la 009.
 - Las claves reales nunca están en el portátil.
 
 ## Correo y cuenta (013 y 014)
-- Verificación del email.
-- Restablecer la contraseña con tokens de un solo uso.
+- Verificación del email: la cuenta no se puede usar hasta verificarlo.
+- Restablecer la contraseña con tokens de un solo uso; cierra todas las sesiones de esa cuenta.
 - Aviso de un nuevo inicio de sesión.
 - Contraseñas filtradas: valorar HIBP.
 - 2FA para el staff.
@@ -73,3 +75,6 @@ Spec siguiente a la 015 y a la /sdd-change de la 009.
 
 ## Riesgo conocido: IP compartida
 Con `NUM_PROXIES=0`, detrás de un proxy todas las peticiones llegan con la IP del proxy, así que los límites por IP la comparten todos los usuarios. Hoy solo lo acota no desplegar antes de la 011.
+
+## Riesgo conocido: ráfaga simultánea en la entrada
+Entre la comprobación del límite del par y la anotación del fallo pasa el hash, así que una ráfaga simultánea supera los 5 fallos antes de que se anote ninguno. Con un servidor de hilos, el tope lo fija el límite por IP (unas 20 cada 15 minutos, ×4); con gunicorn síncrono, se reduce al efecto de los contadores por proceso.
