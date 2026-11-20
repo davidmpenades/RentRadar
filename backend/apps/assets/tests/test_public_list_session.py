@@ -7,6 +7,7 @@ from django.test import Client
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
+from apps.core.tests.helpers import MALFORMED_SESSION_VALUES, raw_cookie_header
 from apps.users.models import User
 
 pytestmark = pytest.mark.django_db
@@ -33,10 +34,9 @@ def sql_of(captured):
 
 
 def fetch_with_cookie(session_key):
-    client = Client()
-    client.cookies[settings.SESSION_COOKIE_NAME] = session_key
+    cookie = raw_cookie_header(sessionid=session_key)
     with CaptureQueriesContext(connection) as captured:
-        response = client.get(URL, MADRID_QUERY)
+        response = Client().get(URL, MADRID_QUERY, HTTP_COOKIE=cookie)
     return response, sql_of(captured)
 
 
@@ -116,7 +116,11 @@ def test_an_expired_session_is_never_read_and_the_answer_is_the_same(
     assert_never_authenticates(sql)
 
 
-@pytest.mark.parametrize("cookie", ["short", "!" * 40, UNKNOWN_KEY])
+@pytest.mark.parametrize(
+    "cookie",
+    ["short", "!" * 40, MALFORMED_SESSION_VALUES["null-characters"], UNKNOWN_KEY],
+    ids=["short", "exclamation-marks", "null-characters", "unknown-key"],
+)
 def test_a_malformed_or_unknown_cookie_changes_nothing(listed_asset, cookie):
     baseline, _ = anonymous_answer()
 

@@ -10,7 +10,13 @@ from django.core.handlers.wsgi import LimitedStream
 from django.test import Client
 from django.utils import timezone
 
-from apps.core.tests.helpers import KEY_WITHOUT_ROW
+from apps.core.tests.helpers import (
+    EACH_MALFORMED_SESSION_VALUE,
+    KEY_WITHOUT_ROW,
+    assert_session_cookie_deleted,
+    post_with_raw_cookie,
+    session_queries_with,
+)
 from apps.users.models import User
 from apps.users.tests.helpers import (
     assert_no_store,
@@ -53,12 +59,6 @@ def stored_accounts():
             "pk", "email", "password", "is_active", "is_staff", "last_login"
         )
     )
-
-
-def assert_session_cookie_deleted(response):
-    cookie = response.cookies[SESSION_COOKIE]
-    assert cookie.value == ""
-    assert cookie["max-age"] == 0
 
 
 def assert_logged_out(response):
@@ -223,6 +223,49 @@ def test_without_a_session_cookie_the_view_deletes_it_with_its_settings(
     assert cookie["path"] == settings.SESSION_COOKIE_PATH
     assert cookie["domain"] == (settings.SESSION_COOKIE_DOMAIN or "")
     assert cookie["samesite"] == settings.SESSION_COOKIE_SAMESITE
+
+
+# --- Cookie de sesión mal formada ---------------------------------------------
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_a_malformed_session_cookie_is_ignored_when_logging_out(value):
+    log_in(Client(), "luis@correo.es")
+    sessions, accounts = stored_sessions(), stored_accounts()
+
+    response, captured = post_with_raw_cookie(
+        URL, "", csrf_cookie=TOKEN, csrf_header=TOKEN, session_cookie=value
+    )
+
+    assert_logged_out(response)
+    assert stored_sessions() == sessions
+    assert stored_accounts() == accounts
+    assert session_queries_with(captured, value) == []
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_without_a_token_a_malformed_session_cookie_is_removed(value):
+    log_in(Client(), "luis@correo.es")
+    sessions, accounts = stored_sessions(), stored_accounts()
+
+    response, _ = post_with_raw_cookie(
+        URL, "", csrf_cookie=TOKEN, csrf_header=None, session_cookie=value
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"code": "csrf_failed"}
+    assert_session_cookie_deleted(response)
+    assert stored_sessions() == sessions
+    assert stored_accounts() == accounts
+
+
+def test_a_well_formed_key_without_row_is_looked_up():
+    response, captured = post_with_raw_cookie(
+        URL, "", csrf_cookie=TOKEN, csrf_header=TOKEN, session_cookie=KEY_WITHOUT_ROW
+    )
+
+    assert response.status_code == 204
+    assert session_queries_with(captured, KEY_WITHOUT_ROW)
 
 
 # --- CSRF ---------------------------------------------------------------------

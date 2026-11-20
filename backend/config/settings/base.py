@@ -39,6 +39,9 @@ CSRF_USE_SESSIONS = False
 SESSION_COOKIE_SAMESITE = "Lax"
 CSRF_COOKIE_SAMESITE = "Lax"
 
+# Una cookie de sesión mal formada equivale a no tener sesión y no llega a la BD
+SESSION_ENGINE = "apps.core.session_store"
+
 # Catorce días fijos desde el inicio de sesión: no se renueva ni acaba al cerrar
 SESSION_COOKIE_AGE = 60 * 60 * 24 * 14
 SESSION_SAVE_EVERY_REQUEST = False

@@ -18,7 +18,13 @@ from django.test import Client
 from django.utils import timezone
 from django.views.debug import ExceptionReporter
 
-from apps.core.tests.helpers import KEY_WITHOUT_ROW
+from apps.core.tests.helpers import (
+    EACH_MALFORMED_SESSION_VALUE,
+    KEY_WITHOUT_ROW,
+    assert_session_cookie_deleted,
+    post_with_raw_cookie,
+    session_queries_with,
+)
 from apps.users import views
 from apps.users.models import User
 from apps.users.tests.helpers import (
@@ -53,8 +59,6 @@ CSRF_COOKIE = django_settings.CSRF_COOKIE_NAME
 FOURTEEN_DAYS = 60 * 60 * 24 * 14
 MAX_BYTES = 4096
 SURROGATE = chr(0xD800)
-# Barra invertida con chr: el escape octal de la cookie no debe interpretarse aquí
-OCTAL_NULL = chr(92) + "000"
 CREDENTIALS_REJECTED = {
     "code": "invalid_fields",
     "params": {"non_field": ["credentials_invalid"]},
@@ -419,23 +423,79 @@ def test_replacing_a_session_of_another_account_does_not_send_user_logged_out(
     assert received == []
 
 
-def test_a_session_cookie_with_null_characters_gives_a_server_error_on_success():
-    # Riesgo aceptado: flush() borra por esa clave y PostgreSQL rechaza el nulo
-    account()
-    client = Client(enforce_csrf_checks=True, raise_request_exception=False)
-    # Ocho nulos escritos como escape octal, que la cookie deshace al leerla
-    cookie = f'{CSRF_COOKIE}={TOKEN}; {SESSION_COOKIE}="{OCTAL_NULL * 8}"'
+# --- Cookie de sesión mal formada ---------------------------------------------
 
-    response = client.post(
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_a_malformed_session_cookie_is_ignored_when_logging_in(value):
+    user = account()
+
+    response, captured = post_with_raw_cookie(
         URL,
-        data=json.dumps(CREDENTIALS),
-        content_type=JSON,
-        headers={"X-CSRFToken": TOKEN},
-        HTTP_COOKIE=cookie,
+        json.dumps(CREDENTIALS),
+        csrf_cookie=TOKEN,
+        csrf_header=TOKEN,
+        session_cookie=value,
     )
 
-    assert response.status_code == 500
+    assert response.status_code == 200
+    new_key = response.cookies[SESSION_COOKIE].value
+    assert re.fullmatch(r"[a-z0-9]{32}", new_key)
+    session = Session.objects.get()
+    assert session.session_key == new_key
+    assert session.get_decoded()[SESSION_KEY] == str(user.pk)
+    assert session_queries_with(captured, value) == []
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_a_failed_login_removes_a_malformed_session_cookie(value):
+    account()
+
+    response, _ = post_with_raw_cookie(
+        URL,
+        json.dumps(WRONG_PASSWORD_BODY),
+        csrf_cookie=TOKEN,
+        csrf_header=TOKEN,
+        session_cookie=value,
+    )
+
+    assert response.status_code == 400
+    assert response.json() == CREDENTIALS_REJECTED
+    assert_session_cookie_deleted(response)
     assert not Session.objects.exists()
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_without_a_token_a_malformed_session_cookie_is_removed(value):
+    account()
+
+    response, _ = post_with_raw_cookie(
+        URL,
+        json.dumps(CREDENTIALS),
+        csrf_cookie=TOKEN,
+        csrf_header=None,
+        session_cookie=value,
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"code": "csrf_failed"}
+    assert_session_cookie_deleted(response)
+    assert not Session.objects.exists()
+
+
+def test_a_well_formed_key_without_row_is_looked_up():
+    account()
+
+    response, captured = post_with_raw_cookie(
+        URL,
+        json.dumps(CREDENTIALS),
+        csrf_cookie=TOKEN,
+        csrf_header=TOKEN,
+        session_cookie=KEY_WITHOUT_ROW,
+    )
+
+    assert response.status_code == 200
+    assert session_queries_with(captured, KEY_WITHOUT_ROW)
 
 
 # --- CSRF ---------------------------------------------------------------------
