@@ -122,7 +122,7 @@ Cambio posterior a la implementación (RF-14), con su plan en «Cambio: clave de
   - Commit: `test(users): share a well-formed session key without row`
   - Hecho cuando: toda la suite, ruff y la comprobación de migraciones están en verde; `KEY_WITHOUT_ROW` se define solo en `apps/core/tests/helpers.py`; el número de tests recogidos sube en uno (el de la precondición); el diff solo toca `apps/core/tests/helpers.py` (nuevo) y los tres ficheros de test.
 
-- [ ] **C2. Motor de sesión que ignora las claves mal formadas.** RF-14, RF-1, RF-2, RF-5, RF-6, RF-7, RNF Lista pública sin cambios
+- [x] **C2. Motor de sesión que ignora las claves mal formadas.** RF-14, RF-1, RF-2, RF-5, RF-6, RF-7, RNF Lista pública sin cambios
   - Primero los tests:
     - en `apps/core/tests/helpers.py`, `OCTAL_NULL` (traído de `test_login_api.py:55-56`), `raw_cookie_header`, `MALFORMED_SESSION_VALUES` y `session_queries_with`;
     - los de las cuatro operaciones (`test_register_api.py`, `test_login_api.py`, `test_logout_api.py` y `test_session_api.py`), con la inversión de `test_a_session_cookie_with_null_characters_gives_a_server_error_on_success` (`test_login_api.py:423-439`) y un contrapeso con `KEY_WITHOUT_ROW` por operación;
