@@ -142,7 +142,7 @@ Cambio posterior a la implementación (RF-14), con su plan en «Cambio: clave de
       - Contrapesos y guardas de la lista pública: pasan antes y después del código.
     - después, pasan toda la suite, ruff y `config/tests/test_migrations.py`; `manage.py check` no da avisos; regenerar `backend/openapi.json` no produce diferencias; el `git diff` de `frontend/`, `requirements*` y las migraciones está vacío.
 
-- [ ] **C3. Mutaciones, comprobación de punta a punta y cierre.** RF-14
+- [x] **C3. Mutaciones, comprobación de punta a punta y cierre.** RF-14
   - `validation.md`, sección «Cambio: clave de sesión (RF-14)»: C1 y C2 (tests que fallaron primero y recuentos), y la nota de que `Client.session` y `force_login` con una cookie mal formada no consultan la BD.
   - Mutaciones, cada una con su lista exacta escrita en `validation.md` antes de ejecutarla, sobre una copia y con el sha256 antes y después: «quitar la comprobación de la forma» (los 63 fallos de la estrategia de tests de `plan.md`) y M1, M2, M2b, M3a, M3b, M4 y M5. La de M5 incluye los ids `null-characters` de las dos guardas de la lista pública.
   - Navegador, a 1280 y 375 px, a través del proxy de Vite:
