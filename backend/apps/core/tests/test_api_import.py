@@ -11,6 +11,7 @@ MODULES = [
     "apps.core.csrf",
     "apps.core.negotiation",
     "apps.core.request_body",
+    "apps.core.session_store",
     "rest_framework.views",
 ]
 

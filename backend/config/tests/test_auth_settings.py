@@ -1,5 +1,12 @@
-from django.conf import settings
+from importlib import import_module
 
+import pytest
+from django.conf import settings
+from django.test import Client
+
+from apps.users.models import User
+
+PROJECT_STORE = "apps.core.session_store"
 CLEANER = "apps.core.middleware.CleanMarkedResponseMiddleware"
 SESSION = "django.contrib.sessions.middleware.SessionMiddleware"
 CSRF = "django.middleware.csrf.CsrfViewMiddleware"
@@ -48,6 +55,21 @@ def test_session_lasts_fourteen_days_without_renewal():
     assert settings.SESSION_COOKIE_AGE == 14 * 24 * 60 * 60
     assert settings.SESSION_SAVE_EVERY_REQUEST is False
     assert settings.SESSION_EXPIRE_AT_BROWSER_CLOSE is False
+
+
+def test_the_session_engine_is_the_project_store():
+    assert settings.SESSION_ENGINE == PROJECT_STORE
+    assert import_module(settings.SESSION_ENGINE).SessionStore.__module__ == (
+        PROJECT_STORE
+    )
+
+
+@pytest.mark.django_db
+def test_the_test_client_uses_the_project_store():
+    client = Client()
+    client.force_login(User.objects.create(email="ana@correo.es"))
+
+    assert type(client.session).__module__ == PROJECT_STORE
 
 
 def test_the_csrf_cookie_and_header_names_are_the_ones_the_client_uses():

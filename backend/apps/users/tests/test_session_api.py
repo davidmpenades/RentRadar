@@ -4,9 +4,19 @@ from datetime import timedelta
 import pytest
 from django.conf import settings as django_settings
 from django.contrib.sessions.models import Session
+from django.db import connection
+from django.test import Client
+from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 from django.utils.cache import cc_delim_re
 
+from apps.core.tests.helpers import (
+    EACH_MALFORMED_SESSION_VALUE,
+    KEY_WITHOUT_ROW,
+    assert_session_cookie_deleted,
+    raw_cookie_header,
+    session_queries_with,
+)
 from apps.users.models import User
 from apps.users.tests.helpers import assert_no_store
 
@@ -20,8 +30,6 @@ PASSWORD = "vela roja en el puerto"
 TOKEN = "a1B2c3D4" * 4
 SESSION_COOKIE = django_settings.SESSION_COOKIE_NAME
 CSRF_COOKIE = django_settings.CSRF_COOKIE_NAME
-# Formato válido de clave de sesión, sin fila en la BD
-KEY_WITHOUT_ROW = "k3y5in4f1l4" * 3
 
 
 def who_am_i(client, method="get", **extra):
@@ -40,12 +48,6 @@ def vary_tokens(response):
 
 def assert_varies_by_cookie(response):
     assert "cookie" in vary_tokens(response)
-
-
-def assert_session_cookie_deleted(response):
-    cookie = response.cookies[SESSION_COOKIE]
-    assert cookie.value == ""
-    assert cookie["max-age"] == 0
 
 
 # --- Estados de la sesión que llega en la petición -----------------------------
@@ -74,7 +76,7 @@ def expired_session(client):
 
 
 def short_cookie(client):
-    # Django descarta sin consultar la BD una clave de menos de 8 caracteres
+    # Mal formada: más corta que una clave de sesión
     client.cookies[SESSION_COOKIE] = "abc1234"
     return "abc1234"
 
@@ -93,7 +95,7 @@ def key_without_row(client):
 EMPTY_SESSIONS = pytest.mark.parametrize(
     "prepare",
     [expired_session, short_cookie, long_malformed_cookie, key_without_row],
-    ids=["expired", "shorter-than-8", "long-malformed", "key-without-row"],
+    ids=["expired", "too-short", "long-malformed", "key-without-row"],
 )
 
 EVERY_STATE = pytest.mark.parametrize(
@@ -112,11 +114,16 @@ EVERY_STATE = pytest.mark.parametrize(
         "valid",
         "deactivated",
         "expired",
-        "shorter-than-8",
+        "too-short",
         "long-malformed",
         "key-without-row",
     ],
 )
+
+
+def test_the_key_without_row_is_well_formed_and_has_no_row():
+    assert re.fullmatch(r"[a-z0-9]{32}", KEY_WITHOUT_ROW)
+    assert not Session.objects.filter(session_key=KEY_WITHOUT_ROW).exists()
 
 
 # --- Respuesta ----------------------------------------------------------------
@@ -232,6 +239,43 @@ def test_a_staff_session_gets_only_its_email(csrf_client):
     text = response.content.decode()
     for hidden in ("id", "staff", "superuser", "last_login", "date_joined", "active"):
         assert hidden not in text
+
+
+# --- Cookie de sesión mal formada ---------------------------------------------
+
+
+def ask_with_raw_cookie(value, method="get"):
+    # Un error del servidor tiene que llegar como 500, no como excepción
+    client = Client(enforce_csrf_checks=True, raise_request_exception=False)
+    with CaptureQueriesContext(connection) as captured:
+        response = getattr(client, method)(
+            URL, HTTP_COOKIE=raw_cookie_header(sessionid=value)
+        )
+    return response, captured
+
+
+@EACH_MALFORMED_SESSION_VALUE
+@pytest.mark.parametrize("method", ["get", "head"])
+def test_a_malformed_session_cookie_is_ignored_when_asking(value, method):
+    response, captured = ask_with_raw_cookie(value, method)
+
+    assert response.status_code == 200
+    if method == "get":
+        assert response.json() == {"user": None}
+    assert_session_cookie_deleted(response)
+    assert response.cookies[CSRF_COOKIE].value
+    assert_no_store(response)
+    assert_varies_by_cookie(response)
+    assert session_queries_with(captured, value) == []
+
+
+def test_a_well_formed_key_without_row_is_looked_up():
+    response, captured = ask_with_raw_cookie(KEY_WITHOUT_ROW)
+
+    assert response.status_code == 200
+    queries = session_queries_with(captured, KEY_WITHOUT_ROW)
+    assert queries
+    assert all(query.startswith("SELECT") for query in queries)
 
 
 # --- Métodos no admitidos -----------------------------------------------------

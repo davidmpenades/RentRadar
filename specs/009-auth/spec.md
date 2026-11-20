@@ -16,6 +16,8 @@ La autenticación es la sesión de Django con CSRF, en el mismo origen que la p�
 
 La **entrada** (con su error uniforme de credenciales incorrectas, sus límites de intentos y la página `/login`) es la spec 015. La navegación completa llega en la spec 008. La verificación de email y la recuperación de contraseña, en la 013, y el borrado de cuenta y los textos legales, en la 014. Orden: 009 → 015 → 013 → 014 → 011. Hasta la 013 el registro **no** es uniforme: avisa de que un email ya existe (ver «Riesgos aceptados»).
 
+Un cambio posterior a la implementación añade RF-14: una cookie de sesión mal formada equivale a no tener sesión en cualquier petición. Se prueba en las cuatro operaciones en las que hoy esa cookie da un error del servidor: el registro, la entrada (spec 015), la salida y «quién soy». La lista pública ya la trata como sin sesión y sigue sin cookies. Corrige el riesgo «Cookie de sesión con nulos» que aceptó la spec 015.
+
 ## Usuarios
 - **Visitante**: cualquier persona que abre RentRadar, sin sesión.
 - **Usuario**: persona con cuenta y sesión abierta. En esta spec no tiene más capacidades que un visitante: puede salir.
@@ -39,6 +41,7 @@ La **entrada** (con su error uniforme de credenciales incorrectas, sus límites 
   - no contiene un carácter nulo ni un sustituto Unicode suelto.
   «Tal como llegan» vale para la longitud y el hash; la lista de comunes y la similitud usan el criterio de Django. Se acepta que pasen contraseñas como `aaaaaaaaaa` si no están en la lista.
 - **Sesión**: relación entre un navegador y una cuenta, identificada por una cookie que los scripts de la página no pueden leer. Caduca a los 14 días de abrirse, sin renovarse con la actividad. Una sesión **válida** es una que existe, no ha caducado y pertenece a una cuenta activa.
+- **Cookie de sesión mal formada**: la que trae un valor que no puede ser un identificador de sesión. Un identificador **bien formado** tiene exactamente 32 caracteres, y cada uno es una letra minúscula de la `a` a la `z` (sin `ñ` ni tildes) o un dígito del `0` al `9`. Cualquier otro valor está mal formado: vacío, más corto o más largo, con mayúsculas, con caracteres nulos o de control, o con caracteres fuera de ASCII. Cuenta el valor tal como lo lee el servidor, después de deshacer los escapes de la cookie. Un valor bien formado que no corresponde a ninguna sesión no está mal formado: es una sesión que no existe.
 - **Token CSRF**: valor que el cliente envía en una cabecera en cada petición que cambia el estado (registro y salida) y que demuestra que sale de la propia página. Es de doble envío: la petición debe llevar la misma cadena en la cabecera y en una cookie legible por la página, y no está ligado a la sesión. El cliente lo recibe en esa cookie al preguntar «quién soy», y cambia cada vez que se abre una sesión.
 - **«Quién soy»**: consulta del cliente por la sesión de su navegador.
 - **Barra superior**: franja superior de la página, con la marca (un enlace a la página del mapa) y las acciones de sesión, en todas las páginas. No es la «cabecera» del panel de resultados de la 006.
@@ -51,6 +54,7 @@ La **entrada** (con su error uniforme de credenciales incorrectas, sus límites 
 |---|---|
 | Longitud de la contraseña | de 10 a 128 puntos de código |
 | Caducidad de la sesión | 14 días desde que se abre, sin renovación |
+| Identificador de sesión bien formado | 32 caracteres de `a`-`z` y `0`-`9` |
 | Límite de registro por IP | 10 peticiones en una hora deslizante |
 | Tamaño máximo del cuerpo de una petición de registro | 4 KiB |
 | Tiempo máximo de espera de «quién soy» | 5 s |
@@ -74,6 +78,7 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - RF-6: CUANDO el cliente pregunta «quién soy», EL SISTEMA responde con el email de la sesión válida o, si no la hay, con la indicación de que no hay sesión, sin devolver un error, y deja el token CSRF en su cookie.
 - RF-7: SI una petición de registro o de salida no lleva un token CSRF válido, ENTONCES EL SISTEMA la rechaza con el error `csrf_failed` antes de leer el cuerpo, sin crear cuenta ni sesión y sin tocar la sesión actual. Vale también para la salida sin sesión.
 - RF-8: SI el cuerpo de una petición de registro no es JSON válido, está demasiado anidado (ver «Definiciones»), no es un objeto, o lleva el email o la contraseña con un tipo que no es texto (número, lista u objeto), ENTONCES EL SISTEMA la rechaza como `invalid_request`; y SI declara más de 4 KiB, llega con codificación troceada (`Transfer-Encoding`, de cualquier tamaño) o se leen más de 4 KiB, la rechaza como `payload_too_large`. En ambos casos no crea nada. Un email o una contraseña ausentes, nulos o vacíos no son `invalid_request`: los trata RF-2.
+- RF-14: SI una petición llega con una cookie de sesión mal formada, ENTONCES EL SISTEMA la trata igual que una petición sin sesión: no busca, guarda ni borra ninguna sesión con ese valor, no responde con un error del servidor y, si la respuesta no abre una sesión nueva, retira la cookie de sesión. Vale también para las peticiones que no leen la sesión, con una salvedad: las respuestas que nunca llevan cookies, como la de la lista pública, no retiran la cookie de sesión y siguen sin cookies. El resto no cambia: el límite, el CSRF y la validación siguen su orden y sus errores. Se prueba en el registro, la entrada (spec 015), la salida, «quién soy» y la lista pública.
 
 ### Interfaz
 - RF-9: MIENTRAS el cliente aún no sabe si hay sesión, la barra superior no muestra acciones de sesión; después muestra «Entrar» (botón secundario) y «Registrarse» (principal), juntos y en ese orden, si no hay sesión, y solo «Salir» si la hay, y nunca el email de la cuenta. «Entrar» llega con la spec 015. La marca de la barra es un enlace a la página del mapa. Si «quién soy» falla, no responde en 5 s o su respuesta tiene una forma inválida, se trata como sin sesión y no bloquea el mapa.
@@ -97,11 +102,12 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
   - La caducidad es de 14 días fijos. El cierre de sesión se aplica en el servidor (RF-5).
   - El token CSRF es de doble envío: lo que se garantiza y se prueba es que cambia al abrir una sesión (RF-4), no que esté ligado a ella.
   - El cliente de sesión envía las cookies del mismo origen. El de la lista pública sigue sin enviarlas.
-- **Lista pública sin cambios**: la lista de la 006 sigue sin autenticar al visitante: no lee ni modifica la sesión, y su respuesta es idéntica con o sin sesión, sin cookies, también con una cookie de sesión mal formada. Añadir la autenticación no la cambia.
+- **Lista pública sin cambios**: la lista de la 006 sigue sin autenticar al visitante: no lee ni modifica la sesión, y su respuesta es idéntica con o sin sesión, sin cookies, también con una cookie de sesión mal formada (RF-14). Añadir la autenticación no la cambia.
 - **Caché**: toda respuesta de registro, salida y «quién soy» lleva `Cache-Control: no-store`, errores incluidos, y la de «quién soy» se declara variable por la cookie. Ninguna caché compartida puede servir la respuesta de una persona a otra. Quedan fuera hasta la 011, como en la 006, las redirecciones por barra final y los errores internos del servidor (5xx).
 - **Respuestas mínimas**: las de éxito llevan solo el email de la propia cuenta, o la indicación de que no hay sesión. Nunca llevan un identificador, `is_staff`, `is_superuser`, `last_login` ni la fecha de alta. Nunca llevan el email de otro usuario.
 - **Desconfianza de la entrada (constitución, punto 6)**:
   - El backend valida tipo, tamaño y contenido de cada campo (RF-2, RF-8). Los campos desconocidos se ignoran.
+  - La cookie de sesión también es entrada del usuario: su forma se comprueba antes de usarla (RF-14), y ningún valor de esa cookie produce un error del servidor.
   - Una contraseña de más de 128 caracteres se rechaza sin calcular su hash (004, RF-9). Ningún contenido del email ni de la contraseña, incluidos el nulo y los sustitutos sueltos, produce un error del servidor.
   - El tamaño se mide en bytes del cuerpo leído, no en caracteres.
   - El cliente valida la forma de cada respuesta (email como texto no vacío, o la indicación de que no hay sesión) antes de usarla. Si la respuesta de un registro llega con forma inválida o la petición vence, el cliente pregunta «quién soy» y decide con eso: si hay sesión continúa como un éxito, y si no, muestra un error general.
@@ -156,6 +162,13 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - Abrir `/register` con sesión: va al mapa sin añadir una entrada al historial. Abrirlo sin sesión y que la sesión llegue después de pintar el formulario: igual (RF-13). `/register/` se normaliza a `/register` (RF-13).
 - A 375 px la barra superior no desborda, ni con «Entrar» y «Registrarse» ni con «Salir» (RF-9).
 - La lista pública pedida con una sesión abierta: respuesta idéntica a la del anónimo, sin cookies (no funcionales).
+- Cookie de sesión con ocho caracteres nulos (escritos con escape octal, que la cookie deshace al leerla): un registro válido crea la cuenta y abre una sesión nueva; una entrada con credenciales correctas abre la sesión; la salida responde bien y retira la cookie; «quién soy» responde sin sesión. Ninguna da un error del servidor ni deja guardada una sesión con ese valor (RF-14).
+- Cookie de sesión de 31 o de 33 caracteres, de 32 con una mayúscula o con un carácter fuera de ASCII: mal formada, igual que la de nulos (RF-14).
+- Cookie de sesión bien formada sin sesión guardada: sin sesión, como hasta ahora; no cuenta como mal formada (RF-6, RF-14).
+- Registro, entrada o salida con una cookie de sesión mal formada y sin token CSRF: `csrf_failed`, como sin la cookie, y retira la cookie (RF-7, RF-14).
+- Registro rechazado por validación con una cookie de sesión mal formada: no crea nada, no da un error del servidor y retira la cookie (RF-2, RF-14).
+- Sesiones abiertas antes del cambio: sus identificadores están bien formados, así que nadie pierde la sesión (RF-14).
+- Lista pública con una cookie de sesión mal formada, también la de nulos: los mismos datos que para el anónimo, sin error del servidor y sin cookies, igual que con una sesión abierta; no retira la cookie de sesión (RF-14).
 
 ## Fuera de alcance
 - **Entrada**: iniciar sesión, el error uniforme de credenciales incorrectas, los límites de intentos de entrada (por IP, y por IP y email) y la página `/login` (spec 015). Esta spec solo recoge cómo la entrada cambia la barra superior (RF-9 y RF-12) y el formulario de registro (RF-10).
@@ -172,9 +185,10 @@ En el límite cuenta toda petición que no rechace el propio límite: las acepta
 - Panel de administración y entrada del staff.
 - Fijar el proxy de confianza para la IP de los límites, el almacén compartido y atómico de los contadores, el tope global del coste del hash, las comprobaciones de `Origin` y `Referer` tras un proxy HTTPS, el anti-framing de las páginas y la purga de sesiones caducadas: spec 011.
 - Un comando para borrar las cuentas de prueba: no se crea (ver Criterios de finalización).
+- Cambiar el formato de los identificadores de sesión, validar la forma de otras cookies, y registrar en los logs o limitar las peticiones con una cookie de sesión mal formada.
 
 ## Cambios en otras specs
-Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 006 salvo lo que pida la 006 en su interfaz. Los puntos 1 a 5 ya están hechos; el 6 se hace con el cambio que alinea esta spec con el comportamiento verificado en el plan:
+Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 006 salvo lo que pida la 006 en su interfaz. Los puntos 1 a 6 ya están hechos; el 7 se hace con el cambio de RF-14:
 
 **Spec 004, «Reglas para specs posteriores»:**
 1. **Registro**: la regla «Registro y recuperación de contraseña: responden de forma uniforme» pasa a «La recuperación de contraseña responde de forma uniforme. El registro responde de forma explícita que el email existe (`email_taken`) hasta la spec 013, que lo hará uniforme con la verificación por correo».
@@ -185,6 +199,9 @@ Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 
 3. **RF-8 (mapa a pantalla completa)**: el mapa ocupa toda la zona bajo la barra superior, no la pantalla completa. Se ajustan también las menciones de «pantalla completa» de RF-13 y de los casos límite y criterios que la repiten.
 4. **RF-13 (error del estilo)**: el mensaje y «Reintentar» ocupan la zona bajo la barra superior, que se conserva; no se muestran el mapa ni el panel. La página «Página no encontrada» (RF-14) también va bajo la barra.
 5. **Regla de privacidad de la URL** (requisitos no funcionales, privacidad): «La dirección de la página no cambia al mover el mapa (ni fragmento ni parámetros), el historial no gana entradas y la vista no se guarda en el almacenamiento del navegador» pasa a «La zona del mapa nunca va a la URL ni al almacenamiento del navegador: mover el mapa no cambia la dirección ni añade entradas al historial. La navegación entre páginas (`/map`, `/register` y después `/login`) sí usa el historial».
+
+**Spec 015:**
+7. **Riesgos aceptados, «Cookie de sesión con nulos»**: deja de ser un riesgo y pasa a «Corregido por RF-14 de la spec 009: una cookie de sesión mal formada equivale a no tener sesión, también en la entrada».
 
 ## Riesgos aceptados
 - **Enumeración de emails**: el registro revela si un email existe (`email_taken`). Se mitiga con el límite de 10 registros por hora y IP. La spec 013 lo corrige.
@@ -219,6 +236,12 @@ Se hacen con `/sdd-change`; solo cambian textos, sin código en las specs 004 y 
 - La suite de tests, el análisis estático, la comprobación de migraciones y el control de desfase del contrato están en verde. Frontend: vitest, build y eslint de los ficheros tocados.
 - **Comprobación en el navegador**, a 1280 y 375 px, con la consola sin errores propios de la aplicación (las respuestas 4xx esperadas al probar errores se anotan) y un recorrido solo con teclado, a través del proxy de Vite y sin añadir orígenes de confianza a la configuración de Django (Django recibe `Host: localhost:5173`): registrarse, ver «Salir» en la barra superior, recargar y seguir con sesión, salir, y comprobar un error de cada tipo (email repetido, contraseña débil, límite superado). El límite de registro se prueba el último, porque las pruebas salen de la misma IP; si hace falta repetirlo, se reinicia el backend, que pone a cero el contador en memoria. Registrarse crea cuentas en la base de datos de desarrollo: el desarrollador lo autoriza expresamente en ese momento y las cuentas usan el dominio `example.com`. Esas cuentas se acumulan en la base de datos de desarrollo hasta que haga falta limpiarlas; entonces se borran una vez con orden expresa del desarrollador, o se reinicia el volumen y se ejecutan `migrate` y el comando de demostración.
 - Las specs 004 y 006 quedan actualizadas con `/sdd-change` (Cambios en otras specs), y la spec 015 sigue el orden de comprobaciones de esta spec.
+- **Cambio de RF-14**:
+  - Los tests de las cuatro operaciones (registro, entrada, salida y «quién soy») con la cookie de nulos se escriben primero y fallan por el error del servidor. El test de la 015 que fijaba ese error en la entrada se invierte.
+  - La cookie de nulos se añade a los tests que ya prueban la lista pública con una cookie de sesión mal formada. Pasan en verde desde el principio, como guarda: la lista no lee la sesión.
+  - Prueba de mecanismo, registrada en `validation.md`: quitar la comprobación de la forma hace fallar los tests de las cuatro operaciones.
+  - Comprobación de punta a punta: en el navegador, con la cookie de nulos puesta, la página del mapa carga con «Entrar» y «Registrarse» y sin errores en la consola, y una petición real de salida responde bien y retira la cookie.
+  - El punto 7 de «Cambios en otras specs» queda hecho en la spec 015.
 - Se revisa que ningún bien, mapa ni panel de la 006 cambie su comportamiento, salvo el que ocupen la zona bajo la barra superior, sin scroll de página.
 
 ## Dudas abiertas

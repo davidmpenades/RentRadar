@@ -12,6 +12,13 @@ from django.core.cache import cache
 from django.core.handlers.wsgi import LimitedStream
 from django.db import connection
 
+from apps.core.tests.helpers import (
+    EACH_MALFORMED_SESSION_VALUE,
+    KEY_WITHOUT_ROW,
+    assert_session_cookie_deleted,
+    post_with_raw_cookie,
+    session_queries_with,
+)
 from apps.users import views
 from apps.users.models import User
 from apps.users.tests.helpers import (
@@ -247,6 +254,74 @@ def test_a_session_of_the_same_account_is_discarded_too(csrf_client, monkeypatch
     response = register(csrf_client)
 
     assert_replaced_by_a_session_of_the_new_account(response, old_key)
+
+
+# --- Cookie de sesión mal formada ---------------------------------------------
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_a_malformed_session_cookie_is_ignored_when_registering(value):
+    response, captured = post_with_raw_cookie(
+        URL,
+        json.dumps(CREDENTIALS),
+        csrf_cookie=TOKEN,
+        csrf_header=TOKEN,
+        session_cookie=value,
+    )
+
+    assert response.status_code == 201
+    new_key = response.cookies[SESSION_COOKIE].value
+    assert re.fullmatch(r"[a-z0-9]{32}", new_key)
+    assert Session.objects.get().session_key == new_key
+    assert User.objects.get().email == EMAIL
+    assert session_queries_with(captured, value) == []
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_a_rejected_registration_removes_a_malformed_session_cookie(value):
+    response, _ = post_with_raw_cookie(
+        URL,
+        json.dumps({"email": "ana", "password": "corta"}),
+        csrf_cookie=TOKEN,
+        csrf_header=TOKEN,
+        session_cookie=value,
+    )
+
+    assert response.status_code == 400
+    assert response.json()["code"] == "invalid_fields"
+    assert_session_cookie_deleted(response)
+    assert not User.objects.exists()
+    assert not Session.objects.exists()
+
+
+@EACH_MALFORMED_SESSION_VALUE
+def test_without_a_token_a_malformed_session_cookie_is_removed(value):
+    response, _ = post_with_raw_cookie(
+        URL,
+        json.dumps(CREDENTIALS),
+        csrf_cookie=TOKEN,
+        csrf_header=None,
+        session_cookie=value,
+    )
+
+    assert response.status_code == 403
+    assert response.json() == {"code": "csrf_failed"}
+    assert_session_cookie_deleted(response)
+    assert not User.objects.exists()
+    assert not Session.objects.exists()
+
+
+def test_a_well_formed_key_without_row_is_looked_up():
+    response, captured = post_with_raw_cookie(
+        URL,
+        json.dumps(CREDENTIALS),
+        csrf_cookie=TOKEN,
+        csrf_header=TOKEN,
+        session_cookie=KEY_WITHOUT_ROW,
+    )
+
+    assert response.status_code == 201
+    assert session_queries_with(captured, KEY_WITHOUT_ROW)
 
 
 # --- Rechazo por validación ---------------------------------------------------

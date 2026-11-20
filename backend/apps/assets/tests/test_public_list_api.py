@@ -26,6 +26,7 @@ from apps.assets.views import (
     PublicListThrottle,
 )
 from apps.core.api import ERROR_CODES
+from apps.core.tests.helpers import MALFORMED_SESSION_VALUES, raw_cookie_header
 from apps.users.models import User
 
 pytestmark = pytest.mark.django_db
@@ -678,12 +679,16 @@ MALFORMED_COOKIES = [
     pytest.param({"csrftoken": "x"}, id="csrftoken"),
     pytest.param({"sessionid": "short"}, id="sessionid"),
     pytest.param({"csrftoken": "x", "sessionid": "short"}, id="both"),
+    pytest.param(
+        {"sessionid": MALFORMED_SESSION_VALUES["null-characters"]},
+        id="null-characters",
+    ),
 ]
 
 
 def set_cookies(client, cookies):
-    for name, value in cookies.items():
-        client.cookies[name] = value
+    # Pisa la cabecera que el cliente construiría con su almacén de cookies
+    client.defaults["HTTP_COOKIE"] = raw_cookie_header(**cookies)
 
 
 @pytest.mark.parametrize("cookies", MALFORMED_COOKIES)
