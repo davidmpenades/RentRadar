@@ -8,6 +8,7 @@ from django.contrib.gis.geos import Point
 from django.db import connection
 from django.test.utils import CaptureQueriesContext
 
+from apps.assets.filters import Filters, parse_filters
 from apps.assets.models import Asset
 from apps.assets.selectors import visible_assets_in_zone
 from apps.assets.services import create_asset, update_asset
@@ -526,3 +527,308 @@ def test_the_where_clause_filters_by_the_public_location_in_both_axes(
     assert "public_location" in where
     assert where.count("BETWEEN") == 2
     assert "is_active" in where
+
+
+# --- Filtros de categoría y de título ------------------------------------------
+
+COMBINING_ACUTE = chr(0x301)
+HOW_MANY_NEWER_ASSETS_DO_NOT_MATCH = 100
+# Tablas y columnas que ninguna consulta con filtros debe pedir
+COLUMNS_OUTSIDE_THE_WHITELIST_WITH_FILTERS = [
+    ("assets_asset", "title_folded"),
+    ("assets_asset", "id"),
+    ("assets_asset", "description"),
+    ("assets_asset", "status"),
+    ("assets_asset", "created_at"),
+    ("assets_asset", "updated_at"),
+    ("categories_category", "id"),
+]
+
+
+def filters_of(*, category=None, text=None):
+    # El texto pasa por el parseo real: la columna y el fragmento se pliegan juntos
+    params = {}
+    if category is not None:
+        params["category"] = [category]
+    if text is not None:
+        params["q"] = [text]
+    filters = parse_filters(params)
+    assert isinstance(filters, Filters)
+    return filters
+
+
+SKI_AND_ESQUI = filters_of(category="ski", text="esqui")
+
+
+def select_filtered(zone, filters, limit=LIMIT):
+    return visible_assets_in_zone(zone=zone, limit=limit, filters=filters)
+
+
+def public_ids_filtered(zone, filters):
+    rows, _ = select_filtered(zone, filters)
+    return [row["public_id"] for row in rows]
+
+
+def titles_filtered(zone, filters):
+    rows, _ = select_filtered(zone, filters)
+    return {row["title"] for row in rows}
+
+
+def captured_filtered_queries(zone, filters):
+    with CaptureQueriesContext(connection) as context:
+        select_filtered(zone, filters)
+    return [query["sql"] for query in context.captured_queries]
+
+
+def captured_filtered_sql(zone, filters):
+    queries = captured_filtered_queries(zone, filters)
+    assert len(queries) == 1
+    return queries[0]
+
+
+def bulk_titled_assets(make_asset, titles):
+    # La lista de títulos va del bien más reciente al más antiguo
+    assets = [
+        make_asset(
+            status="active", title=title, created_at=NOW - timedelta(minutes=minutes)
+        )
+        for minutes, title in enumerate(titles)
+    ]
+    Asset.objects.bulk_create(assets)
+    return assets
+
+
+def test_a_paused_asset_is_not_returned_with_a_matching_filter(
+    visible_asset, ski_category
+):
+    shown = visible_asset(*MADRID_PUBLIC, title="Esqui de pista", category=ski_category)
+    visible_asset(
+        *MADRID_PUBLIC, title="Esqui de fondo", category=ski_category, status="paused"
+    )
+
+    assert public_ids_filtered(MADRID_ZONE, SKI_AND_ESQUI) == [shown.public_id]
+
+
+def test_an_asset_of_a_deactivated_account_is_not_returned_with_a_matching_filter(
+    visible_asset, ski_category
+):
+    gone = User.objects.create(email="gone@correo.es", is_active=False)
+    shown = visible_asset(*MADRID_PUBLIC, title="Esqui de pista", category=ski_category)
+    visible_asset(
+        *MADRID_PUBLIC, title="Esqui de fondo", category=ski_category, owner=gone
+    )
+
+    assert public_ids_filtered(MADRID_ZONE, SKI_AND_ESQUI) == [shown.public_id]
+
+
+def test_a_text_and_category_match_outside_the_zone_is_not_returned(
+    visible_asset, ski_category
+):
+    inside = visible_asset(
+        *MADRID_PUBLIC, title="Esqui de pista", category=ski_category
+    )
+    visible_asset(*VALENCIA_PUBLIC, title="Esqui lejano", category=ski_category)
+
+    assert public_ids_filtered(MADRID_ZONE, SKI_AND_ESQUI) == [inside.public_id]
+
+
+def test_the_category_filter_returns_only_that_category(visible_asset, ski_category):
+    skis = visible_asset(*MADRID_PUBLIC, title="Esqui de pista", category=ski_category)
+    visible_asset(*MADRID_PUBLIC, title="Taladro")
+
+    assert public_ids_filtered(MADRID_ZONE, filters_of(category="ski")) == [
+        skis.public_id
+    ]
+
+
+def test_category_and_text_return_only_the_assets_that_meet_both(
+    visible_asset, ski_category
+):
+    both = visible_asset(*MADRID_PUBLIC, title="Esqui de pista", category=ski_category)
+    visible_asset(*MADRID_PUBLIC, title="Casco rojo", category=ski_category)
+    visible_asset(*MADRID_PUBLIC, title="Esqui acuatico")
+    visible_asset(*MADRID_PUBLIC, title="Taladro")
+
+    assert public_ids_filtered(MADRID_ZONE, SKI_AND_ESQUI) == [both.public_id]
+
+
+def test_a_well_formed_unknown_category_returns_nothing_and_is_complete(
+    visible_asset,
+):
+    visible_asset(*MADRID_PUBLIC, title="Taladro")
+
+    unknown = filters_of(category="no-such-category")
+
+    assert select_filtered(MADRID_ZONE, unknown) == ([], False)
+
+
+@pytest.mark.parametrize(
+    ("text", "literal_title", "decoy_title"),
+    [
+        pytest.param("%", "Oferta 50% descuento", "Oferta sin descuento", id="percent"),
+        pytest.param("a_c", "Pieza a_c nueva", "Pieza abc nueva", id="underscore"),
+        pytest.param("a\\b", "Ruta a\\b larga", "Ruta ab larga", id="backslash"),
+        pytest.param(".*", "Cable .* largo", "Cable corto", id="dot-star"),
+        pytest.param("d'agua", "Garrafa d'agua", "Garrafa de agua", id="quote"),
+    ],
+)
+def test_the_wildcards_and_quotes_of_the_text_are_literal(
+    visible_asset, text, literal_title, decoy_title
+):
+    literal = visible_asset(*MADRID_PUBLIC, title=literal_title)
+    visible_asset(*MADRID_PUBLIC, title=decoy_title)
+
+    assert public_ids_filtered(MADRID_ZONE, filters_of(text=text)) == [
+        literal.public_id
+    ]
+
+
+@pytest.mark.parametrize(
+    "texts",
+    [
+        pytest.param(("percusion",), id="description"),
+        pytest.param(("vidal",), id="owner-email"),
+        # La pública y la exacta, desplazada de ella en este módulo
+        pytest.param(("40.4157", "40.4197"), id="coordinate"),
+        pytest.param(("piscina",), id="category-name"),
+    ],
+)
+def test_the_text_is_searched_only_in_the_title(visible_asset, texts):
+    owner = User.objects.create(email="marta.vidal@correo.es")
+    asset = visible_asset(
+        *MADRID_PUBLIC,
+        title="Taladro",
+        owner=owner,
+        description="Equipo de percusion con maletin",
+    )
+    assert public_ids_filtered(MADRID_ZONE, filters_of(text="taladro")) == [
+        asset.public_id
+    ]
+
+    for text in texts:
+        assert select_filtered(MADRID_ZONE, filters_of(text=text)) == ([], False)
+
+
+def test_a_text_of_only_combining_characters_does_not_return_every_asset(
+    visible_asset,
+):
+    visible_asset(*MADRID_PUBLIC, title="Esquí de pista")
+    visible_asset(*MADRID_PUBLIC, title="Taladro")
+
+    only_a_mark = filters_of(text=COMBINING_ACUTE)
+
+    assert select_filtered(MADRID_ZONE, only_a_mark) == ([], False)
+
+
+@pytest.mark.parametrize(
+    ("titles", "text", "expected"),
+    [
+        pytest.param(
+            ["Esquí de pista", "Taladro"],
+            "esqui",
+            {"Esquí de pista"},
+            id="esqui-finds-accented-title",
+        ),
+        pytest.param(
+            ["Esqui de fondo", "Taladro"],
+            "ESQUÍ",
+            {"Esqui de fondo"},
+            id="upper-accented-text-finds-plain-title",
+        ),
+        pytest.param(
+            ["bicicleta de paseo", "Taladro"],
+            "BICI",
+            {"bicicleta de paseo"},
+            id="upper-bici-finds-lowercase-title",
+        ),
+        pytest.param(
+            ["Casco rojo", "Un casco rojo", "Rojo casco", "Taladro"],
+            "casco",
+            {"Casco rojo", "Un casco rojo", "Rojo casco"},
+            id="start-middle-and-end",
+        ),
+        pytest.param(
+            ["Compra del año", "Compra del ano"],
+            "ano",
+            {"Compra del ano"},
+            id="ano-does-not-find-enye",
+        ),
+        pytest.param(
+            ["Compra del año", "Taladro"],
+            "AÑO",
+            {"Compra del año"},
+            id="upper-enye-finds-enye",
+        ),
+    ],
+)
+def test_the_text_ignores_case_and_accents_but_not_the_enye(
+    visible_asset, titles, text, expected
+):
+    for title in titles:
+        visible_asset(*MADRID_PUBLIC, title=title)
+
+    assert titles_filtered(MADRID_ZONE, filters_of(text=text)) == expected
+
+
+@pytest.mark.parametrize(
+    "case",
+    [
+        pytest.param("more-than-the-limit-match", id="more-than-the-limit-match"),
+        pytest.param("few-match-among-many", id="few-match-among-many"),
+    ],
+)
+def test_the_limit_applies_after_the_filter(make_asset, case):
+    # Los que no cumplen son más recientes: un tope previo al filtro los contaría
+    if case == "more-than-the-limit-match":
+        matching, newer = LIMIT + 1, HOW_MANY_NEWER_ASSETS_DO_NOT_MATCH
+    else:
+        matching, newer = 5, LIMIT + 50
+    titles = [f"Taladro {n}" for n in range(newer)]
+    titles += [f"Esqui {n}" for n in range(matching)]
+    assets = bulk_titled_assets(make_asset, titles)
+
+    rows, incomplete = select_filtered(MADRID_ZONE, filters_of(text="esqui"))
+
+    expected = [asset.public_id for asset in assets[newer:]][:LIMIT]
+    assert [row["public_id"] for row in rows] == expected
+    assert incomplete is (matching > LIMIT)
+
+
+@pytest.fixture
+def one_filtered_asset(visible_asset, ski_category):
+    return visible_asset(*MADRID_PUBLIC, title="Esqui de pista", category=ski_category)
+
+
+def test_a_row_has_exactly_the_whitelisted_keys_with_filters(one_filtered_asset):
+    rows, _ = select_filtered(MADRID_ZONE, SKI_AND_ESQUI)
+
+    assert len(rows) == 1
+    assert set(rows[0]) == WHITELIST
+
+
+def test_the_selector_runs_exactly_one_query_with_filters(one_filtered_asset):
+    assert len(captured_filtered_queries(MADRID_ZONE, SKI_AND_ESQUI)) == 1
+
+
+def test_the_exact_location_appears_nowhere_in_the_query_with_filters(
+    one_filtered_asset,
+):
+    assert "exact_location" not in captured_filtered_sql(MADRID_ZONE, SKI_AND_ESQUI)
+
+
+def test_the_select_clause_has_no_user_or_owner_columns_with_filters(
+    one_filtered_asset,
+):
+    selected = select_clause(captured_filtered_sql(MADRID_ZONE, SKI_AND_ESQUI))
+
+    assert "users_user" not in selected
+    assert "owner" not in selected
+
+
+def test_the_select_clause_has_no_columns_outside_the_whitelist_with_filters(
+    one_filtered_asset,
+):
+    selected = select_clause(captured_filtered_sql(MADRID_ZONE, SKI_AND_ESQUI))
+
+    for table, column in COLUMNS_OUTSIDE_THE_WHITELIST_WITH_FILTERS:
+        assert f'"{table}"."{column}"' not in selected
