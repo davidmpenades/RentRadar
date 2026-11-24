@@ -79,7 +79,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T2 done`
   - Hecho cuando: pytest con `--create-db`, ruff y `test_migrations` en verde, el SQL de 0005 revisado con `sqlmigrate`, el diff de la colección es el previsto y M4 registrada.
 
-- [ ] **T3. Validación pura de los filtros y unión con la zona.** RF-3, RF-4
+- [x] **T3. Validación pura de los filtros y unión con la zona.** RF-3, RF-4
   - Qué: apps/assets/filters.py (`Filters`, `NO_FILTERS`, `parse_filters`, `parse_public_query`) y apps/assets/tests/test_filters.py.
   - Tests del plan: B7.
   - Mutaciones: ninguna (las cuatro del plan están en T2 y T4).
