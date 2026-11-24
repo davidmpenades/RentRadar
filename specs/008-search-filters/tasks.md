@@ -93,7 +93,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T3 done`
   - Hecho cuando: pytest y ruff en verde y el diff de la colección es el previsto.
 
-- [ ] **T4. Selector con filtros.** RF-1, RF-2, RF-4, RF-5, RF-6
+- [x] **T4. Selector con filtros.** RF-1, RF-2, RF-4, RF-5, RF-6
   - Depende de T2 y T3.
   - Qué: apps/assets/selectors.py (`filters=NO_FILTERS`) y apps/assets/tests/test_selectors.py.
   - Tests del plan: B1, B2, B3, B4, B6, B10 y B11 (partes del selector) y B12 (partes del selector).
