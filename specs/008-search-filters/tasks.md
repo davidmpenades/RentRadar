@@ -65,7 +65,8 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     - apps/assets/tests/test_folding.py;
     - apps/assets/tests/test_models.py (`EXPECTED_FIELDS`, `EXPECTED_COLUMNS` y la regla de nulos y valores por defecto).
   - Tests del plan: B5.
-  - Mutaciones: M4 (quitar una pareja solo en Python o solo en la expresión del modelo, sobre copia) → B5 debe ponerse en rojo.
+  - Mutaciones: M4 (quitar una pareja de `FOLD_SOURCE` y `FOLD_TARGET` en `folding.py`, sobre copia y sin generar migración, de modo que Python cambia y la BD no) → B5 y `test_models_have_no_pending_migrations` deben ponerse en rojo.
+    - La definición anterior (quitar la pareja solo en Python o solo en la expresión del modelo) no podía poner B5 en rojo en la segunda forma: los tests crean la BD aplicando la migración, que congela la tabla como literales.
   - Parar y pedir OK antes de escribir (migración): D1, D6, D7 (generación de 0005), D8 (`--create-db`, `test_migrations` y `sqlmigrate`), D2, D3 y D4. Aplicar 0005 en la BD de desarrollo no entra aquí: es T10.
   - Riesgo: se modifican tests existentes.
     - Inventario: `apps/assets/tests/test_models.py` (`test_the_model_has_exactly_these_fields`, `test_no_field_is_nullable_or_has_a_default` y los que comparan columnas) y `config/tests/test_migrations.py`.

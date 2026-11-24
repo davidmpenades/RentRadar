@@ -78,3 +78,73 @@ El sondeo usa `pg_database.datctype` en lugar de `SHOW lc_ctype`: PostgreSQL 16 
   - `npx vitest run`: `Test Files  36 passed (36)` y `Tests  1324 passed (1324)`.
   - `npm run build`: `✓ built in 648ms`.
   - `npm run api:check`: `✨ openapi-typescript 7.13.0`, código de salida 0.
+
+## T2 — comprobaciones
+- Commit de código: `bbe28ba40bd99129de1fe6222e3c53b66dd6b4a9` `feat(assets): add folded title column`. Seis ficheros: `backend/apps/assets/folding.py`, `backend/apps/assets/models.py`, `backend/apps/assets/migrations/0005_asset_title_folded.py`, `backend/apps/assets/tests/test_folding.py`, `backend/apps/assets/tests/test_models.py` y `backend/apps/assets/tests/test_update.py`. El diff completo (`git diff HEAD~1 HEAD`) tiene el sha256 `fea6fe048877791bb370711a6c37dfc5394624b81c40eac51a97f87efeb572ae`, el mismo que el diff revisado antes del commit.
+- Prueba en rojo, antes de generar la migración: `test_folding.py` fallaba con `column assets_asset.title_folded does not exist` (2 de los 3 tests; el tercero comprueba solo la tabla).
+- Colección de `apps/assets/tests` y `config/tests` (`pytest --collect-only -q`): de 1314 a 1317 tests. Diff literal, antes contra después:
+```
+102a103,104
+> apps/assets/tests/test_folding.py::test_python_and_the_database_fold_every_character_of_the_table_the_same_way
+> apps/assets/tests/test_folding.py::test_characters_outside_the_table_stay_the_same_in_python_and_in_the_database
+495a498
+> apps/assets/tests/test_folding.py::test_the_fold_source_and_target_have_the_same_length_and_no_repeats
+1316c1319
+< 1314 tests collected in 0.89s
+---
+> 1317 tests collected in 0.89s
+```
+  Son exactamente los tres ids previstos; no hay ninguno eliminado ni renombrado.
+- Generación de la migración (`makemigrations assets` con `DB_HOST=db-inexistente.invalid`): `Migrations for 'assets':`, `apps/assets/migrations/0005_asset_title_folded.py` y `+ Add field title_folded to asset`. Django la escribe con comillas simples: `ruff format` reformateó tres ficheros (`0005`, `test_folding.py` y `folding.py`) y dejó dos sin cambios.
+- `pytest -q --create-db apps/assets config/tests/test_migrations.py`: `1120 passed, 2 skipped in 16.05s`.
+- SQL de `sqlmigrate assets 0005` (BD de test), literal:
+```
+BEGIN;
+--
+-- Add field title_folded to asset
+--
+ALTER TABLE "assets_asset" ADD COLUMN "title_folded" text GENERATED ALWAYS AS (translate("title", 'ABCDEFGHIJKLMNOPQRSTUVWXYZÀÁÂÃÄÅàáâãäåÇçÈÉÊËèéêëÌÍÎÏìíîïÒÓÔÕÖòóôõöÙÚÛÜùúûüÝŸýÿÑÆŒØ', 'abcdefghijklmnopqrstuvwxyzaaaaaaaaaaaacceeeeeeeeiiiiiiiioooooooooouuuuuuuuyyyyñæœø')) STORED;
+COMMIT;
+```
+  Los parámetros de `translate` se incrustan bien como literales (supuesto del plan comprobado). No hay `NOT NULL` (ver la desviación 2).
+- Tanda previa al commit, con la línea de resumen literal de cada orden:
+  - `docker compose exec backend pytest -q`: `2610 passed, 2 skipped in 43.75s` (los dos saltados son los de medición).
+  - `docker compose exec backend sh -c "ruff check . && ruff format --check ."`: `All checks passed!` y `156 files already formatted`.
+  - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 1.63s`.
+  - Desfase de `openapi.json` (`spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json`): sin diferencias, código de salida 0.
+  - `docker compose run --rm --no-deps -e DB_HOST=db-inexistente.invalid --entrypoint "" backend python manage.py check`: `System check identified no issues (0 silenced).`
+  - La última edición cambió el comentario de un test (`test_models.py`), así que la tanda se repitió entera. `pytest -q` y ruff, arriba, ya se ejecutaron después de ella. Las demás se ejecutaron después del commit sobre el mismo código de `bbe28ba` (sin cambios en `backend/` ni en `frontend/` respecto a `HEAD`):
+    - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 0.89s`.
+    - Desfase de `openapi.json` (`spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json`): sin diferencias, código de salida 0.
+    - `manage.py check`: `System check identified no issues (0 silenced).`
+    - `npx vitest run`: `Test Files  36 passed (36)` y `Tests  1324 passed (1324)`.
+    - `npm run build`: `✓ built in 674ms`.
+    - `npm run api:check`: `✨ openapi-typescript 7.13.0`, código de salida 0.
+    - eslint no aplica: esta tarea no toca `frontend/`.
+
+### M4 — Tabla de Python y tabla de la BD desincronizadas
+- Definición (cambia respecto a `tasks.md` anterior): quitar una pareja de `FOLD_SOURCE` y de `FOLD_TARGET` en `folding.py` sin generar migración, de modo que Python cambia y la BD no. La definición anterior (quitar la pareja solo en Python o solo en la expresión del modelo) no podía poner B5 en rojo en la segunda forma: los tests crean la BD aplicando la migración, que congela la tabla como literales; cambiar la expresión del modelo no cambia la columna, solo deja una migración pendiente.
+- Mutación: pareja Ç → c. `"Çç"` pasa a `"ç"` en `FOLD_SOURCE` y `"cc"` a `"c"` en `FOLD_TARGET`.
+- Procedimiento: script de Python ejecutado con `python3 -I -B`, copia previa del fichero fuera del repo, sin `sed -i`, sha256 antes y después y restauración en `finally`. Stack en marcha (backend y db, `healthy`) y portátil enchufado.
+- Antes de ejecutar, `ruff check` y `ruff format --check` por stdin sobre el fichero mutado: código 0 y sin diferencias, así que `test_ruff_accepts_the_backend_code` no se ve afectado.
+- Predicción, sellada con sha256 antes de ejecutar y nunca modificada:
+  - fallan exactamente `apps/assets/tests/test_folding.py::test_python_and_the_database_fold_every_character_of_the_table_the_same_way` (Python deja la Ç y la BD la pliega a c) y `config/tests/test_migrations.py::test_models_have_no_pending_migrations` (la expresión de `title_folded` cambia y `makemigrations` detecta una migración pendiente);
+  - línea de resumen: `2 failed, 2608 passed, 2 skipped`;
+  - ninguna línea `ERROR`.
+- Orden: `docker compose exec -T backend pytest -q -rfE` (suite completa).
+- Resultado, línea de resumen literal: `2 failed, 2608 passed, 2 skipped in 43.09s`.
+  - Ids fallidos (orden `LC_ALL=C`), idénticos a los predichos:
+```
+apps/assets/tests/test_folding.py::test_python_and_the_database_fold_every_character_of_the_table_the_same_way
+config/tests/test_migrations.py::test_models_have_no_pending_migrations
+```
+  - Mensajes: `{'Ç': 'Ç'} != {'Ç': 'c'}` y `Hay cambios de modelos sin migración: ejecuta makemigrations.`
+  - ERROR: 0 líneas `^ERROR ` y ninguna aparición de «error» en la línea de resumen.
+- Restauración: sha256 de `folding.py` antes `dd1ae1517b6236dd629659686c2d214b6b55364caf8e7ee9eeb340c541d5ec57`, con la mutación `99d3cbc45298b1b5dac5c1a2c4e23e6146f38831765413739d02edfaea00fda5` y restaurado `dd1ae1517b6236dd629659686c2d214b6b55364caf8e7ee9eeb340c541d5ec57`. Coincide con `git show bbe28ba:backend/apps/assets/folding.py | sha256sum`, y `git status --short` salió vacío.
+- Veredicto: B5 detecta una tabla de Python desincronizada de la de la BD (con la forma de B5 de la desviación 3) y `test_models_have_no_pending_migrations` detecta la misma desincronización por el lado del modelo.
+
+### Desviaciones del plan en T2
+1. Un test existente de edición compara la fila completa y tuvo que incluir la columna plegada; no estaba previsto en el plan. El id no cambia y solo cambia la aserción: `backend/apps/assets/tests/test_update.py@bbe28ba:218-223` (`"title_folded": "martillo"`), que de paso comprueba que la BD recalcula la columna al editar el título.
+2. La columna generada es nullable en la BD: Django no emite `NOT NULL` en una columna generada (ver el SQL de arriba), aunque nunca será nula porque `title` no lo es. El plan suponía `NOT NULL`. La regla «ninguna columna es nullable» excluye `title_folded` y afirma que es `YES`: `backend/apps/assets/tests/test_models.py@bbe28ba:321-324`; `EXPECTED_FIELDS` y `EXPECTED_COLUMNS` en `backend/apps/assets/tests/test_models.py@bbe28ba:74` y `backend/apps/assets/tests/test_models.py@bbe28ba:93`.
+3. B5 no itera sobre `FOLD_SOURCE`, como decía el plan: así una pareja quitada solo en Python no se probaría. El test recorre los puntos de código U+0020 a U+024F (latín básico, Latin-1 y ampliados A y B) y afirma que `FOLD_SOURCE` está contenido en ese rango: `backend/apps/assets/tests/test_folding.py@bbe28ba:9` y `backend/apps/assets/tests/test_folding.py@bbe28ba:30-38`. Si la tabla se amplía fuera de ese rango, el propio test falla y obliga a ampliarlo.
+4. `ruff format` fundía `FOLD_TARGET` en una sola línea ilegible. Las dos tablas llevan un comentario por grupo, para ver la correspondencia y evitar que ruff las una: `backend/apps/assets/folding.py@bbe28ba:4-35`.
