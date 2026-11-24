@@ -148,3 +148,96 @@ config/tests/test_migrations.py::test_models_have_no_pending_migrations
 2. La columna generada es nullable en la BD: Django no emite `NOT NULL` en una columna generada (ver el SQL de arriba), aunque nunca será nula porque `title` no lo es. El plan suponía `NOT NULL`. La regla «ninguna columna es nullable» excluye `title_folded` y afirma que es `YES`: `backend/apps/assets/tests/test_models.py@bbe28ba:321-324`; `EXPECTED_FIELDS` y `EXPECTED_COLUMNS` en `backend/apps/assets/tests/test_models.py@bbe28ba:74` y `backend/apps/assets/tests/test_models.py@bbe28ba:93`.
 3. B5 no itera sobre `FOLD_SOURCE`, como decía el plan: así una pareja quitada solo en Python no se probaría. El test recorre los puntos de código U+0020 a U+024F (latín básico, Latin-1 y ampliados A y B) y afirma que `FOLD_SOURCE` está contenido en ese rango: `backend/apps/assets/tests/test_folding.py@bbe28ba:9` y `backend/apps/assets/tests/test_folding.py@bbe28ba:30-38`. Si la tabla se amplía fuera de ese rango, el propio test falla y obliga a ampliarlo.
 4. `ruff format` fundía `FOLD_TARGET` en una sola línea ilegible. Las dos tablas llevan un comentario por grupo, para ver la correspondencia y evitar que ruff las una: `backend/apps/assets/folding.py@bbe28ba:4-35`.
+
+## T3 — comprobaciones
+- Commit de código: `502a50d379f1fc75ef9dc9710cdb6f14bae682b5` `feat(assets): validate public list filters`. Dos ficheros nuevos: `backend/apps/assets/filters.py` y `backend/apps/assets/tests/test_filters.py`. El diff completo (`git diff HEAD~1 HEAD`) tiene el sha256 `8b13c72f4e95fe0a8a1d82804da51edecb612216da5b2742576f98966e1fa6cc`, el mismo que el diff revisado antes del commit. Sin mutaciones: el plan no pide ninguna en esta tarea.
+- Prueba en rojo, antes de escribir `filters.py`: `pytest -q apps/assets/tests/test_filters.py` terminó con `ImportError: cannot import name 'filters' from 'apps.assets'` y `1 error in 0.20s` (error de colección, porque el módulo no existía).
+- Con `filters.py` escrito y formateado con `ruff format`: `46 passed in 0.12s`.
+- Colección de `apps/assets/tests` (`pytest --collect-only -q`): de 1121 a 1167 tests. Diff literal, antes contra después:
+```
+491a492,537
+> apps/assets/tests/test_filters.py::test_no_filter_parameters_return_no_filters[no-parameters]
+> apps/assets/tests/test_filters.py::test_no_filter_parameters_return_no_filters[names-are-case-sensitive]
+> apps/assets/tests/test_filters.py::test_valid_filters_are_returned_trimmed_and_folded[category-ski]
+> apps/assets/tests/test_filters.py::test_valid_filters_are_returned_trimmed_and_folded[category-sports-area]
+> apps/assets/tests/test_filters.py::test_valid_filters_are_returned_trimmed_and_folded[category-of-50-characters]
+> apps/assets/tests/test_filters.py::test_valid_filters_are_returned_trimmed_and_folded[text-trimmed]
+> apps/assets/tests/test_filters.py::test_valid_filters_are_returned_trimmed_and_folded[text-folded]
+> apps/assets/tests/test_filters.py::test_valid_filters_are_returned_trimmed_and_folded[category-and-text]
+> apps/assets/tests/test_filters.py::test_a_text_in_nfd_is_normalised_before_folding[accent]
+> apps/assets/tests/test_filters.py::test_a_repeated_parameter_is_rejected[category-two-values]
+> apps/assets/tests/test_filters.py::test_a_repeated_parameter_is_rejected[text-same-value-twice]
+> apps/assets/tests/test_filters.py::test_an_empty_value_is_an_error_and_not_a_missing_filter[category]
+> apps/assets/tests/test_filters.py::test_an_empty_value_is_an_error_and_not_a_missing_filter[text]
+> apps/assets/tests/test_filters.py::test_a_parameter_without_equals_arrives_as_an_empty_value[q]
+> apps/assets/tests/test_filters.py::test_a_text_that_is_empty_after_trimming_is_empty[tab-and-newline]
+> apps/assets/tests/test_filters.py::test_a_text_that_is_empty_after_trimming_is_empty[no-break-and-ideographic-space]
+> apps/assets/tests/test_filters.py::test_a_text_that_is_empty_after_trimming_is_empty[100-spaces]
+> apps/assets/tests/test_filters.py::test_a_text_of_up_to_64_characters_is_accepted[64]
+> apps/assets/tests/test_filters.py::test_a_text_of_up_to_64_characters_is_accepted[64-surrounded-by-no-break-and-ideographic-spaces]
+> apps/assets/tests/test_filters.py::test_a_text_of_up_to_64_characters_is_accepted[65-in-nfd-that-are-64-in-nfc]
+> apps/assets/tests/test_filters.py::test_a_text_of_more_than_64_characters_is_too_long[65]
+> apps/assets/tests/test_filters.py::test_a_text_of_more_than_64_characters_is_too_long[65-with-a-control-character]
+> apps/assets/tests/test_filters.py::test_a_control_character_inside_the_text_is_rejected[tab]
+> apps/assets/tests/test_filters.py::test_a_control_character_inside_the_text_is_rejected[delete]
+> apps/assets/tests/test_filters.py::test_a_control_character_inside_the_text_is_rejected[c1-control]
+> apps/assets/tests/test_filters.py::test_control_characters_at_the_ends_are_trimmed_and_not_rejected[line-break-at-the-end]
+> apps/assets/tests/test_filters.py::test_format_and_combining_characters_are_accepted_and_kept[zero-width-space]
+> apps/assets/tests/test_filters.py::test_format_and_combining_characters_are_accepted_and_kept[combining-acute]
+> apps/assets/tests/test_filters.py::test_a_category_with_a_wrong_format_is_rejected[double-hyphen]
+> apps/assets/tests/test_filters.py::test_a_category_with_a_wrong_format_is_rejected[trailing-newline]
+> apps/assets/tests/test_filters.py::test_a_category_with_a_wrong_format_is_rejected[uppercase]
+> apps/assets/tests/test_filters.py::test_a_category_with_a_wrong_format_is_rejected[leading-space]
+> apps/assets/tests/test_filters.py::test_a_category_with_a_wrong_format_is_rejected[arabic-indic-digit]
+> apps/assets/tests/test_filters.py::test_a_category_of_more_than_50_characters_is_too_long[51-valid-format]
+> apps/assets/tests/test_filters.py::test_a_category_of_more_than_50_characters_is_too_long[51-wrong-format]
+> apps/assets/tests/test_filters.py::test_the_category_pattern_is_the_one_of_the_category_model
+> apps/assets/tests/test_filters.py::test_both_filters_failing_return_both_codes_in_order
+> apps/assets/tests/test_filters.py::test_only_the_failing_filter_is_reported[category-bad-text-ok]
+> apps/assets/tests/test_filters.py::test_every_filter_code_returned_belongs_to_the_filter_codes
+> apps/assets/tests/test_filters.py::test_zone_and_filter_errors_are_returned_together[south-and-empty-text]
+> apps/assets/tests/test_filters.py::test_zone_and_filter_errors_are_returned_together[valid-zone-and-empty-text]
+> apps/assets/tests/test_filters.py::test_an_inverted_zone_with_an_invalid_filter_reports_only_the_filter
+> apps/assets/tests/test_filters.py::test_once_the_filters_are_valid_the_zone_error_is_reported[inverted-with-valid-filters]
+> apps/assets/tests/test_filters.py::test_the_query_carries_the_zone_and_its_filters[without-filters]
+> apps/assets/tests/test_filters.py::test_the_query_carries_the_zone_and_its_filters[with-filters]
+> apps/assets/tests/test_filters.py::test_filters_module_stays_pure_without_django_drf_or_other_apps
+1123c1169
+< 1121 tests collected in 0.75s
+---
+> 1167 tests collected in 0.81s
+```
+  Son exactamente 46 ids añadidos, todos de `apps/assets/tests/test_filters.py::`, y ninguno eliminado ni renombrado (la única línea que cambia es la del resumen). La colección se repitió tras la corrección de la tanda y es idéntica (`1167 tests collected in 0.75s`).
+- Ficheros nuevos: en NFC y sin caracteres de formato, combinantes ni de control literales; el Unicode especial de los tests va con `chr()`.
+- Tanda previa al commit. La primera falló por un aviso de ruff en mi test y se repitió entera tras corregirlo.
+  - Primera tanda (solo backend), con `test_filters.py` todavía con `assert NO_FILTERS == Filters(...)`:
+    - `docker compose exec backend pytest -q`: `1 failed, 2655 passed, 2 skipped in 44.64s`. El test rojo era `config/tests/test_tooling.py::test_ruff_accepts_the_backend_code`, consecuencia del aviso de ruff.
+    - `docker compose exec backend sh -c "ruff check . && ruff format --check ."`: `Found 1 error.` y «[*] 1 fixable with the --fix option.» El aviso era SIM300 (condición «Yoda») en `backend/apps/assets/tests/test_filters.py@502a50d:61`.
+    - `pytest -q config/tests/test_migrations.py`: `1 passed in 0.90s`. Desfase de `openapi.json`: sin diferencias, código 0. `manage.py check`: `System check identified no issues (0 silenced).`
+  - Corrección: se invierte el orden de esa aserción (`assert Filters(category_slug=None, title_fragment=None) == NO_FILTERS`). Solo cambia un test, así que la tanda se repitió entera.
+  - Repetición entera, con la línea de resumen literal de cada orden:
+    - `docker compose exec backend pytest -q`: `2656 passed, 2 skipped in 43.74s` (los dos saltados son los de medición).
+    - `docker compose exec backend sh -c "ruff check . && ruff format --check ."`: `All checks passed!` y `158 files already formatted`.
+    - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 0.89s`.
+    - Desfase de `openapi.json` (`spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json`): sin diferencias, código de salida 0.
+    - `manage.py check`: `System check identified no issues (0 silenced).`
+    - `npx vitest run`: `Test Files  36 passed (36)` y `Tests  1324 passed (1324)`.
+    - `npm run build`: `✓ built in 690ms`.
+    - `npm run api:check`: `✨ openapi-typescript 7.13.0`, código de salida 0.
+    - eslint no aplica: esta tarea no toca `frontend/`.
+- Tercer uso: `make_params` y `VALENCIA` aparecen solo en `test_zone.py` y `test_filters.py` (`git grep -n -E "def make_params|^VALENCIA = " -- backend`), así que todavía no se extraen.
+
+### Desviaciones del plan en T3
+1. Los tests de B7 se recortaron a un id por fallo distinto: 46 ids en 23 funciones, anclados en `backend/apps/assets/tests/test_filters.py@502a50d:59-329`. Quedaron fuera, cada uno con su motivo:
+   - `test_filters_are_immutable_because_no_filters_is_shared`: sin test. Si `Filters` dejase de ser `frozen`, ningún test fallaría (`backend/apps/assets/filters.py@502a50d:26-27` y `32-33`).
+   - `64-emoji`: sin test. Medir la longitud en bytes en lugar de en puntos de código no lo detecta ningún otro id.
+   - `text-keeps-the-enye` y `nfd-enye`: la distinción de la ñ ya la fija `test_folding.py` de T2, y `nfd-enye` repite el fallo de `accent` (no pasar a NFC antes de plegar).
+   - `right-to-left-override`: mismo fallo que `zero-width-space` (rechazar o descartar un carácter de formato).
+   - Variantes con el mismo fallo que otro id conservado: `only-the-zone-parameters`, `category-same-value-twice`, `text-two-values`, la variante `category` de «parámetro sin `=`», `spaces`, `no-break-space`, `ideographic-space`, `64-surrounded-by-spaces`, `nul`, `newline`, `tab-and-carriage-return-around`, `category-ok-text-bad`, `all-bounds-and-both-filters`, `too-large-with-wrong-category`, `inverted-without-filters` y `too-large-with-valid-filters`.
+   - `leading-hyphen`, `trailing-hyphen`, `underscore`, `trailing-space` y `accented-letter`: el patrón de categoría queda fijado por `test_the_category_pattern_is_the_one_of_the_category_model` (`backend/apps/assets/tests/test_filters.py@502a50d:226`).
+   - `never_carry_the_received_value`: se sustituye por `test_every_filter_code_returned_belongs_to_the_filter_codes` (`backend/apps/assets/tests/test_filters.py@502a50d:247`), que exige que los códigos devueltos sean exactamente los cinco del conjunto cerrado.
+   - `invalid_filter_with_a_valid_zone`: lo absorbe `valid-zone-and-empty-text` de `test_zone_and_filter_errors_are_returned_together` (`backend/apps/assets/tests/test_filters.py@502a50d:275`).
+2. No hay test de `re.match` frente a `fullmatch`. Con el patrón anclado con `\A` y `\Z`, las dos funciones dan el mismo resultado, así que no hay fallo que nombrar. Lo único que cambiaría el resultado es sustituir `\Z` por `$`, y lo detecta `trailing-newline` (`backend/apps/assets/tests/test_filters.py@502a50d:205`) sobre el patrón de `backend/apps/assets/filters.py@502a50d:23` y su uso en `backend/apps/assets/filters.py@502a50d:57`.
+3. Test de pureza añadido, que no estaba en B7: `test_filters_module_stays_pure_without_django_drf_or_other_apps` (`backend/apps/assets/tests/test_filters.py@502a50d:315-329`). Impide importar Django, DRF u otra app salvo `apps.assets.folding` y `apps.assets.zone`; la tentación era `apps.core.text`, que importa Django. Por eso `filters.py` lleva su propia comprobación de caracteres de control (`_has_control_character` en `backend/apps/assets/filters.py@502a50d:46-47`).
+4. `PublicQuery` se define en `filters.py`: el plan la nombra en `plan.md:153` pero no la define. Es un `dataclass(frozen=True, slots=True)` con `zone` y `filters` (`backend/apps/assets/filters.py@502a50d:32-35`).
+5. Un valor `[]` cuenta como parámetro ausente, y no como error (`backend/apps/assets/filters.py@502a50d:79-88`). Un `QueryDict` nunca lo produce, y la comprobación del plan solo cubría `None`.
