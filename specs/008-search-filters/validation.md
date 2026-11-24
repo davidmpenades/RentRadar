@@ -241,3 +241,198 @@ config/tests/test_migrations.py::test_models_have_no_pending_migrations
 3. Test de pureza añadido, que no estaba en B7: `test_filters_module_stays_pure_without_django_drf_or_other_apps` (`backend/apps/assets/tests/test_filters.py@502a50d:315-329`). Impide importar Django, DRF u otra app salvo `apps.assets.folding` y `apps.assets.zone`; la tentación era `apps.core.text`, que importa Django. Por eso `filters.py` lleva su propia comprobación de caracteres de control (`_has_control_character` en `backend/apps/assets/filters.py@502a50d:46-47`).
 4. `PublicQuery` se define en `filters.py`: el plan la nombra en `plan.md:153` pero no la define. Es un `dataclass(frozen=True, slots=True)` con `zone` y `filters` (`backend/apps/assets/filters.py@502a50d:32-35`).
 5. Un valor `[]` cuenta como parámetro ausente, y no como error (`backend/apps/assets/filters.py@502a50d:79-88`). Un `QueryDict` nunca lo produce, y la comprobación del plan solo cubría `None`.
+
+## T4 — comprobaciones
+- Commit de código: `d13fbad548b909d7ab5531e770ee434314ef46aa` `feat(assets): filter public assets by category and title`. Dos ficheros: `backend/apps/assets/selectors.py` y `backend/apps/assets/tests/test_selectors.py`. El diff completo (`git diff d13fbad~1 d13fbad`) tiene el sha256 `41651a0ba39574e28c5d92f687bc854d8a3d5476f0d949ba26bfecf2dac1bf70`, el mismo que el diff revisado antes del commit.
+- Cambio del selector (`backend/apps/assets/selectors.py@d13fbad:24-45`): `visible_assets_in_zone(*, zone, limit, filters=NO_FILTERS)`. Los dos `.filter` nuevos (`category__slug` y `title_folded__contains`) van tras el filtro de la zona y antes de `order_by` y del tope (líneas 41-44), en la misma consulta. Sin `regex`, `icontains`, `extra` ni SQL a mano.
+- Prueba en rojo, antes de tocar el selector: `pytest -q apps/assets/tests/test_selectors.py` dio `29 failed, 51 passed in 2.45s`, y los 29 fallos eran `TypeError: visible_assets_in_zone() got an unexpected keyword argument 'filters'`. Con el selector escrito: `80 passed in 2.35s`.
+- Colección de `apps/assets/tests` (`pytest --collect-only -q`): de 1167 a 1196 tests. Diff literal, antes contra después:
+```
+324a325,353
+> apps/assets/tests/test_selectors.py::test_a_paused_asset_is_not_returned_with_a_matching_filter
+> apps/assets/tests/test_selectors.py::test_an_asset_of_a_deactivated_account_is_not_returned_with_a_matching_filter
+> apps/assets/tests/test_selectors.py::test_a_text_and_category_match_outside_the_zone_is_not_returned
+> apps/assets/tests/test_selectors.py::test_the_category_filter_returns_only_that_category
+> apps/assets/tests/test_selectors.py::test_category_and_text_return_only_the_assets_that_meet_both
+> apps/assets/tests/test_selectors.py::test_a_well_formed_unknown_category_returns_nothing_and_is_complete
+> apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[percent]
+> apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[underscore]
+> apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[backslash]
+> apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[dot-star]
+> apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[quote]
+> apps/assets/tests/test_selectors.py::test_the_text_is_searched_only_in_the_title[description]
+> apps/assets/tests/test_selectors.py::test_the_text_is_searched_only_in_the_title[owner-email]
+> apps/assets/tests/test_selectors.py::test_the_text_is_searched_only_in_the_title[coordinate]
+> apps/assets/tests/test_selectors.py::test_the_text_is_searched_only_in_the_title[category-name]
+> apps/assets/tests/test_selectors.py::test_a_text_of_only_combining_characters_does_not_return_every_asset
+> apps/assets/tests/test_selectors.py::test_the_text_ignores_case_and_accents_but_not_the_enye[esqui-finds-accented-title]
+> apps/assets/tests/test_selectors.py::test_the_text_ignores_case_and_accents_but_not_the_enye[upper-accented-text-finds-plain-title]
+> apps/assets/tests/test_selectors.py::test_the_text_ignores_case_and_accents_but_not_the_enye[upper-bici-finds-lowercase-title]
+> apps/assets/tests/test_selectors.py::test_the_text_ignores_case_and_accents_but_not_the_enye[start-middle-and-end]
+> apps/assets/tests/test_selectors.py::test_the_text_ignores_case_and_accents_but_not_the_enye[ano-does-not-find-enye]
+> apps/assets/tests/test_selectors.py::test_the_text_ignores_case_and_accents_but_not_the_enye[upper-enye-finds-enye]
+> apps/assets/tests/test_selectors.py::test_the_limit_applies_after_the_filter[more-than-the-limit-match]
+> apps/assets/tests/test_selectors.py::test_the_limit_applies_after_the_filter[few-match-among-many]
+> apps/assets/tests/test_selectors.py::test_a_row_has_exactly_the_whitelisted_keys_with_filters
+> apps/assets/tests/test_selectors.py::test_the_selector_runs_exactly_one_query_with_filters
+> apps/assets/tests/test_selectors.py::test_the_exact_location_appears_nowhere_in_the_query_with_filters
+> apps/assets/tests/test_selectors.py::test_the_select_clause_has_no_user_or_owner_columns_with_filters
+> apps/assets/tests/test_selectors.py::test_the_select_clause_has_no_columns_outside_the_whitelist_with_filters
+1169c1198
+< 1167 tests collected in 0.77s
+---
+> 1196 tests collected in 0.77s
+```
+  Son exactamente 29 ids añadidos, todos de `apps/assets/tests/test_selectors.py::`, y ninguno eliminado ni renombrado. La colección se repitió tras el cambio de nombres de tres tests y es la que figura arriba.
+- Tanda previa al commit. Se ejecutó dos veces: la segunda, entera, porque cambiaron tres nombres de test y se quitaron dos `# noqa: E501` de nombres demasiado largos. La segunda, con la línea de resumen literal de cada orden:
+  - `docker compose exec backend pytest -q`: `2685 passed, 2 skipped in 45.67s` (los dos saltados son los de medición; incluye `test_architecture`).
+  - `docker compose exec backend sh -c "ruff check . && ruff format --check ."`: `All checks passed!` y `158 files already formatted`.
+  - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 0.89s`.
+  - Desfase de `openapi.json` (`spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json`): sin diferencias, código de salida 0.
+  - `manage.py check`: `System check identified no issues (0 silenced).`
+  - `npx vitest run`: `Test Files  36 passed (36)` y `Tests  1324 passed (1324)`.
+  - `npm run build`: `✓ built in 738ms`.
+  - `npm run api:check`: `✨ openapi-typescript 7.13.0`, código de salida 0.
+  - eslint no aplica: esta tarea no toca `frontend/`.
+  - La primera tanda dio las mismas líneas, salvo `2685 passed, 2 skipped in 45.30s`, `1 passed in 0.91s` y `✓ built in 757ms`.
+- `git grep -n "noqa" -- backend/apps` no encuentra nada.
+
+### SQL capturado con categoría `ski` y texto «esqui»
+Literal, de la consulta del selector con los dos filtros sobre una zona de Madrid:
+```
+SELECT "assets_asset"."public_id" AS "public_id", "assets_asset"."title" AS "title", "categories_category"."slug" AS "category__slug", "categories_category"."name" AS "category__name", "assets_asset"."price" AS "price", "assets_asset"."currency" AS "currency", "assets_asset"."price_unit" AS "price_unit", "assets_asset"."privacy_radius" AS "privacy_radius", ST_Y(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) AS "latitude", ST_X(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) AS "longitude" FROM "assets_asset" INNER JOIN "users_user" ON ("assets_asset"."owner_id" = "users_user"."id") INNER JOIN "categories_category" ON ("assets_asset"."category_id" = "categories_category"."id") WHERE ("users_user"."is_active" AND "assets_asset"."status" = 'active' AND ST_Y(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) BETWEEN 40.3 AND 40.5 AND ST_X(("assets_asset"."public_location")::geometry(GEOMETRY,4326)) BETWEEN  -3.8 AND  -3.6 AND "categories_category"."slug" = 'ski' AND "assets_asset"."title_folded"::text LIKE '%esqui%') ORDER BY "assets_asset"."created_at" DESC, "assets_asset"."id" DESC LIMIT 201
+```
+- Hay dos `INNER JOIN`: `users_user` (por `is_active`) y `categories_category`, que ya existía por `category__slug` y `category__name`.
+- Los dos filtros van en el mismo `WHERE`, tras la zona: `"categories_category"."slug" = 'ski'` y `"assets_asset"."title_folded"::text LIKE '%esqui%'`. Después van `ORDER BY` y `LIMIT 201`.
+- `title_folded` no está en el `SELECT` y `exact_location` no aparece en ningún sitio.
+- Cómo se obtuvo: se añadió un `print` temporal a `test_the_exact_location_appears_nowhere_in_the_query_with_filters`, se ejecutó ese test con `-s` y se restauró el fichero. El sha256 de `test_selectors.py` fue el mismo antes y después del `print`: `ebc0b3e1b5ce94be06250c6992628daff04e1f58fdda6697fa84d37abc84905d` (versión anterior al cambio de nombres).
+
+### Pruebas de mecanismo (M1a, M1b, M2 y M3)
+- Procedimiento, como M4 en T2: una mutación por ejecución sobre `selectors.py` con la suite completa y `-rfE`, con la copia del fichero fuera del repo, sin `sed -i`, con sha256 antes y después y restauración en `finally`. Stack en marcha (backend y db, `healthy`) y portátil enchufado antes de cada una.
+- Antes de ejecutar ninguna, se escribieron el texto literal de cada mutación y los ids esperados de cada una (ordenados con `LC_ALL=C`), y se sellaron las cuatro predicciones con sha256. No se modificaron después.
+- Comprobación previa de ruff por stdin sobre cada fichero mutado (`ruff check` y `ruff format --check`): código 0 y sin diferencias en las cuatro (sin I001 ni F401 con el `Q` de M2), así que `test_ruff_accepts_the_backend_code` no entra en ninguna predicción.
+- Qué más usa el selector, buscado en toda la suite: `test_selectors.py`, `test_public_list_api.py` (el endpoint llama al selector), `test_demo_command.py` (`test_the_public_selector_returns_the_24_active_assets_and_not_the_paused_one`) y `test_list_query_plan.py` (saltado sin `--run-measurement`). `test_public_list_session.py` crea bienes activos y `test_architecture.py` solo prohíbe métodos de escritura (`extra` no lo es).
+- Base de la suite sin mutar: `2685 passed, 2 skipped`.
+
+#### M1a — quitar `status="active"`
+Sustitución en `backend/apps/assets/selectors.py@d13fbad:30`:
+```
+        Asset.objects.filter(status="active", owner__is_active=True)
+```
+pasa a
+```
+        Asset.objects.filter(owner__is_active=True)
+```
+- Predicción sellada: `7 failed, 2678 passed, 2 skipped`.
+- Resultado, línea de resumen literal: `7 failed, 2678 passed, 2 skipped in 46.68s`.
+- Ids fallidos (orden `LC_ALL=C`), idénticos a los predichos:
+```
+apps/assets/tests/test_demo_command.py::test_the_public_selector_returns_the_24_active_assets_and_not_the_paused_one
+apps/assets/tests/test_public_list_api.py::test_a_paused_asset_never_appears_not_even_for_its_owner_with_a_session
+apps/assets/tests/test_public_list_api.py::test_every_kind_of_visitor_receives_the_same_body_without_hidden_assets[anonymous]
+apps/assets/tests/test_public_list_api.py::test_every_kind_of_visitor_receives_the_same_body_without_hidden_assets[owner]
+apps/assets/tests/test_public_list_api.py::test_every_kind_of_visitor_receives_the_same_body_without_hidden_assets[staff]
+apps/assets/tests/test_selectors.py::test_a_paused_asset_is_not_returned_even_if_its_owner_is_active
+apps/assets/tests/test_selectors.py::test_a_paused_asset_is_not_returned_with_a_matching_filter
+```
+- Mensaje de la demostración: `assert 25 == 24` (el pausado entra en la lista).
+- ERROR: 0 líneas `^ERROR ` y ninguna aparición de «error» en la línea de resumen.
+
+#### M1b — quitar `owner__is_active=True`
+Sustitución en `backend/apps/assets/selectors.py@d13fbad:30`:
+```
+        Asset.objects.filter(status="active", owner__is_active=True)
+```
+pasa a
+```
+        Asset.objects.filter(status="active")
+```
+- Predicción sellada: `7 failed, 2678 passed, 2 skipped`.
+- Resultado: `7 failed, 2678 passed, 2 skipped in 46.65s`.
+- Ids fallidos, idénticos a los predichos (`test_the_where_clause_filters_by_the_public_location_in_both_axes` lo ve porque exige `is_active` en el `WHERE`):
+```
+apps/assets/tests/test_public_list_api.py::test_an_active_asset_of_a_deactivated_account_is_hidden
+apps/assets/tests/test_public_list_api.py::test_every_kind_of_visitor_receives_the_same_body_without_hidden_assets[anonymous]
+apps/assets/tests/test_public_list_api.py::test_every_kind_of_visitor_receives_the_same_body_without_hidden_assets[owner]
+apps/assets/tests/test_public_list_api.py::test_every_kind_of_visitor_receives_the_same_body_without_hidden_assets[staff]
+apps/assets/tests/test_selectors.py::test_an_active_asset_of_an_owner_with_a_deactivated_account_is_not_returned
+apps/assets/tests/test_selectors.py::test_an_asset_of_a_deactivated_account_is_not_returned_with_a_matching_filter
+apps/assets/tests/test_selectors.py::test_the_where_clause_filters_by_the_public_location_in_both_axes
+```
+- ERROR: 0 líneas `^ERROR ` y ninguna aparición de «error» en la línea de resumen.
+
+#### M2 — el filtro de texto busca también en `description`
+Dos sustituciones. En `backend/apps/assets/selectors.py@d13fbad:2`:
+```
+from django.db.models import FloatField, Func
+```
+pasa a
+```
+from django.db.models import FloatField, Func, Q
+```
+Y en `backend/apps/assets/selectors.py@d13fbad:44`:
+```
+        queryset = queryset.filter(title_folded__contains=filters.title_fragment)
+```
+pasa a
+```
+        queryset = queryset.filter(
+            Q(title_folded__contains=filters.title_fragment)
+            | Q(description__contains=filters.title_fragment)
+        )
+```
+- Predicción sellada: `1 failed, 2684 passed, 2 skipped`.
+- Resultado: `1 failed, 2684 passed, 2 skipped in 46.01s`.
+- Id fallido, idéntico al predicho:
+```
+apps/assets/tests/test_selectors.py::test_the_text_is_searched_only_in_the_title[description]
+```
+- Mensaje: `assert ([{'public_id... ...}], False) == ([], False)` (el bien se encuentra por su descripción).
+- Por qué solo falla uno: la descripción por defecto de `make_asset` («Taladro de percusion en buen estado») no contiene ningún fragmento de los demás tests de texto, y solo `[description]` crea una descripción propia.
+- ERROR: 0 líneas `^ERROR ` y ninguna aparición de «error» en la línea de resumen.
+
+#### M3 — LIKE sin escapar con `.extra`
+Sustitución en `backend/apps/assets/selectors.py@d13fbad:44`:
+```
+        queryset = queryset.filter(title_folded__contains=filters.title_fragment)
+```
+pasa a
+```
+        queryset = queryset.extra(
+            where=["title_folded LIKE %s"], params=[f"%{filters.title_fragment}%"]
+        )
+```
+(la forma de `tasks.md`, con `filters.title_fragment` en lugar de `fragment`, que es el nombre real en el código).
+- Predicción sellada: `3 failed, 2682 passed, 2 skipped`.
+- Resultado: `3 failed, 2682 passed, 2 skipped in 44.45s`.
+- Ids fallidos, idénticos a los predichos:
+```
+apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[backslash]
+apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[percent]
+apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_are_literal[underscore]
+```
+- `[dot-star]` y `[quote]` siguen en verde por diseño: en un `LIKE`, `.*` es un texto literal, y la comilla viaja como parámetro ligado. Esos dos casos protegen contra otras mutaciones (expresión regular y SQL concatenado), que no son esta.
+- Mensajes: `[percent]` y `[underscore]` devuelven un bien de más (el señuelo), y `[backslash]` devuelve el señuelo en lugar del título literal.
+- ERROR: 0 líneas `^ERROR ` y ninguna aparición de «error» en la línea de resumen.
+
+#### Restauración de las cuatro
+- sha256 de `selectors.py` antes de cada mutación, con la mutación puesta y tras restaurar:
+  - M1a, mutado `1d36d5e15ee1b9e0c125be6c4db47b8f706e3c32bb2d24677bc25d3bb8e754eb`.
+  - M1b, mutado `046f558afa21f54f55ba2e87463ae3e33d674b9fa1ea2d1d144ef712ef355362`.
+  - M2, mutado `3460aa279bb3423482ff50ceefd0acaa5b2f18871e15c431f845585f80987d9a`.
+  - M3, mutado `7fa678b34ea1b3789e45381b0deca3a830da9d4c6a1725d98fa7db454ad701a6`.
+  - Antes y después de cada una: `a56e6c9ae4cd3c582d370f4046777d268afc39f13846f005fc7791b658bf0a0a`.
+- Ese valor coincide con `git show d13fbad:backend/apps/assets/selectors.py | sha256sum`, y `git status --short` salió vacío tras cada ejecución.
+- Veredicto: M1a, M1b, M2 y M3 ponen en rojo exactamente los tests previstos; ninguna sobrevive.
+
+### Desviaciones del plan en T4
+1. 29 ids en lugar de los 45 de `tasks.md`, anclados en `backend/apps/assets/tests/test_selectors.py@d13fbad:532-834`: un id por fallo distinto, y se renombraron tres tests: dos para que quepan en 88 columnas sin `noqa` y el del pausado por simetría con el de la cuenta desactivada. Qué se quitó, con su motivo:
+   - Pausado y cuenta desactivada con `[category|text|both]` (6 ids) pasan a un id cada uno, con los dos filtros a la vez (`test_a_paused_asset_is_not_returned_with_a_matching_filter`, línea 601, y `test_an_asset_of_a_deactivated_account_is_not_returned_with_a_matching_filter`, línea 612): comparten el queryset base y, con los dos filtros, se ejecutan las dos ramas.
+   - Coincidencia fuera de la zona `[text|both]` (2) pasa a uno (línea 624), por el mismo motivo.
+   - `[zero-width-space|right-to-left-override|combining-acute]` (3) pasa a `test_a_text_of_only_combining_characters_does_not_return_every_asset` (línea 712): el fallo realista es quitar las marcas y dejar `%%`; que el parseo no rechace ni descarte los caracteres de formato lo fija `test_filters.py` de T3.
+   - En la comparación de texto (8 ids) quedan 6 (línea 764): `start`, `middle` y `end` pasan a un solo id con tres bienes (`start-middle-and-end`); `nfd` se quita porque lo cubre `a_text_in_nfd_is_normalised_before_folding[accent]` de T3; la ñ pasa de un id a dos, `ano-does-not-find-enye` y `upper-enye-finds-enye`, porque son dos fallos distintos de la tabla; y `esqui`, `bici` y `upper-esqui` pasan a `esqui-finds-accented-title`, `upper-bici-finds-lowercase-title` y `upper-accented-text-finds-plain-title`.
+   - Las cuatro familias de fugas con `[category|text|both]` (12 ids) pasan a un id cada una con los dos filtros (líneas 802, 813, 819 y 828), y se añade `test_the_selector_runs_exactly_one_query_with_filters` (línea 809), que no estaba en la lista: el fallo es resolver la categoría o el texto en una segunda consulta.
+   - `test_the_limit_applies_after_the_filter` conserva dos ids pero con otros nombres (`more-than-the-limit-match` y `few-match-among-many`, línea 780) y otro montaje: los bienes que no cumplen son más recientes que los que cumplen, porque con `201-match` y `5-of-201-match` un filtro aplicado después del tope daba el mismo resultado.
+   - `test_the_text_is_not_searched_in_the_description_the_owner_the_coordinates_or_the_category_name` pasa a `test_the_text_is_searched_only_in_the_title` (línea 696), con los mismos cuatro ids; con el nombre original, la línea del `def` medía 100 columnas. Los tests de texto construyen el filtro con `parse_filters`, no con `Filters` a mano, para que el plegado del texto y el de la columna se prueben juntos.
+2. `title_folded` no lo cubría el test existente: `plan.md:333` decía que `test_the_select_clause_has_no_columns_outside_the_whitelist` lo cubría, pero ese test solo recorre seis columnas (`id`, `description`, `status`, `created_at`, `updated_at` y `category_id`; `backend/apps/assets/tests/test_selectors.py@d13fbad:503-517`). Lo cubre el test nuevo `test_the_select_clause_has_no_columns_outside_the_whitelist_with_filters` (`backend/apps/assets/tests/test_selectors.py@d13fbad:828-834`), cuya lista de columnas (`backend/apps/assets/tests/test_selectors.py@d13fbad:537-545`) empieza por `title_folded`. El test existente no se tocó.
+3. M1 se parte en M1a (quitar `status="active"`) y M1b (quitar `owner__is_active=True`), porque `tasks.md` dice «`status` u `owner`» y son dos condiciones distintas de la misma consulta, cada una con tests distintos que la ven. Las dos mutaciones tocan la misma línea (`backend/apps/assets/selectors.py@d13fbad:30`), pero una por ejecución y con su propia predicción sellada.
