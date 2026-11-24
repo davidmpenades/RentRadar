@@ -39,7 +39,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
 
 ---
 
-- [ ] **T1. Medición inicial del plan de la consulta.** RNF Rendimiento
+- [x] **T1. Medición inicial del plan de la consulta.** RNF Rendimiento
   - Qué:
     - backend/conftest.py (opción `--run-measurement`);
     - apps/assets/tests/test_list_query_plan.py (sondeo del entorno, 50 000 filas sintéticas, consultas en Z1 y Z2, `EXPLAIN (ANALYZE, BUFFERS)`);
