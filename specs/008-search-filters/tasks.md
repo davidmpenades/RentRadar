@@ -57,7 +57,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T1 done`
   - Hecho cuando: pytest y ruff en verde, el diff de la colección es el previsto y la medición «antes» (sondeo, volumen y las consultas de Z1 y Z2) está en validation.md.
 
-- [ ] **T2. Título plegado como columna generada.** RF-2
+- [x] **T2. Título plegado como columna generada.** RF-2
   - Qué:
     - apps/assets/folding.py;
     - apps/assets/models.py (`title_folded`);
