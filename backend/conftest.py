@@ -15,6 +15,30 @@ def ensure_isolated_test_database(test_name: str, development_name: str) -> None
         )
 
 
+def pytest_addoption(parser):
+    parser.addoption(
+        "--run-measurement",
+        action="store_true",
+        default=False,
+        help="Ejecuta también los tests marcados como measurement.",
+    )
+
+
+def pytest_configure(config):
+    config.addinivalue_line(
+        "markers", "measurement: medición lenta, solo con --run-measurement"
+    )
+
+
+def pytest_collection_modifyitems(config, items):
+    if config.getoption("run_measurement"):
+        return
+    skip = pytest.mark.skip(reason="Medición: se ejecuta solo con --run-measurement")
+    for item in items:
+        if item.get_closest_marker("measurement"):
+            item.add_marker(skip)
+
+
 def pytest_sessionstart(session):
     database = settings.DATABASES["default"]
     development_name = read_optional(None, "DB_NAME")
