@@ -215,7 +215,12 @@ def test_a_title_change_keeps_the_rest_of_an_active_asset(creation_arguments):
 
     modify(asset, title="Martillo")
 
-    assert row_of(asset) == {**before, "title": "Martillo", "updated_at": LATER}
+    assert row_of(asset) == {
+        **before,
+        "title": "Martillo",
+        "title_folded": "martillo",
+        "updated_at": LATER,
+    }
     assert (before["privacy_radius"], before["status"]) == (2000, "active")
 
 
