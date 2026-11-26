@@ -18,12 +18,21 @@
     opacity: 0.7;
   }
 
+  .field::placeholder {
+    color: var(--color-muted);
+  }
+
   /* Edge pinta su propio botón de ver contraseña: solo se ve el ojo de RentRadar */
   .field::-ms-reveal {
     display: none;
   }
 
   .field::-ms-clear {
+    display: none;
+  }
+
+  /* El campo de búsqueda lleva su propio botón de borrar: la cruz de Chrome y Safari lo duplicaría */
+  .field::-webkit-search-cancel-button {
     display: none;
   }
 

@@ -102,6 +102,13 @@ export const es = {
     "sports-area": "Zona deportiva",
     van: "Furgoneta",
   },
+  search: {
+    label: "Buscar por título",
+    placeholder: "Buscar…",
+    clearText: "Borrar texto",
+    clearAll: "Quitar filtros",
+    categories: "Categorías",
+  },
   map: {
     styleError: "No se ha podido cargar el mapa.",
     retry: "Reintentar",

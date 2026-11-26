@@ -89,4 +89,78 @@
       opacity: 1;
     }
   }
+
+  /* Mismo borde en los dos estados y la marca dentro del relleno: al activarse, el chip no cambia de tamaño ni mueve a los demás */
+  .chip {
+    position: relative;
+    display: inline-flex;
+    flex-shrink: 0;
+    align-items: center;
+    justify-content: center;
+    min-width: 2.75rem;
+    min-height: 2.75rem;
+    padding-inline: 1.375rem;
+    border: 2px solid var(--color-muted);
+    border-radius: 9999px;
+    background-color: #fff;
+    color: var(--color-ink);
+    font-size: 1rem;
+    font-weight: 600;
+    white-space: nowrap;
+    cursor: pointer;
+    touch-action: manipulation;
+  }
+
+  .chip[aria-pressed="true"] {
+    border-color: var(--color-accent-deep);
+    background-color: var(--color-accent);
+    box-shadow: inset 0 0 0 1px var(--color-accent-deep);
+    color: #fff;
+  }
+
+  /* El anillo por fuera tocaba el buscador y lo recortaba el desplazamiento del grupo; el !important es porque la regla global de foco no va en capa y ganaría sin él (como en AppShell.tsx) */
+  .chip:focus-visible {
+    outline-offset: -5px !important;
+  }
+
+  .chip[aria-pressed="true"]:focus-visible {
+    outline-color: #fff !important;
+  }
+
+  .chip > svg {
+    position: absolute;
+    inset-inline-start: 0.25rem;
+    top: 50%;
+    width: 0.875rem;
+    height: 0.875rem;
+    transform: translateY(-50%);
+  }
+
+  @media (hover: hover) {
+    .chip:not([aria-pressed="true"]):hover {
+      background-color: var(--color-sky-button-hover);
+    }
+
+    .chip[aria-pressed="true"]:hover {
+      background-color: var(--color-accent-deep);
+    }
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    .chip {
+      transition:
+        background-color 0.14s,
+        border-color 0.14s,
+        color 0.14s;
+    }
+  }
+
+  @media (forced-colors: active) {
+    .chip {
+      border: 2px solid ButtonText;
+      color: ButtonText;
+      background-color: ButtonFace;
+      box-shadow: none;
+    }
+  }
 }

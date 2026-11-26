@@ -3,6 +3,7 @@ import { describe, expect, it } from "vitest";
 import { loadAssetsForView, type RequestOutcome } from "../map/loadAssets";
 import { requestBox } from "../map/requestBox";
 import { circleKey } from "../map/circles";
+import { NO_FILTERS } from "../search/filters";
 import { requestCircles, viewState } from "./viewState";
 
 const VISIBLE = { south: 39.4, west: -0.45, north: 39.5, east: -0.3 };
@@ -36,6 +37,7 @@ describe("la zona de las tarjetas y la de los círculos", () => {
     let outcome: RequestOutcome | undefined;
     await loadAssetsForView({
       bounds: VISIBLE,
+      filters: NO_FILTERS,
       request: { signal: new AbortController().signal, isCurrent: () => true },
       fetchAssets: async () => ({ results: [INSIDE, OUTSIDE], incomplete: false }),
       report: (reported) => {

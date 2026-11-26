@@ -160,18 +160,22 @@ frontend/
     ├── login/          # Página de entrada
     │   ├── loginFormState.ts    # Lógica pura: estado del formulario tras cada resultado de la entrada (la contraseña solo se borra con credenciales incorrectas)
     │   └── LoginForm.tsx        # Solo marcado (probado con react-dom/server): email con autocomplete="email" y contraseña no controlada con "current-password"
-    ├── pages/          # MapPage.tsx (mapa y panel), RegisterPage.tsx y LoginPage.tsx (estado, sesión, guarda y foco del formulario)
+    ├── pages/          # MapPage.tsx (mapa, barra de filtros y panel), RegisterPage.tsx y LoginPage.tsx (estado, sesión, guarda y foco del formulario)
     ├── map/            # Mapa MapLibre
     │   ├── MapView.tsx      # Crea y libera el mapa, la capa de círculos y los controles
     │   ├── style.ts         # Validación del estilo y de las URL permitidas, atribución fija
     │   ├── loadStyle.ts     # Descarga del estilo con tiempo máximo
-    │   ├── loadAssets.ts    # Petición de los bienes de la vista
+    │   ├── loadAssets.ts    # Petición de los bienes de la vista, con los filtros vigentes
     │   ├── requestBox.ts    # Caja de petición a partir de los límites visibles
     │   ├── scheduler.ts     # Retardo y cancelación de las peticiones al mover el mapa
     │   ├── viewport.ts      # Vista inicial y su comprobación con tolerancia
     │   ├── circles.ts       # Círculos únicos y su colección GeoJSON
     │   └── geodesy.ts       # Distancias y puntos sobre la esfera
     ├── panel/          # Panel de resultados: ResultsPanel.tsx, AssetCard.tsx, header.ts (textos de cabecera y estado) y categoryImage.ts
+    ├── search/         # Búsqueda por texto y categoría
+    │   ├── filters.ts       # Lógica pura: estado de los filtros, los que se mandan al servidor y su consulta
+    │   ├── categories.ts    # CATEGORY_CHIPS: los chips, en orden de presentación
+    │   └── FilterBar.tsx    # Solo marcado (probado con react-dom/server): campo de búsqueda por título, «Quitar filtros» y chips con aria-pressed
     └── state/          # viewState.ts: estado de la petición y de la vista (cargando, resultados, vacío, acercar el mapa y errores)
 ```
 

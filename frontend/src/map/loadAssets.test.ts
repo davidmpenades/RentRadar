@@ -34,7 +34,7 @@ function setup(options: { fetch?: Fetch } = {}) {
   const fetchAssets = vi.fn(options.fetch ?? (async () => LIST));
   const report = vi.fn();
   const logError = vi.fn();
-  const run = (bounds = VALENCIA, filters?: AppliedFilters) =>
+  const run = (bounds = VALENCIA, filters: AppliedFilters = NO_FILTERS) =>
     loadAssetsForView({
       bounds,
       filters,
