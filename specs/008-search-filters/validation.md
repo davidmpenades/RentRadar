@@ -617,3 +617,163 @@ src/search/filters.test.ts > toggleCategory > sustituye la categoría activa al 
 1. `frontend/src/api/publicAssets.test.ts` gana un `it` nuevo (`frontend/src/api/publicAssets.test.ts@9b491f2:159-163`), contra «`publicAssets.test.ts` no cambia» (`specs/008-search-filters/tasks.md@b618783:194`). Entre los tests de T7 es el único que ve la URL real con filtros: `filters.test.ts` solo prueba `filtersQuery` y el de `loadAssets` usa un fetcher falso.
 2. El inventario de `specs/008-search-filters/tasks.md@b618783:192` está desactualizado. La aserción estaba en `frontend/src/map/loadAssets.test.ts@b618783:55`, no en la línea 58. El rango 152-221 de `publicAssets.test.ts` (también en `specs/008-search-filters/plan.md@b618783:169`) no corresponde a los bloques del fichero: «la petición» empieza en la línea 149 y «tiempo máximo» en la 198 ya antes de T5 (`frontend/src/api/publicAssets.test.ts@860c698:149` y `:198`), y esa segunda empieza ahora en la 210 (`frontend/src/api/publicAssets.test.ts@9b491f2:210`).
 3. F5 queda cubierto solo en parte (`specs/008-search-filters/plan.md@b618783:344-345`). El test de `loadAssets` comprueba que reenvía los filtros que recibe (`frontend/src/map/loadAssets.test.ts@9b491f2:65-77`); que «Reintentar» use los filtros vigentes depende de la ref de `MapPage` (`specs/008-search-filters/plan.md@b618783:171` y `specs/008-search-filters/tasks.md@b618783:205`) y se verifica en el navegador (`specs/008-search-filters/tasks.md@b618783:241`).
+
+## T8 — comprobaciones
+- Commit de código: `58dbfc1e166f2cf6f2e202dd83c45f49e30ec88b` `feat(map): add category chips and search box`. Diez ficheros y 420 inserciones y 18 borrados: `docs/architecture.md`, `frontend/src/i18n/es.ts`, `frontend/src/map/loadAssets.ts`, `frontend/src/map/loadAssets.test.ts`, `frontend/src/pages/MapPage.tsx`, `frontend/src/search/FilterBar.tsx`, `frontend/src/search/FilterBar.test.ts`, `frontend/src/state/zone.test.ts`, `frontend/src/styles/buttons.css` y `frontend/src/styles/fields.css`. El diff completo (`git diff 58dbfc1~1 58dbfc1`) tiene el sha256 `e8a37997feafa5465bd47eaa4780ce9f8f61c746dc59b58de3b871cf51a475ad`, el mismo que el diff de 596 líneas revisado antes del commit.
+- Cambio:
+  - `FilterBar` es un `form role="search"` con la etiqueta «Buscar por título» (`sr-only`), un campo `type="search"` con la lupa decorativa, el botón «Borrar texto» (solo con texto), «Quitar filtros» (solo con algún filtro activo) y un grupo «Categorías» con 12 chips con `aria-pressed` (`frontend/src/search/FilterBar.tsx@58dbfc1:65-99` y `101-123`).
+  - `MapPage` guarda los filtros en estado y en una ref, y la petición lee la ref; la barra va en columna encima del mapa y no se pinta con el estilo fallido (`frontend/src/pages/MapPage.tsx@58dbfc1:29`, `32`, `51`, `93-102` y `105-115`).
+  - `filters` es obligatorio en `loadAssetsForView` (`frontend/src/map/loadAssets.ts@58dbfc1:18` y `40`).
+  - Los textos de la barra, en `es.search` (`frontend/src/i18n/es.ts@58dbfc1:105-111`).
+  - Estilos: `.chip` (`frontend/src/styles/buttons.css@58dbfc1:93-165`) y, en el campo de búsqueda, el color del placeholder y la cruz nativa oculta (`frontend/src/styles/fields.css@58dbfc1:21-23` y `34-37`).
+  - La estructura nueva, en `docs/architecture.md@58dbfc1:163`, `168` y `175-178`.
+- Tests: 17 ids nuevos en `frontend/src/search/FilterBar.test.ts` (marcado con `react-dom/server`, `frontend/src/search/FilterBar.test.ts@58dbfc1:30-141`), los de F6 más el de `spellcheck`. Al ser un módulo nuevo no se comprobó antes el rojo.
+- Tanda previa al commit, con la línea de resumen literal de cada orden (las órdenes, en `specs/008-search-filters/tasks.md@58dbfc1:15`, `17`, `18`, `33`, `34` y `35`):
+  - D1: `backend` y `db`.
+  - D3: `2697 passed, 2 skipped in 54.63s`
+  - D4: `All checks passed!` y `158 files already formatted`
+  - D12: `1 passed in 1.16s`
+  - D13: código de salida 0.
+  - D14: `System check identified no issues (0 silenced).`
+  - `npx vitest run`: `Test Files  39 passed (39)` y `Tests  1366 passed (1366)`.
+  - `npm run build`: `✓ built in 856ms`.
+  - `npx eslint` sobre `FilterBar.tsx`: código de salida 0 (ver desviación 9).
+  - `npm run api:check`: código de salida 0.
+
+### Rojo de tipos
+Al hacer `filters` obligatorio en `loadAssetsForView`, antes de arreglar a los que lo llaman, `npx tsc -b` dio tres errores y ningún otro. Las posiciones son las del árbol de ese momento, no las de `58dbfc1`:
+```
+src/map/loadAssets.test.ts(40,7): error TS2322: Type 'Readonly<{ category?: string | undefined; q?: string | undefined; }> | undefined' is not assignable to type 'Readonly<{ category?: string | undefined; q?: string | undefined; }>'.
+src/pages/MapPage.tsx(34,32): error TS2345: Argument of type '{ bounds: VisibleBounds; request: ScheduledRequest; fetchAssets: (box: RequestBox, signal: AbortSignal, filters?: Readonly<{ category?: string | undefined; q?: string | undefined; }>) => Promise<...>; report: Dispatch<...>; logError: (error: unknown) => void; }' is not assignable to parameter of type 'LoadAssetsOptions'.
+src/state/zone.test.ts(37,29): error TS2345: Argument of type '{ bounds: { south: number; west: number; north: number; east: number; }; request: { signal: AbortSignal; isCurrent: () => true; }; fetchAssets: () => Promise<{ results: { public_id: string; title: string; ... 7 more ...; longitude: -0.375; }[]; incomplete: false; }>; report: (reported: RequestOutcome) => void; logEr...' is not assignable to parameter of type 'LoadAssetsOptions'.
+```
+- El tercer texto se anota como lo imprimió `tsc`: acaba truncado en `logEr...`.
+- El de `MapPage.tsx` es el que se buscaba: `tsc` avisa de que `MapPage` no pasa `filters`.
+
+### Inventario
+- `npx vitest list src/search src/pages src/map src/state src/i18n`: de 178 a 195 líneas. Con `LC_ALL=C sort` son 17 líneas añadidas, todas de `src/search/FilterBar.test.ts`, y ninguna quitada ni renombrada. Los 17 ids:
+```
+src/search/FilterBar.test.ts > FilterBar > agrupa los chips bajo la etiqueta «Categorías»
+src/search/FilterBar.test.ts > FilterBar > asocia al campo su etiqueta «Buscar por título»
+src/search/FilterBar.test.ts > FilterBar > desactiva el autocompletado del campo
+src/search/FilterBar.test.ts > FilterBar > desactiva la corrección ortográfica del campo
+src/search/FilterBar.test.ts > FilterBar > limita el texto del campo a 64 caracteres
+src/search/FilterBar.test.ts > FilterBar > marca el formulario como búsqueda
+src/search/FilterBar.test.ts > FilterBar > muestra en el campo el texto del estado
+src/search/FilterBar.test.ts > FilterBar > no ofrece «Borrar texto» con el campo vacío
+src/search/FilterBar.test.ts > FilterBar > no ofrece «Quitar filtros» sin filtro activo (%s)
+src/search/FilterBar.test.ts > FilterBar > no pone name a ningún control ni action al formulario
+src/search/FilterBar.test.ts > FilterBar > ofrece «Borrar texto» con texto escrito
+src/search/FilterBar.test.ts > FilterBar > ofrece «Quitar filtros» con %s
+src/search/FilterBar.test.ts > FilterBar > pinta un chip por categoría, en orden y con su nombre
+src/search/FilterBar.test.ts > FilterBar > pone aria-pressed a cada chip
+src/search/FilterBar.test.ts > FilterBar > pone la marca de verificación solo en el chip activo
+src/search/FilterBar.test.ts > FilterBar > pone type=button a todos los botones
+src/search/FilterBar.test.ts > FilterBar > pulsa solo el chip de la categoría activa
+```
+- Tests existentes con el mismo id y el cuerpo cambiado:
+  - el ayudante `run` de `frontend/src/map/loadAssets.test.ts` (`filters` pasa a valer `NO_FILTERS` por defecto, `frontend/src/map/loadAssets.test.ts@58dbfc1:37`);
+  - `frontend/src/state/zone.test.ts` (el import, `frontend/src/state/zone.test.ts@58dbfc1:6`, y `filters: NO_FILTERS`, `:40`).
+
+### Navegador
+Chrome DevTools MCP en un contexto aislado, con el viewport emulado y sin táctil, contra `http://localhost:5173/map` y los datos de demostración de la BD de desarrollo.
+
+#### 375×667
+- Barra y campo (medidos con la etiqueta «Buscar por título»):
+  - Barra de 56 a 164 (108 px de alto), formulario de 48 px y caja del campo con left 12, right 363, ancho 351 y alto 48.
+  - Lupa: left 24, right 44, top 74, bottom 94, 20×20; `aria-hidden` "true", `focusable` "false" y `pointer-events` none.
+  - Campo: `padding-left` 44px, `padding-right` 52px y borde de 2px; el texto empieza en x=58.
+  - Placeholder «Buscar…»: color rgb(66, 75, 90), igual a `--color-muted` (#424b5a), con opacidad 1.
+  - Etiqueta: clase `sr-only`, texto «Buscar por título», 1×1 px.
+  - Con texto escrito y «Quitar filtros» visible: «Borrar texto» left 185.2, right 229.2, top 62, bottom 106 (44×44); «Quitar filtros» left 239.2, right 363, top 62, bottom 106 (123.8×44); campo de ancho 219.2 y alto 48; barra de 108 de alto; `scrollWidth` del documento 375 con `innerWidth` 375.
+  - Con «esqui» escrito se ve una sola cruz (la del botón) y la lupa a la izquierda; la cruz nativa no aparece.
+- Grupo de chips, mapa, panel y controles de MapLibre (solo se midieron con la etiqueta «Qué», con la barra también de 108 px):
+  - Grupo de 108 a 160 (52 px) con `scrollWidth` 1568, `clientWidth` 375, `scrollHeight` 52, `clientHeight` 52 y `scrollbar-width: none`. Los 12 chips miden 44 px de alto.
+  - Mapa de 164 a 667 (503 px). Panel de 400.2 a 667 (266.8 px), con `--panel-height` igual a `max(40dvh, 15rem)`.
+  - Controles de MapLibre de 164 a 282. Atribución: top 164, bottom 184, left 50.4, ancho 324.6, alto 20. Zoom: top 194, bottom 282, left 321, right 365, 44×88.
+  - `elementFromPoint` en el centro de la atribución, de «acercar» y de «alejar» devuelve sus propios elementos (`A`, `maplibregl-ctrl-icon`, `maplibregl-ctrl-icon`).
+  - `--free-top`: 234px (la fórmula `ceil(282 − 56) + 8` da 234).
+  - Campo: `maxlength` 64 y `autocomplete` off.
+- Tras los ajustes de la desviación 4, la 8 y la marca del chip (ronda final):
+  - Anchos de los 12 chips, en su orden: 185.3, 120.8, 155.3, 127.3, 103.5, 122, 164.2, 93.4, 95.8, 106.8, 90.6 y 90.9.
+  - Chip activo («Kayak»): marca de 14×14 de 6 a 20 px, texto desde 24 px (4 px entre ambos), ancho 95.84 y alto 44.
+  - Margen del chip enfocado dentro del grupo (de 0 a 375, con `scroll-px-3`), izquierdo y derecho en px, medido en dos `requestAnimationFrame` tras cada tecla; mínimo exigido 11.5.
+    - Ida con Tab desde el campo: Bicicleta eléctrica 12 y 177.719; Caravana 205.281 y 48.969; Autocaravana 208.031 y 11.672; Furgoneta 124.328 y 123.359; Piscina 259.641 y 11.844; Barbacoa 126.156 y 126.875; Zona deportiva 199.125 y 11.703; Barco 140.297 y 141.297; Kayak 241.703 y 37.453; Piragua 256.547 y 11.641; Esquí 173.359 y 111.078; Otros 271.922 y 12.188.
+    - Vuelta con Shift+Tab desde «Otros» (se parte de él; su medida es la de la llegada con Tab): Esquí 173.359 y 111.078; Piragua 58.547 y 209.641; Kayak 11.703 y 267.453; Barco 140.297 y 141.297; Zona deportiva 12.125 y 198.703; Barbacoa 126.156 y 126.875; Piscina 14.641 y 256.844; Furgoneta 124.328 y 123.359; Autocaravana 12.031 y 207.672; Caravana 127.281 y 126.969; Bicicleta eléctrica 12 y 177.719.
+    - Menor margen de las dos pasadas: 11.641 («Piragua», derecha, ida); el siguiente, 11.672 («Autocaravana»).
+  - Anillo de foco:
+    - Chip inactivo («Bicicleta eléctrica»): `outline-offset` -5px, `outline-color` rgb(22, 71, 184), `outline-width` 2px, solid y `:focus-visible` verdadero; chipTop 112, ringOuterTop 115 y formBottom 108; borde del chip de 2px rgb(66, 75, 90).
+    - Chip activo («Kayak», pulsado con Espacio): `outline-offset` -5px, `outline-color` rgb(255, 255, 255) y `outline-width` 2px; chipTop 112, ringOuterTop 115 y formBottom 108; fondo rgb(22, 71, 184) y borde rgb(18, 63, 159).
+    - `forced-colors: active`, «Kayak» activo y enfocado: `outline` solid 2px rgba(0, 230, 255, 0.8) con offset -5px, borde de 2px solid rgba(0, 230, 255, 0.8), fondo rgb(0, 0, 0) y texto rgb(255, 255, 255).
+  - Con «esqui» escrito, el campo lleva `spellcheck="false"` (la propiedad vale false) y no hay subrayado rojo.
+- Teclado, «Borrar texto» y «Quitar filtros» (solo se midieron antes de los ajustes de la desviación 4, la 8 y la marca del chip):
+  - «Borrar texto» en [185, 229], de 44 px de alto, con contorno solid de 2px rgb(22, 71, 184); «Quitar filtros» en [239, 363].
+- Otros:
+  - Campo: `type` search, `enterkeyhint` search y sin `name`.
+  - Transiciones del chip: sin emulación, `background-color, border-color, color / 0.14s, 0.14s, 0.14s`; con `prefers-reduced-motion: reduce`, `all / 0s`. Con `forced-colors` y sin él, el chip activo lleva la marca.
+- `location.href` sin cambios (`http://localhost:5173/map`); `localStorage.length` y `sessionStorage.length` valen 0.
+
+#### 1280×800
+- Medidas con la etiqueta «Buscar por título»; no consta si se tomaron antes o después de los ajustes de la desviación 4, la 8 y la marca del chip.
+- Barra de 56 a 120 (64 px de alto). Formulario de 0 a 400 (400×48) y campo de 12 a 388 (376×48).
+- Grupo de chips: left 412, right 1280, top 57, bottom 119; ancho 868, alto 62 (`clientHeight` 52 y `offsetHeight` 62); `scrollWidth` 1568, `clientWidth` 868, `scrollHeight` 52; `scrollbar-width: thin`; `overflow-x` auto y `overflow-y` auto. Los 12 chips miden 44 px de alto.
+- Panel de 400×680 (de 120 a 800) y mapa de 1280×680.
+- Controles de MapLibre: left 955.4, top 120, bottom 238. Atribución: left 955.4, top 120, bottom 140, alto 20. Zoom: left 1226, right 1270, top 150, bottom 238 (44×88). `elementFromPoint` en la atribución, «acercar» y «alejar» devuelve sus propios elementos (true los tres).
+- `--free-top`: 190px (esperado 190). `scrollWidth` del documento 1280.
+- Con el texto «ab» y dos Tab: «Quitar filtros» en [264, 388], de 44 px de alto; formulario de 400 de ancho y barra de 64 de alto.
+- Tab hasta «Zona deportiva» (el séptimo chip): [764, 928] dentro del grupo [412, 1280]; `scrollLeft` 522 de 700; `scrollHeight` 52, igual que `clientHeight`.
+
+### Red
+Peticiones de la lista pública, vistas en el panel de red del navegador.
+- Carga: 1 petición.
+- «Kayak» pulsado: 1 petición con `category=kayak`. «Kayak» otra vez: 1 sin `category`.
+- Escribir «esqui»: 1 petición con `q=esqui`. Intro: 1 más. Un espacio final: ninguna.
+- «Borrar texto»: 1 sin `q`, con el foco en el campo.
+- «Kayak» y luego «Quitar filtros»: 1 y 1; la cabecera dice «24 bienes en esta zona», hay 24 tarjetas y el foco queda en el campo.
+- Esas medidas se tomaron con una versión del código anterior a los ajustes de foco y de marca.
+- Ráfagas de pulsaciones, repetidas en condiciones limpias con el código final y desde la vista inicial sin filtros (una primera ronda de ráfagas se repitió así):
+  - Ráfaga de 2, Kayak y Esquí: 2 peticiones (`category=kayak` y `category=ski`) tras la de carga.
+  - Ráfaga de 4, Esquí, Esquí, Kayak y Esquí: 4 peticiones (`category=ski`, sin filtro, `category=kayak` y `category=ski`) tras la de carga. Al final queda «Esquí» pulsado.
+- Cancelación (Slow 3G, clics con `.click()` separados 51 ms): `category=pool` acaba en `net::ERR_ABORTED` y `category=boat` en 200 (2012 ms). La cabecera dice «2 bienes en esta zona», las tarjetas son «Velero de recreo de nueve metros» y «Lancha neumática con motor», y «Barco» es el único chip pulsado.
+  - El primer intento se perdió: la red del equipo cambió durante una pausa de unas 5,9 horas y la consola dio `net::ERR_NETWORK_CHANGED`. Se repitió desde cero.
+- Espera de 300 ms (`REQUEST_DELAY_MS`, `frontend/src/map/scheduler.ts@58dbfc1:1`) al escribir «bici», una letra cada 100 ms con el setter nativo y un evento `input` con `bubbles`. Cada `dispatchEvent` tarda entre 23.6 y 31.9 ms y se tomó un sello antes y otro después de cada uno (última letra: 7161.4 antes y 7185 después). Resultado: una sola petición con `q=bici`, que empieza en 7462.4, es decir 301.0 ms después del sello previo a la última letra y 277.4 ms después del posterior.
+- Observado: las peticiones con `q` reciben un 500 del servidor. La causa no se ha investigado; se comprueba en T10.
+
+### Privacidad, accesibilidad y consola
+- Privacidad, en todas las comprobaciones: `location.href` sin cambios (`http://localhost:5173/map`) y `localStorage.length` y `sessionStorage.length` valen 0. La página carga recursos de `http://localhost:5173` (91) y de `https://tiles.openfreemap.org` (7).
+- Accesibilidad:
+  - Árbol de accesibilidad: `search` → `searchbox "Buscar por título"` y 12 `button` en el orden Bicicleta eléctrica, Caravana, Autocaravana, Furgoneta, Piscina, Barbacoa, Zona deportiva, Barco, Kayak, Piragua, Esquí y Otros.
+  - Todos los controles miden 44 px de alto como mínimo («Borrar texto» 44×44) y se alcanzan con Tab; el foco se ve con el anillo medido arriba.
+- Sin conexión: recargar deja `chrome-error://chromewebdata/`, es decir, el propio documento no carga; el estilo fallido no se pudo comprobar así (desviación 7).
+- Consola (literal):
+  - `[error] Failed to load resource: the server responded with a status of 500 (Internal Server Error)`: peticiones con `q`; causa no investigada, se comprueba en T10.
+  - `[error] Failed to load resource: net::ERR_INTERNET_DISCONNECTED`: provocado por la prueba sin conexión.
+  - `[error] Failed to load resource: net::ERR_NETWORK_CHANGED`: observado durante un cambio de red del equipo en una pausa.
+  - `[warn] layers[highway-shield-non-us].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`
+  - `[warn] layers[highway-shield-us-interstate].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`
+  - Además, `[debug] [vite] connecting...`, `[debug] [vite] connected.` y `[info] Download the React DevTools for a better development experience: https://react.dev/link/react-devtools`.
+
+### Decisiones en T8
+1. `specs/008-search-filters/tasks.md` no se enmienda: lo que difiere de él va como desviación.
+2. «Borrar texto» reutiliza `.field-box` y `.eye`, y solo sale con texto (`frontend/src/search/FilterBar.tsx@58dbfc1:73` y `88-92`).
+3. El foco vuelve al campo tras «Borrar texto» y tras «Quitar filtros» (`frontend/src/search/FilterBar.tsx@58dbfc1:54-57`, `89` y `95`).
+4. Solo se pide de nuevo si `filtersQuery` cambia frente a la ref: un espacio final no pide (`frontend/src/pages/MapPage.tsx@58dbfc1:96-99`).
+5. Intro lanza la petición siempre, con `runNow` (`frontend/src/pages/MapPage.tsx@58dbfc1:111`).
+6. La barra de desplazamiento de los chips va oculta por debajo de 900 px y fina desde 900 px (`frontend/src/search/FilterBar.tsx@58dbfc1:104`), porque a 1280 px no caben (`scrollWidth` 1568 frente a 868).
+7. El formulario mide 400 px, con la etiqueta y «Quitar filtros», alineado con el panel (`frontend/src/search/FilterBar.tsx@58dbfc1:68`).
+8. `spellCheck` es false (`frontend/src/search/FilterBar.tsx@58dbfc1:83`): con la revisión ortográfica mejorada, Chrome envía a Google el texto que se escribe en el navegador; la básica no (https://support.google.com/chrome/answer/12027911).
+9. El placeholder usa `--color-muted` (`frontend/src/styles/fields.css@58dbfc1:21-23`); medido: rgb(66, 75, 90) con opacidad 1.
+10. La marca del chip activo mide 14 px y queda a 4 px del texto, sin cambiar el ancho del chip (`frontend/src/styles/buttons.css@58dbfc1:130-137`).
+
+### Desviaciones del plan en T8
+1. Cuatro ficheros fuera de la lista de T8 (`specs/008-search-filters/tasks.md@58dbfc1:204-208`): `frontend/src/map/loadAssets.ts`, `frontend/src/map/loadAssets.test.ts` y `frontend/src/state/zone.test.ts` (`filters` obligatorio, para que TypeScript detecte que `MapPage` lo olvide) y `frontend/src/styles/fields.css` (cruz nativa del campo de búsqueda y color del placeholder).
+2. «Riesgo: ninguno sobre tests existentes.» (`specs/008-search-filters/tasks.md@58dbfc1:212`) no se cumple del todo: cambian el ayudante `run` de `frontend/src/map/loadAssets.test.ts` (`filters = NO_FILTERS`) y `frontend/src/state/zone.test.ts` (`filters: NO_FILTERS`), con los mismos ids. El rojo se vio con `tsc -b`: los tres errores de arriba.
+3. La etiqueta «Qué» pasa a «Buscar por título» (`sr-only`), con una lupa decorativa y el placeholder «Buscar…»; aprobado por el responsable el 26-11. Motivo: «Qué» solo, sin «Dónde», no se entendía, y un placeholder no sirve como única etiqueta.
+   - Literal: «El buscador tiene una etiqueta accesible «Qué».» (`specs/008-search-filters/spec.md@58dbfc1:101`); «`form role="search"` con la etiqueta visible «Qué»» (`specs/008-search-filters/plan.md@58dbfc1:176`); «el foco va al campo «Qué»» (`specs/008-search-filters/plan.md@58dbfc1:186`); «campo con etiqueta «Qué»» (`specs/008-search-filters/plan.md@58dbfc1:346`).
+   - Otras líneas que usan «Qué» como nombre del buscador, sin citar: `specs/008-search-filters/spec.md@58dbfc1:6`, `11`, `36`, `68` y `70`; `specs/008-search-filters/plan.md@58dbfc1:13`, `49`, `57` y `396`; `specs/008-search-filters/tasks.md@58dbfc1:201`.
+4. «el navegador lo desplaza a la vista al enfocarlo» (`specs/008-search-filters/plan.md@58dbfc1:177`) no se cumple: Chrome no desplaza un chip que ya se ve en parte. Antes del arreglo, «Barbacoa» enfocado con Tab quedaba en [371, 493] con 4 px visibles en un grupo de 375. Arreglo: `onFocus` con `scrollIntoView` y `scroll-px-3` (`frontend/src/search/FilterBar.tsx@58dbfc1:115` y `104`); el margen mínimo medido es 11.641 px.
+5. Cobertura de los tests: son 17 en `frontend/src/search/FilterBar.test.ts` (los de F6, `specs/008-search-filters/plan.md@58dbfc1:346`, más el de `spellcheck`) y no se comprobó antes el rojo, por ser un módulo nuevo. `type="search"` y `enterKeyHint` no tienen test y se comprobaron en el navegador. El cableado de eventos solo se comprueba en el navegador, porque vitest corre en node.
+6. `specs/008-search-filters/tasks.md@58dbfc1:213` pide listar `src/search src/pages` antes y después; se listaron además `src/map`, `src/state` y `src/i18n`.
+7. El estilo fallido (la barra no pintada, `frontend/src/pages/MapPage.tsx@58dbfc1:106`) no se comprobó en el navegador: sin conexión no carga ni el documento. Se comprueba en T9 (`specs/008-search-filters/tasks.md@58dbfc1:241`).
+8. El anillo de foco del chip va por dentro (`outline-offset: -5px`) con `!important`, porque la regla global de `:focus-visible` no va en capa y gana sin él (`frontend/src/styles/buttons.css@58dbfc1:122-127`). Antes: `outline-offset` de 2px y el anillo por fuera, con su borde superior en y=108 tocando el formulario.
+9. La tanda previa al commit pasó `eslint` solo sobre `FilterBar.tsx`, y la regla pide pasarlo sobre todo lo tocado. Tras el commit, `npx eslint` sobre los siete ficheros .ts y .tsx de `frontend/` que toca `58dbfc1`: código de salida 0.
