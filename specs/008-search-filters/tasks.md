@@ -219,7 +219,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T8 done`
   - Hecho cuando: vitest, build y eslint en verde, el diff de la colección es el previsto y la verificación en navegador está en validation.md sin errores de consola.
 
-- [ ] **T9. Panel con filtros y encabezados de la pantalla.** RF-11, RF-12, RF-13
+- [x] **T9. Panel con filtros y encabezados de la pantalla.** RF-11, RF-12, RF-13
   - Depende de T8.
   - Qué:
     - frontend/src/state/viewState.ts;
