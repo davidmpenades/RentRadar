@@ -557,3 +557,63 @@ test_invalid_filters_return_400_with_only_their_own_codes
 
 ### Desviaciones del plan en T6
 Ninguna.
+
+## T7 — comprobaciones
+- Commit de código: `9b491f25676620f89a24bb35cefe21eb7ebc040e` `feat(search): add filter state and filtered request`. Nueve ficheros de `frontend/src`: `api/publicAssets.ts`, `api/publicAssets.test.ts`, `i18n/es.ts`, `map/loadAssets.ts`, `map/loadAssets.test.ts` y los cuatro nuevos de `search/` (`filters.ts`, `filters.test.ts`, `categories.ts` y `categories.test.ts`); 252 inserciones y 8 borrados. El diff completo (`git diff 9b491f2~1 9b491f2`) tiene el sha256 `9f407be61a0c8b544bc9a709e1f5e26fdfe81db4ecbd5ded2390f2ab1dfd6935`, el mismo que el diff revisado antes del commit.
+- Cambio:
+  - `fetchAssets(box, signal, filters = NO_FILTERS)` pega los filtros tras el cuadro con `&`, y sin filtros no queda ningún `&` sobrante (`frontend/src/api/publicAssets.ts@9b491f2:72-85` y `89`).
+  - `loadAssetsForView` recibe `filters` como opción y se los pasa al fetcher (`frontend/src/map/loadAssets.ts@9b491f2:18`, `40` y `49`).
+  - `es.ts` gana `categories` (`frontend/src/i18n/es.ts@9b491f2:91-104`).
+- Test primero, para los tres tests de lo existente, antes de tocar `publicAssets.ts` y `loadAssets.ts` (`npx vitest run src/map/loadAssets.test.ts src/api/publicAssets.test.ts`): `Test Files  2 failed (2)` y `Tests  3 failed | 81 passed (84)`. Los tres fallos son por aserción y ninguno por import:
+  - `pide el cuadro calculado con la señal de la petición…` (`frontend/src/map/loadAssets.test.ts@9b491f2:50-63`): el fetcher recibió dos argumentos y faltaba el tercero, `{}`.
+  - `pasa al fetcher los filtros que recibe` (`frontend/src/map/loadAssets.test.ts@9b491f2:65-77`): al fetcher le faltaba `{ category: "ski", q: "esqui" }` como tercer argumento.
+  - `añade los filtros detrás del cuadro, con & y codificados` (`frontend/src/api/publicAssets.test.ts@9b491f2:159-163`): la URL recibida terminaba en `east=10.55`, sin `&category=ski&q=esqu%C3%AD+%26+botas`.
+  - Con el código escrito, esos dos ficheros y `src/search` dieron `Test Files  4 passed (4)` y `Tests  105 passed (105)`.
+  - Los 21 tests de `src/search/` se escribieron junto con los módulos nuevos, sin comprobar antes el rojo. Con ellos escritos, `npx vitest run src/search` dio `Test Files  2 passed (2)` y `Tests  21 passed (21)`.
+- Inventario de `npx vitest list src/search src/map src/api src/i18n`: de 315 a 338 líneas. Son exactamente 23 ids añadidos y ninguno eliminado ni renombrado (`comm` sobre las dos listas ordenadas, «solo antes» vacío). Los 23 ids, 17 de `filters.test.ts`, 4 de `categories.test.ts`, 1 de `loadAssets.test.ts` y 1 de `publicAssets.test.ts`:
+```
+src/api/publicAssets.test.ts > fetchPublicAssets: la petición > añade los filtros detrás del cuadro, con & y codificados
+src/map/loadAssets.test.ts > loadAssetsForView > pasa al fetcher los filtros que recibe
+src/search/categories.test.ts > CATEGORY_CHIPS > da a cada chip un nombre que no está vacío
+src/search/categories.test.ts > CATEGORY_CHIPS > deja «Otros» como último chip
+src/search/categories.test.ts > CATEGORY_CHIPS > no repite el nombre de ningún chip
+src/search/categories.test.ts > CATEGORY_CHIPS > tiene exactamente los identificadores de las categorías con imagen
+src/search/filters.test.ts > appliedFilters > no envía nada sin categoría ni texto
+src/search/filters.test.ts > appliedFilters > no genera q con un texto de solo espacios o caracteres de control
+src/search/filters.test.ts > appliedFilters > recorta el texto por los extremos y respeta los espacios de dentro
+src/search/filters.test.ts > appliedFilters > sustituye los caracteres de control por un espacio
+src/search/filters.test.ts > clearFilters > devuelve un estado sin categoría y con el texto vacío
+src/search/filters.test.ts > filtersQuery > codifica un texto con espacio, &, %, #, ñ y un emoji
+src/search/filters.test.ts > filtersQuery > devuelve una cadena vacía sin filtros
+src/search/filters.test.ts > filtersQuery > pone category antes que q aunque el objeto traiga q primero
+src/search/filters.test.ts > hasActiveFilters > está activo solo con un texto
+src/search/filters.test.ts > hasActiveFilters > está activo solo con una categoría
+src/search/filters.test.ts > hasActiveFilters > no está activo con un texto de solo espacios o caracteres de control
+src/search/filters.test.ts > los cambios de estado > devuelven un estado nuevo y no modifican el anterior
+src/search/filters.test.ts > setText > guarda lo escrito tal cual, sin recortar
+src/search/filters.test.ts > toggleCategory > activa la categoría pulsada
+src/search/filters.test.ts > toggleCategory > conserva el texto al cambiar de categoría
+src/search/filters.test.ts > toggleCategory > quita la categoría al pulsar la misma
+src/search/filters.test.ts > toggleCategory > sustituye la categoría activa al pulsar otra
+```
+  El test de `loadAssets.test.ts` que cambia de aserción conserva su id.
+- Tanda previa al commit, con la línea de resumen literal de cada orden:
+  - `docker compose exec backend ruff check .`: `All checks passed!`
+  - `docker compose exec backend ruff format --check .`: `158 files already formatted`
+  - `docker compose exec backend pytest -q`: `2697 passed, 2 skipped in 48.37s`
+  - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 0.90s`
+  - Desfase de `openapi.json` (la orden de la CI, `.github/workflows/ci.yml@9b491f2:44`): `spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json` sin diferencias.
+  - `manage.py check` en contenedor suelto con `-e DB_HOST=db-inexistente.invalid`: `System check identified no issues (0 silenced).`
+  - `npx vitest run`: `Test Files  38 passed (38)` y `Tests  1347 passed (1347)`.
+  - `npm run build`: `✓ built in 681ms`.
+  - `npx eslint` sobre los nueve ficheros del commit: sin avisos, código de salida 0.
+  - `npm run api:check`: código de salida 0 (no imprime línea de resumen).
+
+### Decisiones en T7
+1. `CATEGORY_CHIPS` sigue el orden de la siembra, con `ski` antes de `other` (`frontend/src/search/categories.ts@9b491f2:1-15`). Es el orden de `backend/apps/categories/migrations/0002_seed_categories.py@9b491f2:6-16`, que no incluye `ski`, y la 0003 añade Esquí (`backend/apps/categories/migrations/0003_add_ski_category.py@9b491f2:6`). Los nombres de `es.categories` (`frontend/src/i18n/es.ts@9b491f2:91-104`) son los de esas dos migraciones.
+2. `NO_FILTERS` y `AppliedFilters` viven en `frontend/src/search/filters.ts@9b491f2:7` y `:4`. El plan nombra `NO_FILTERS` (`specs/008-search-filters/plan.md@b618783:51` y `:169`) pero no lo define ni lo lista entre lo que exporta `filters.ts` (`specs/008-search-filters/plan.md@b618783:48`). Los usan `frontend/src/api/publicAssets.ts@9b491f2:84` y `frontend/src/map/loadAssets.ts@9b491f2:40`.
+
+### Desviaciones del plan en T7
+1. `frontend/src/api/publicAssets.test.ts` gana un `it` nuevo (`frontend/src/api/publicAssets.test.ts@9b491f2:159-163`), contra «`publicAssets.test.ts` no cambia» (`specs/008-search-filters/tasks.md@b618783:194`). Entre los tests de T7 es el único que ve la URL real con filtros: `filters.test.ts` solo prueba `filtersQuery` y el de `loadAssets` usa un fetcher falso.
+2. El inventario de `specs/008-search-filters/tasks.md@b618783:192` está desactualizado. La aserción estaba en `frontend/src/map/loadAssets.test.ts@b618783:55`, no en la línea 58. El rango 152-221 de `publicAssets.test.ts` (también en `specs/008-search-filters/plan.md@b618783:169`) no corresponde a los bloques del fichero: «la petición» empieza en la línea 149 y «tiempo máximo» en la 198 ya antes de T5 (`frontend/src/api/publicAssets.test.ts@860c698:149` y `:198`), y esa segunda empieza ahora en la 210 (`frontend/src/api/publicAssets.test.ts@9b491f2:210`).
+3. F5 queda cubierto solo en parte (`specs/008-search-filters/plan.md@b618783:344-345`). El test de `loadAssets` comprueba que reenvía los filtros que recibe (`frontend/src/map/loadAssets.test.ts@9b491f2:65-77`); que «Reintentar» use los filtros vigentes depende de la ref de `MapPage` (`specs/008-search-filters/plan.md@b618783:171` y `specs/008-search-filters/tasks.md@b618783:205`) y se verifica en el navegador (`specs/008-search-filters/tasks.md@b618783:241`).
