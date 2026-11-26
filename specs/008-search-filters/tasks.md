@@ -198,7 +198,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T7 done`
   - Hecho cuando: vitest, build y eslint de los ficheros tocados en verde, `CATEGORY_CHIPS` igual a `CATEGORY_KEYS` y el diff de la colección es el previsto.
 
-- [ ] **T8. Barra de filtros: buscador «Qué» y chips.** RF-7, RF-8, RF-9, RF-10
+- [x] **T8. Barra de filtros: buscador «Qué» y chips.** RF-7, RF-8, RF-9, RF-10
   - Depende de T7.
   - Qué:
     - frontend/src/search/FilterBar.tsx y su test;
