@@ -245,7 +245,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T9 done`
   - Hecho cuando: vitest, build y eslint en verde, el diff de la colección es el previsto y la verificación en navegador está en validation.md sin errores de consola.
 
-- [ ] **T10. Validación de punta a punta y en el navegador.** RF-1 a RF-13
+- [x] **T10. Validación de punta a punta y en el navegador.** RF-1 a RF-13
   - Depende de T9.
   - Qué: specs/008-search-filters/validation.md (RF por RF, mutaciones M1-M4, navegador a 375 y 1280 px y medición).
   - Tests del plan: ninguno nuevo. Se ejecutan todos.
