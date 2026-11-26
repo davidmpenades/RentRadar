@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchPublicAssets } from "../api/publicAssets";
+import { es } from "../i18n/es";
 import { circlesToFeatureCollection } from "../map/circles";
 import { loadAssetsForView } from "../map/loadAssets";
 import { MapView } from "../map/MapView";
@@ -27,12 +28,19 @@ export function MapPage() {
   const [atInitial, setAtInitial] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
   const [filters, setFilters] = useState<FilterState>(clearFilters);
+  // Los filtros de la petición lanzada: el panel los usa para decir «con estos filtros» solo de lo pedido con ellos
+  const [requestedFilters, setRequestedFilters] = useState<AppliedFilters>(NO_FILTERS);
   const boundsRef = useRef<VisibleBounds | null>(null);
   // Lo que lee run: el estado llega tarde a una petición lanzada en el mismo evento
   const filtersRef = useRef<AppliedFilters>(NO_FILTERS);
   const schedulerRef = useRef<ReturnType<typeof createRequestScheduler<number>> | null>(null);
 
-  const view = viewState({ styleFailed, request, atInitialView: atInitial });
+  const view = viewState({
+    styleFailed,
+    request,
+    atInitialView: atInitial,
+    filtersActive: filtersQuery(requestedFilters) !== "",
+  });
   const circles = useMemo(() => circlesToFeatureCollection(requestCircles(request)), [request]);
 
   useEffect(() => {
@@ -45,6 +53,7 @@ export function MapPage() {
         if (!bounds) return;
         // Si el cuadro no se pide, el aviso llega en el mismo lote y «Buscando» no llega a pintarse
         setRequest(startLoading);
+        setRequestedFilters(filtersRef.current);
         void loadAssetsForView({
           bounds,
           request: scheduled,
@@ -103,6 +112,7 @@ export function MapPage() {
 
   return (
     <main className="flex h-full flex-col overflow-hidden">
+      <h1 className="sr-only">{es.map.heading}</h1>
       {!styleFailed && (
         <FilterBar
           filters={filters}
@@ -124,7 +134,12 @@ export function MapPage() {
           onMoveStart={handleMoveStart}
           onMoveEnd={handleMoveEnd}
         />
-        <ResultsPanel view={view} onRetry={handleRetry} onReset={handleReset} />
+        <ResultsPanel
+          view={view}
+          onRetry={handleRetry}
+          onReset={handleReset}
+          onClearFilters={() => changeFilters(clearFilters(), "now")}
+        />
       </div>
     </main>
   );

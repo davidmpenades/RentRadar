@@ -47,7 +47,7 @@ describe("la zona de las tarjetas y la de los círculos", () => {
     });
     if (!outcome) throw new Error("no se ha reportado nada");
 
-    const view = viewState({ styleFailed: false, request: outcome, atInitialView: true });
+    const view = viewState({ styleFailed: false, request: outcome, atInitialView: true, filtersActive: false });
     expect(view.kind).toBe("results");
     expect(view.kind === "results" ? view.cards.map((card) => card.title) : []).toEqual(["Dentro"]);
 

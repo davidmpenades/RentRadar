@@ -73,7 +73,12 @@ export const es = {
     countMany: "{count} bienes en esta zona",
     incompleteOne: "Mostrando 1 bien. Puede haber más: acerca el mapa para verlos todos",
     incompleteMany: "Mostrando {count} bienes. Puede haber más: acerca el mapa para verlos todos",
+    countOneFiltered: "1 bien en esta zona con estos filtros",
+    countManyFiltered: "{count} bienes en esta zona con estos filtros",
+    incompleteOneFiltered: "Mostrando 1 bien con estos filtros. Puede haber más: acerca el mapa para verlos todos",
+    incompleteManyFiltered: "Mostrando {count} bienes con estos filtros. Puede haber más: acerca el mapa para verlos todos",
     empty: "No hay bienes en esta zona",
+    emptyFiltered: "No hay bienes en esta zona con estos filtros",
     zoomIn: "Acerca el mapa para ver los bienes",
     resetView: "Volver a la zona inicial",
     radius: "Zona de unos {radius}",
@@ -110,6 +115,7 @@ export const es = {
     categories: "Categorías",
   },
   map: {
+    heading: "Bienes en alquiler en el mapa",
     styleError: "No se ha podido cargar el mapa.",
     retry: "Reintentar",
     // Textos de los controles de MapLibre, con las claves que él define

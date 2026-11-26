@@ -31,8 +31,10 @@ function loaded(results: PublicAsset[], incomplete = false) {
   return { kind: "loaded", list: { results, incomplete }, visibleBounds: VISIBLE } as const;
 }
 
-const view = (request: RequestState, options: { styleFailed?: boolean; atInitialView?: boolean } = {}) =>
-  viewState({ styleFailed: false, atInitialView: false, request, ...options });
+const view = (
+  request: RequestState,
+  options: { styleFailed?: boolean; atInitialView?: boolean; filtersActive?: boolean } = {},
+) => viewState({ styleFailed: false, atInitialView: false, filtersActive: false, request, ...options });
 
 describe("viewState", () => {
   it("es loading mientras se espera la respuesta", () => {
@@ -47,7 +49,12 @@ describe("viewState", () => {
   it("es results con las tarjetas en el orden de la respuesta", () => {
     const first = asset(1);
     const second = asset(2, { latitude: 39.41 });
-    expect(view(loaded([second, first]))).toEqual({ kind: "results", cards: [second, first], incomplete: false });
+    expect(view(loaded([second, first]))).toEqual({
+      kind: "results",
+      cards: [second, first],
+      incomplete: false,
+      filtered: false,
+    });
   });
 
   it("conserva el indicador de lista incompleta", () => {
@@ -61,11 +68,11 @@ describe("viewState", () => {
   });
 
   it("es empty con una respuesta válida sin bienes", () => {
-    expect(view(loaded([]))).toEqual({ kind: "empty", canReset: true });
+    expect(view(loaded([]))).toEqual({ kind: "empty", canReset: true, filtered: false });
   });
 
   it("es empty si hay bienes pero ninguno se ve en la zona visible", () => {
-    expect(view(loaded([asset(1, FAR), asset(2, FAR)]))).toEqual({ kind: "empty", canReset: true });
+    expect(view(loaded([asset(1, FAR), asset(2, FAR)]))).toEqual({ kind: "empty", canReset: true, filtered: false });
   });
 
   it.each(["tooLarge", "outOfRange"] as const)("es zoomIn si el cuadro no se pide (%s)", (reason) => {
@@ -73,7 +80,7 @@ describe("viewState", () => {
   });
 
   it("no ofrece volver a la zona inicial si ya está en ella, ni en vacío ni en zoomIn", () => {
-    expect(view(loaded([]), { atInitialView: true })).toEqual({ kind: "empty", canReset: false });
+    expect(view(loaded([]), { atInitialView: true })).toEqual({ kind: "empty", canReset: false, filtered: false });
     expect(view({ kind: "notRequested", reason: "tooLarge" }, { atInitialView: true })).toEqual({
       kind: "zoomIn",
       canReset: false,
@@ -86,6 +93,35 @@ describe("viewState", () => {
       expect(view({ kind: "failed", failure })).toEqual({ kind: "error", failure });
     },
   );
+
+  // Rojo si: el vacío con filtros activos sale con filtered en false y el panel muestra el texto de sin filtros
+  it("marca como filtrado el vacío cuando hay filtros activos", () => {
+    expect(view(loaded([]), { filtersActive: true })).toEqual({ kind: "empty", canReset: true, filtered: true });
+    expect(view(loaded([asset(1, FAR)]), { filtersActive: true })).toEqual({
+      kind: "empty",
+      canReset: true,
+      filtered: true,
+    });
+  });
+
+  // Rojo si: los resultados con filtros activos salen con filtered en false y la cabecera no dice «con estos filtros»
+  it("marca como filtrados los resultados cuando hay filtros activos", () => {
+    const only = asset(1);
+    expect(view(loaded([only]), { filtersActive: true })).toEqual({
+      kind: "results",
+      cards: [only],
+      incomplete: false,
+      filtered: true,
+    });
+  });
+
+  // Rojo si: «Acerca el mapa…» o el error ganan un filtered que no les corresponde
+  it.each<[string, RequestState, object]>([
+    ["zoomIn", { kind: "notRequested", reason: "tooLarge" }, { kind: "zoomIn", canReset: true }],
+    ["error", { kind: "failed", failure: "network" }, { kind: "error", failure: "network" }],
+  ])("no añade filtered a %s aunque haya filtros activos", (_name, request, expected) => {
+    expect(view(request, { filtersActive: true })).toEqual(expected);
+  });
 
   it("con el estilo fallido solo es styleError, sea cual sea la petición", () => {
     const requests: RequestState[] = [

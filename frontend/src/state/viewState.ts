@@ -26,13 +26,18 @@ function loadedRequest(request: RequestState): LoadedRequest | null {
 
 export type ViewState =
   | { kind: "loading" }
-  | { kind: "results"; cards: readonly PublicAsset[]; incomplete: boolean }
-  | { kind: "empty"; canReset: boolean }
+  | { kind: "results"; cards: readonly PublicAsset[]; incomplete: boolean; filtered: boolean }
+  | { kind: "empty"; canReset: boolean; filtered: boolean }
   | { kind: "zoomIn"; canReset: boolean }
   | { kind: "error"; failure: FailureKind | "unexpected" }
   | { kind: "styleError" };
 
-type ViewStateInput = { styleFailed: boolean; request: RequestState; atInitialView: boolean };
+type ViewStateInput = {
+  styleFailed: boolean;
+  request: RequestState;
+  atInitialView: boolean;
+  filtersActive: boolean;
+};
 
 // Una tarjeta por cada bien de la respuesta, en su orden, cuyo círculo toca la zona visible del momento de pedir
 function cardsOf(request: LoadedRequest): PublicAsset[] {
@@ -45,7 +50,7 @@ function cardsOf(request: LoadedRequest): PublicAsset[] {
   );
 }
 
-export function viewState({ styleFailed, request, atInitialView }: ViewStateInput): ViewState {
+export function viewState({ styleFailed, request, atInitialView, filtersActive }: ViewStateInput): ViewState {
   if (styleFailed) return { kind: "styleError" };
   const canReset = !atInitialView;
   switch (request.kind) {
@@ -58,8 +63,8 @@ export function viewState({ styleFailed, request, atInitialView }: ViewStateInpu
     case "loaded": {
       const cards = cardsOf(request);
       return cards.length === 0
-        ? { kind: "empty", canReset }
-        : { kind: "results", cards, incomplete: request.list.incomplete };
+        ? { kind: "empty", canReset, filtered: filtersActive }
+        : { kind: "results", cards, incomplete: request.list.incomplete, filtered: filtersActive };
     }
   }
 }
