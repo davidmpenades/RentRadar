@@ -56,6 +56,58 @@ Con 2 bucles (ejecución en paralelo), «Filas descartadas» es la media por buc
 ### Desviación del plan
 El sondeo usa `pg_database.datctype` en lugar de `SHOW lc_ctype`: PostgreSQL 16 eliminó los parámetros de solo lectura `lc_collate` y `lc_ctype` (notas de la versión 16). Comprobado en la 18.6 de la BD de test.
 
+## Rendimiento: después (T6)
+Medición de la consulta de la lista pública con los filtros ya en el selector. El código de la medición está en `8c7521d` (`test(assets): measure the real selector with filters`): `backend/apps/assets/tests/test_list_query_plan.py@8c7521d`.
+
+### Condiciones
+- Fecha: 26-11-2026.
+- Portátil enchufado a la corriente, stack levantado (backend y db) y nada más en marcha, como en T1.
+- Orden: `docker compose exec -T backend pytest -q -s --run-measurement --create-db apps/assets/tests/test_list_query_plan.py`, dos veces sobre la BD de test, las dos con `2 passed` (`2 passed in 35.25s` y `2 passed in 34.79s`). La tabla es la de la segunda (`2 passed in 34.79s`).
+- Volumen, semilla, zonas, calentamiento y medidas, como en T1 (`specs/008-search-filters/validation.md@8c7521d:24-30`).
+- Ahora todas las filas usan el selector real con los `Filters` de `parse_filters`; las réplicas de T1 se borraron (`backend/apps/assets/tests/test_list_query_plan.py@8c7521d:225-240`).
+
+### Sondeo del entorno (literal, segunda ejecución)
+```
+SHOW server_version: 18.6 (Debian 18.6-1.pgdg13+2)
+SELECT datctype FROM pg_database WHERE datname = current_database(): en_US.utf8
+SHOW server_encoding: UTF8
+translate(text, text, text): provolatile = i
+```
+
+### Tabla (literal, segunda ejecución)
+```
+Consulta                        Zona  Mediana ms  Mín ms  Máx ms  Nodo de acceso    Filas descartadas  Bucles  Buffers
+------------------------------  ----  ----------  ------  ------  ----------------  -----------------  ------  -------
+sin filtro                      Z1    99.41       99.27   99.56   Seq Scan          23664              2       15403
+sin filtro                      Z2    598.89      596.93  599.18  Seq Scan          16718              2       86209
+categoría kayak                 Z1    10.90       10.83   11.41   Bitmap Heap Scan  3821               1       2574
+categoría kayak                 Z2    49.93       49.46   51.37   Bitmap Heap Scan  2718               1       7105
+categoría ski                   Z1    2.90        2.87    2.91    Bitmap Heap Scan  933                1       1001
+categoría ski                   Z2    12.89       12.87   13.29   Bitmap Heap Scan  654                1       2144
+texto «bici»                    Z1    22.87       22.36   23.56   Seq Scan          24875              2       3163
+texto «bici»                    Z2    65.51       65.40   65.90   Seq Scan          24172              2       10368
+texto de 1 carácter «a»         Z1    93.18       92.73   93.41   Seq Scan          23771              2       14342
+texto de 1 carácter «a»         Z2    555.29      553.29  559.12  Seq Scan          17360              2       79675
+texto de 2 caracteres «es»      Z1    37.70       37.29   37.74   Seq Scan          24581              2       6052
+texto de 2 caracteres «es»      Z2    185.48      184.92  188.23  Seq Scan          22462              2       27652
+texto sin coincidencias «zzzz»  Z1    18.11       17.41   19.37   Seq Scan          25000              2       1822
+texto sin coincidencias «zzzz»  Z2    17.99       17.92   18.45   Seq Scan          25000              2       1822
+categoría kayak y texto «bici»  Z1    3.21        3.19    3.23    Bitmap Heap Scan  4029               1       1747
+categoría kayak y texto «bici»  Z2    7.59        7.58    7.65    Bitmap Heap Scan  3909               1       2251
+```
+Con 2 bucles, «Filas descartadas» es la media por bucle; el total es filas × bucles, como en T1.
+
+### Estabilidad entre las dos ejecuciones
+- La diferencia máxima entre las medianas es del 3,77 % («zzzz», Z1: 18,82 ms en la primera ejecución y 18,11 ms en la segunda). Ocho de las 16 filas pasan del 1 %.
+- El nodo de acceso, las filas descartadas y los bucles son idénticos en las 16 filas de las dos ejecuciones.
+
+### Criterios
+- Sin filtro no empeora (`specs/008-search-filters/plan.md@af3e128:220`): en Z1, 99.41 ≤ 99.42 × 1,10 + 1 = 110.362; en Z2, 598.89 ≤ 594.82 × 1,10 + 1 = 655.302. En las dos zonas, el mismo nodo de acceso (Seq Scan). Cumple.
+- Umbral con filtro (`specs/008-search-filters/plan.md@af3e128:221`): en Z1, kayak 10.90, ski 2.90 y «bici» 22.87 son ≤ 1,5 × 99.41 = 149.115. Cumple.
+- Peores casos (`specs/008-search-filters/plan.md@af3e128:222`): se registran sin umbral, son las filas de 1 y 2 caracteres, «zzzz» y las de Z2 de la tabla.
+- Índice (`specs/008-search-filters/plan.md@af3e128:224`): en Z2 sin filtro, el plan es un Seq Scan con 16718 × 2 = 33436 filas descartadas de 50 000, un 66,87 %, por debajo del 80 %. La mediana (598.89 ms) supera los 20 ms, pero el criterio pide las dos condiciones. No se recomienda el índice.
+- Observación, fuera del criterio: en Z1 sin filtro, 23664 × 2 = 47328 filas descartadas de 50 000 (94,66 %) en 99.41 ms. Se anota para la decisión aparte sobre el índice (`specs/008-search-filters/plan.md@af3e128:224`).
+
 ## T1 — comprobaciones
 - Commit de código: `6cd3b3e` `test(assets): measure public list query plan` (`backend/conftest.py` y `backend/apps/assets/tests/test_list_query_plan.py`).
 - Fichero de medición: `backend/apps/assets/tests/test_list_query_plan.py@6cd3b3e`.
@@ -484,3 +536,24 @@ test_invalid_filters_return_400_with_only_their_own_codes
 ### Decisiones en T5
 1. Las descripciones OpenAPI de `category` y `q` están en castellano, como la del plan (`specs/008-search-filters/plan.md@1346356:137`) y las de los cuatro límites (`backend/apps/assets/views.py@1346356:58-61`).
 2. El test del tope usa `PUBLIC_LIST_LIMIT` y no un 200 literal (`backend/apps/assets/tests/test_public_list_api.py@1346356:911`, `913`, `924` y `926`). El 200 literal lo fija `test_the_max_age_and_the_limit_are_the_planned_ones` (`backend/apps/assets/tests/test_public_list_api.py@1346356:623-625`).
+
+## T6 — comprobaciones
+- Commit de código: `8c7521d92e422d41901422dd5638b1e051d64007` `test(assets): measure the real selector with filters`. Un solo fichero: `backend/apps/assets/tests/test_list_query_plan.py`. El diff completo (`git diff 8c7521d~1 8c7521d`) tiene el sha256 `bd5d2d45daeb027dd6ab00011b8a3c85927b4fa59d77edf3c9d38573b5d7c32f`, el mismo que el diff revisado antes del commit.
+- Cambio (`backend/apps/assets/tests/test_list_query_plan.py@8c7521d:225-240` y `355`): `_filters_of(case)` arma `category` y `q` con `parse_filters` y comprueba que devuelve `Filters`; `_selector_sql(zone, filters)` pasa los filtros al selector real, y el bucle de medición llama a `_measure(*_selector_sql(zone, _filters_of(case)))`. `_candidate_sql`, `_query_of` y `PUBLIC_FIELDS` ya no están en el módulo (`git grep -n -E "_candidate_sql|_query_of|PUBLIC_FIELDS" 8c7521d -- backend/apps/assets/tests/test_list_query_plan.py` no encuentra nada). `Case`, el volumen, las zonas y el formato de la tabla no cambian.
+- Colección (`pytest --collect-only -q apps/assets/tests/test_list_query_plan.py`): antes y después, `2 tests collected`, con los mismos dos ids (`test_probe_the_test_database_environment` y `test_measure_the_list_query_plans`). `comm` sale vacío en los dos sentidos. Es lo previsto en `specs/008-search-filters/tasks.md@af3e128:174`.
+- `ruff format` sobre el módulo: `1 file left unchanged`.
+- Mediciones: la orden de «Rendimiento: después (T6)», dos veces, `2 passed in 35.25s` y `2 passed in 34.79s`.
+- Tanda previa al commit, con la línea de resumen literal de cada orden:
+  - `docker compose exec backend ruff check .`: `All checks passed!`
+  - `docker compose exec backend ruff format --check .`: `158 files already formatted`
+  - `docker compose exec backend pytest -q`: `2697 passed, 2 skipped in 43.70s`
+  - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 0.89s`
+  - Desfase de `openapi.json` (la orden de la CI, `.github/workflows/ci.yml@8c7521d:44`): `spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json` sin diferencias.
+  - `manage.py check` en contenedor suelto con `-e DB_HOST=db-inexistente.invalid`: `System check identified no issues (0 silenced).`
+  - `npx vitest run`: `Test Files  36 passed (36)` y `Tests  1324 passed (1324)`.
+  - `npm run build`: `✓ built in 747ms`.
+  - `npm run api:check`: código de salida 0 (no imprime línea de resumen).
+  - eslint no aplica: esta tarea no toca `frontend/`.
+
+### Desviaciones del plan en T6
+Ninguna.
