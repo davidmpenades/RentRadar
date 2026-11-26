@@ -87,6 +87,21 @@ export const es = {
       unexpected: "Ha ocurrido un error inesperado. Vuelve a intentarlo.",
     },
   },
+  // Por identificador de categoría: los nombres de la siembra del backend
+  categories: {
+    barbecue: "Barbacoa",
+    boat: "Barco",
+    canoe: "Piragua",
+    caravan: "Caravana",
+    ebike: "Bicicleta eléctrica",
+    kayak: "Kayak",
+    motorhome: "Autocaravana",
+    other: "Otros",
+    pool: "Piscina",
+    ski: "Esquí",
+    "sports-area": "Zona deportiva",
+    van: "Furgoneta",
+  },
   map: {
     styleError: "No se ha podido cargar el mapa.",
     retry: "Reintentar",

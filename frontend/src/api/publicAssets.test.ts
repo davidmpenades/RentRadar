@@ -156,6 +156,12 @@ describe("fetchPublicAssets: la petición", () => {
     expect(Object.keys(calls[0]?.init ?? {}).sort()).toEqual(["credentials", "signal"]);
   });
 
+  it("añade los filtros detrás del cuadro, con & y codificados", async () => {
+    const { calls, fetchAssets } = setup(() => Promise.resolve(jsonResponse({ results: [], incomplete: false })));
+    await fetchAssets(BOX, new AbortController().signal, { category: "ski", q: "esquí & botas" });
+    expect(calls[0]?.url).toBe(`/api/v1/public/assets/?${BOX_QUERY}&category=ski&q=esqu%C3%AD+%26+botas`);
+  });
+
   it("la ruta y los parámetros de la petición son los de la descripción OpenAPI", async () => {
     const { calls, fetchAssets } = setup(() => Promise.resolve(jsonResponse({ results: [], incomplete: false })));
     await fetchAssets(BOX, new AbortController().signal);
