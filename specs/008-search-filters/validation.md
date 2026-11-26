@@ -931,3 +931,132 @@ Medidas de tiempo sobre el `h2` de la región de estado del panel, con el setter
 4. El fallo de «con estos filtros» durante la espera se dedujo del código (`frontend/src/pages/MapPage.tsx@5bf1719:49` y `frontend/src/map/scheduler.ts@5bf1719:39-46`) y no se midió antes del arreglo; después del arreglo sí (segunda ronda).
 5. F4, «con un error, los filtros no cambian» (`specs/008-search-filters/plan.md@57eec8e:342`), y el arreglo de `MapPage` no tienen test unitario, porque `MapPage` no se prueba en node. Se comprobaron en el navegador: «Reintentar» con `category=kayak` (primera ronda) y las dos medidas de tiempo (segunda ronda).
 6. A 1280 px no se midió el vacío con un solo botón.
+
+## T10 — comprobaciones
+Sin cambios de código ni de tests en esta tarea. Base: `ac7a5f5` (`docs(spec-008): mark T9 done`), con `git status --short` vacío antes y después de la tanda. Stack en marcha, con `docker compose ps --status running --format '{{.Service}}'` (D1): `backend` y `db`. Fecha: 26-11-2026.
+
+### Tanda previa (una sola vez)
+Línea de resumen literal de cada orden:
+- `docker compose exec backend pytest -q` (D3): `2697 passed, 2 skipped in 46.68s` (los dos saltados son los de medición).
+- `docker compose exec backend sh -c "ruff check . && ruff format --check ."` (D4): `All checks passed!` y `158 files already formatted`.
+- `docker compose exec backend pytest -q config/tests/test_migrations.py` (D12): `1 passed in 0.88s`.
+- Desfase de `openapi.json` (D13, `spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json`): sin avisos ni diferencias, código de salida 0.
+- `manage.py check` en contenedor suelto con `-e DB_HOST=db-inexistente.invalid` (D14): `System check identified no issues (0 silenced).`
+- `npx vitest run`: `Test Files  39 passed (39)` y `Tests  1383 passed (1383)`.
+- `npm run build`: `✓ built in 739ms`, con el aviso de tamaño de chunk que ya constaba en `MEMORY.md@ac7a5f5:48` (maplibre-gl).
+- `npm run api:check`: `✨ openapi-typescript 7.13.0`, código de salida 0.
+- eslint, desde `frontend/`, sobre los `.ts` y `.tsx` que ha tocado la spec (`git diff --name-only --relative --diff-filter=d dev...HEAD -- '*.ts' '*.tsx'`, 20 ficheros): 0 errores y 1 aviso. Son 19 ficheros revisados; `src/api/schema.gen.ts` lo ignora la configuración de eslint (`File ignored because of a matching ignore pattern`) y lo cubre `npm run api:check`.
+
+### Migración en la BD de desarrollo (D11)
+- Orden expresa en ese momento (`specs/008-search-filters/tasks.md@ac7a5f5:25`): solo `docker compose exec backend python manage.py migrate`, una vez, hacia las 19:21 (hora local). No se ejecutó el comando de demostración.
+- Salida literal, código de salida 0:
+```
+Operations to perform:
+  Apply all migrations: assets, auth, categories, contenttypes, core, sessions, users
+Running migrations:
+  Applying assets.0005_asset_title_folded... OK
+```
+- Es la salida prevista: una sola línea «Applying». La migración es la de `backend/apps/assets/migrations/0005_asset_title_folded.py@ac7a5f5:1-30`; su SQL se revisó en T2 (`specs/008-search-filters/validation.md@ac7a5f5:152-160`).
+- Antes de aplicarla, las peticiones con `q` daban 500 en esta BD (observado en T8, `specs/008-search-filters/validation.md@ac7a5f5:740` y `:749`, y en T9, `:905`) y se anticipó en `specs/008-search-filters/tasks.md@ac7a5f5:269`. Tras aplicarla, esas mismas peticiones dan 200 (abajo). No se ha leído la BD de desarrollo ni los logs de `db`.
+
+### Condiciones del navegador
+- Chrome DevTools en contexto aislado y con navegación nueva a `/map`, con el servidor de Vite (`npm run dev`) en segundo plano y el stack del backend en marcha.
+- Dos anchuras: 1280×800 (pantalla ancha) y 375×667 (factor 2, móvil y táctil, con `emulate`; el cambio recarga la página).
+- Los datos son los 25 bienes de demostración de la BD de desarrollo: 24 activos y uno pausado, «Piscina infantil con toldo» (`backend/apps/assets/demo.py@ac7a5f5:312`).
+- Pruebas espaciadas: ninguna petición dio 429 (límite de 60 por minuto, `backend/apps/assets/views.py@ac7a5f5:23`) y ninguna prueba se repitió por contaminación.
+- Cómo se tomó cada medida:
+  - a 1280, cada texto con la herramienta `fill`, que escribe en el campo y lanza el evento de entrada; chips y botones con clics reales;
+  - a 375, los chips y botones con clics reales y los 11 textos de la letra c en una sola secuencia con el setter nativo y un evento `input` por texto, con 1,2 s entre ellos; los 65 caracteres, con `fill`;
+  - «Pegar 65» no se hizo con el portapapeles: `fill` pone el valor y el campo quedó en 64 (`maxlength="64"`).
+- Respuestas de la lista a 1280: se leyeron en el panel de red (todas 200, salvo el 400 provocado de la letra d). A 375 no se listó la red: el estado de las respuestas se deduce de que el panel pinta el resultado (deducido).
+
+### Resultados, 1280×800 y 375×667
+Esperado y obtenido. Salvo donde se indica, las dos anchuras dieron lo mismo.
+- a. Sin filtros: esperado 24 tarjetas. Obtenido: cabecera «24 bienes en esta zona» y 24 tarjetas, en las dos anchuras.
+- b. Chips:
+  - «Esquí»: esperado 1. Obtenido: «1 bien en esta zona con estos filtros» y «Equipo de esquí de pista completo». A 1280 se ve un solo círculo en el mapa; a 375 el panel tapa el centro de la vista inicial y los círculos no se miraron.
+  - «Piscina»: esperado 2 y sin el pausado. Obtenido: «Piscina con zona de césped» y «Piscina climatizada por horas»; «Piscina infantil con toldo» no aparece. Los círculos de este caso no se miraron.
+  - «Quitar filtros»: esperado 24. Obtenido: 24 tarjetas, ningún chip pulsado, y el foco en el campo «Qué».
+- c. Texto:
+  - `esqui`: esperado 1. Obtenido: 1 («Equipo de esquí de pista completo»).
+  - `ESQUÍ`: esperado 1. Obtenido: 1.
+  - `padel`: esperado 1. Obtenido: «Pista de pádel cubierta».
+  - `bici`: esperado 3. Obtenido: las tres bicicletas eléctricas.
+  - `  bici  ` (con espacios): esperado 3. Obtenido: 3.
+  - `pequeña`: esperado 1. **Obtenido: 2**, «Furgoneta para mudanzas pequeñas» y «Caravana pequeña para dos personas». La predicción era errónea, no el servidor: «pequeña» es subcadena de «pequeñas» (`backend/apps/assets/demo.py@ac7a5f5:60` y `:168`) y la comparación es `contains`.
+  - `pequena`: esperado 0. Obtenido: 0 («No hay bienes en esta zona con estos filtros»), con «Quitar filtros»: la ñ no se pliega a la n.
+  - `infantil`: esperado 0 (el bien está pausado). Obtenido: 0.
+  - `%`: esperado 0. Obtenido: 0 (la petición lleva `q=%25`).
+  - `_`: esperado 0. Obtenido: 0.
+  - 64 caracteres: esperado 200 y 0 resultados. Obtenido: 200 y 0.
+  - 65 caracteres: esperado que el campo se quede en 64. Obtenido: `value.length` 64 y petición con 64 letras (con `fill`, ver las condiciones).
+- d. 65 caracteres por la API, con `fetch` desde la página y la caja de la vista inicial (`south=39.35&west=-0.65&north=39.60&east=-0.10`): esperado 400, `invalid_parameters`, `params.q = too_long`, sin eco del valor y `Cache-Control` con `no-store`. Obtenido, en las dos anchuras: estado 400, cuerpo literal `{"code":"invalid_parameters","params":{"q":"too_long"}}`, sin ninguna aparición del valor enviado y `Cache-Control: no-store`.
+- e. Categoría y texto:
+  - «Bicicleta eléctrica» más `plegable`: esperado 1. Obtenido: «Bicicleta eléctrica plegable».
+  - «Bicicleta eléctrica» más `esqui`: esperado 0, con «Quitar filtros» y el foco en la cabecera. Obtenido: «No hay bienes en esta zona con estos filtros» y un botón «Quitar filtros» en el panel (de 152×44 a 375). Al pulsarlo, 24 tarjetas y el foco en el contenedor de la cabecera (`tabindex="-1"` y con el `h2` dentro), como dice `specs/008-search-filters/plan.md@ac7a5f5:186`.
+  - «Esquí» más `esqui`: esperado 1. Obtenido: 1.
+- f. Teclado, anuncios, tamaños, limón, URL, almacenamiento, red y consola:
+  - Teclado: desde el campo, Tab recorre «Borrar texto» y «Quitar filtros» cuando hay filtros, los 12 chips en orden (de «Bicicleta eléctrica» a «Otros») y después el mapa y los enlaces de atribución; cada parada con contorno visible de 2 px. Espacio sobre «Esquí» y Intro sobre «Quitar filtros» funcionan. El foco tras «Quitar filtros» de la barra va al campo «Qué».
+  - Anuncios: la región de estado dice «1 bien en esta zona con estos filtros» tras el chip y «No hay bienes en esta zona con estos filtros» sin resultados.
+  - Encabezados: un `h1` («Bienes en alquiler en el mapa») y un `h2` en el panel («24 bienes en esta zona», «1 bien…» o «No hay bienes…»).
+  - Tamaños: todos los controles visibles miden 44 px o más, salvo los tres enlaces de atribución del mapa (OpenFreeMap, © OpenMapTiles y OpenStreetMap, de 14 px de alto, en las dos anchuras). Son del control de atribución de la librería de mapas, no de esta spec. Sin desbordamiento horizontal a 375.
+  - Sin limón: ningún elemento tiene el color `--color-lemon` (`frontend/src/styles/index.css@ac7a5f5:18`, `#f5d547`) en su color, fondo, bordes, contorno, relleno, trazo, sombra ni degradado calculados. Con un chip activo, a las dos anchuras.
+  - URL y almacenamiento: `location.href` sigue en `http://localhost:5173/map` y `localStorage.length` y `sessionStorage.length` valen 0 durante todas las pruebas.
+  - Red: los recursos salen solo de `http://localhost:5173` (144 a 1280, 135 a 375) y de `https://tiles.openfreemap.org` (7).
+  - Una petición por cambio, a 1280 (pestaña de red): carga, `category=ski`, `category=pool`, sin filtros, y una petición por cada texto (`q=esqui`, `q=ESQU%C3%8D`, `q=padel`, `q=bici`, `q=peque%C3%B1a`, `q=pequena`, `q=infantil`, `q=%25`, `q=_`, 64 «a» y 64 «b»), todas 200; al sustituir `bici` por `  bici  ` hubo una segunda `q=bici` (ver «Observado y abierto», 4).
+  - Consola: ningún error propio. Líneas literales:
+    - `[error] Failed to load resource: the server responded with a status of 400 (Bad Request)`: es el 400 provocado a propósito en la letra d.
+    - `[warn] layers[highway-shield-non-us].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`
+    - `[warn] layers[highway-shield-us-interstate].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`
+    - El aviso `layers[road_shield_us]` de T9 (`specs/008-search-filters/validation.md@ac7a5f5:915`) no apareció.
+    - Además, los mensajes `[debug]` de Vite y el `[info]` de React DevTools.
+- g. Búsqueda de `zxqv7413`, una sola vez desde el buscador, a las 18:25:49 UTC, a 1280: 0 resultados y «No hay bienes en esta zona con estos filtros».
+
+### Logs del backend y el texto buscado
+Orden 1, `docker compose logs --no-color --since 2026-11-26T18:25:49Z backend | grep -n -F zxqv7413`, salida literal:
+```
+1:backend-1  | [26/Nov/2026 18:25:53] "GET /api/v1/public/assets/?south=39.35&west=-0.65&north=39.60&east=-0.10&q=zxqv7413 HTTP/1.1" 200 33
+```
+Orden 2, `docker compose logs --no-color --since 2026-11-26T18:25:49Z backend | grep -v -F '"GET /api/v1/public/assets/?' | grep -c -F zxqv7413`, salida literal: `0`.
+- El texto solo aparece en la línea de acceso de la petición. Fuera de ella, ninguna línea del backend lo lleva.
+- Esa línea es del servidor de desarrollo, no de la aplicación (deducido: el backend de desarrollo corre con `runserver`, `docker-compose.yml@ac7a5f5:25`, y la configuración de logs solo toca `django.db.backends`, `backend/config/settings/base.py@ac7a5f5:99-102`).
+- No se leyeron los logs de `db`.
+- Lo que garantiza que la aplicación no registra el texto es el test `test_a_successful_request_with_a_text_does_not_leave_it_in_the_logs` (`specs/008-search-filters/tasks.md@ac7a5f5:158`), que forma parte de los 2697 de la tanda.
+
+### RF por RF
+Las pruebas B y F son las del plan (`specs/008-search-filters/plan.md@ac7a5f5:365-377`) y pasan en la tanda de arriba.
+- RF-1: B1 y B10, y en el navegador un chip deja solo sus tarjetas (letra b).
+- RF-2: B2, B3, B5 y B6, y en el navegador los textos de la letra c.
+- RF-3: B4, B7, B8 y B9, y en el navegador el 400 de la letra d.
+- RF-4: B10, y la combinación de la letra e.
+- RF-5: B11, B12 y B13, y en el navegador el 400 con `no-store`, sin eco, y los logs de la aplicación sin el texto (test de T5 y segunda pasada del grep); la línea de acceso del servidor de desarrollo sí lo lleva (abierto 3).
+- RF-6: B10, y chip más texto a la vez (letra e).
+- RF-7: F3 y F6, y el recorrido con Tab por los 12 chips (letra f).
+- RF-8: F1 y F2, y una petición por cambio en la pestaña de red (letra f).
+- RF-9: F1, y los textos y el límite de 64 de la letra c. La espera de 300 ms y el Intro inmediato se midieron en T8 (`specs/008-search-filters/validation.md@ac7a5f5:739`) y no se repitieron.
+- RF-10: F2 y F6, y el chip activo y «Quitar filtros» (letras b y e).
+- RF-11: F4 y F7, y el mensaje y el anuncio sin resultados con filtros (letras c y e).
+- RF-12: F4 y F5. El error con filtros y «Reintentar» se comprobaron en T9, con la red cortada (`specs/008-search-filters/validation.md@ac7a5f5:882` y `:887`) y con simulaciones (`:903-907`); en T10 no se repitieron y no hubo ningún error del servidor.
+- RF-13: F7, y el árbol de accesibilidad con un `h1` y un `h2` (letra f). El estilo bloqueado, solo el `h1`, no se repitió: está en T9 (`specs/008-search-filters/validation.md@ac7a5f5:883` y `:888`).
+
+### Mutaciones M1-M4
+Se recogen, sin repetirlas: M4 en `specs/008-search-filters/validation.md@ac7a5f5:177-196`, y M1a, M1b, M2 y M3 en `specs/008-search-filters/validation.md@ac7a5f5:362-478`.
+
+### Medición
+Ninguna medición nueva. Las de T1 y T6 están en «Rendimiento: antes» (`specs/008-search-filters/validation.md@ac7a5f5:5`) y «Rendimiento: después» (`:59`), con los criterios y la decisión sobre el índice en `:104-109`.
+
+### Observado y abierto
+1. Índice de la consulta de la lista: no se recomienda (`specs/008-search-filters/validation.md@ac7a5f5:108`); la observación de Z1 sin filtro (`:109`) queda para la decisión aparte, que no es de esta spec.
+2. Alfabeto de la tabla de plegado: las letras fuera de la tabla distinguen mayúsculas y tildes (riesgo aceptado, `specs/008-search-filters/plan.md@ac7a5f5:92`). Queda abierto, como pide `specs/008-search-filters/tasks.md@ac7a5f5:259`.
+3. Línea de acceso del servidor de desarrollo con el texto buscado en la consulta (observado arriba). Para el despliegue: decidir qué se registra en el acceso y si incluye la consulta.
+4. Observado, sin investigar: al sustituir `bici` por `  bici  ` (espacios al principio y al final) a 1280, la red muestra una segunda petición con `q=bici`. T8 había anotado que un espacio final no pide (`specs/008-search-filters/validation.md@ac7a5f5:739`, `:760`). El resultado mostrado fue correcto (3 tarjetas).
+5. La columna generada es nullable: ver la desviación 2 de T2 (`specs/008-search-filters/validation.md@ac7a5f5:200`).
+6. Los enlaces de atribución del mapa miden 14 px de alto (observado en la letra f).
+
+### Desviaciones del plan en T10
+1. En `specs/008-search-filters/tasks.md@ac7a5f5:255`, el caso `pequeña` se esperaba con 1 resultado y da 2 (ver la letra c).
+2. Los 11 textos de la letra c a 375 se enviaron con el setter nativo y un evento `input`, no con `fill`; la prueba de 65 caracteres no usó el portapapeles (ver las condiciones).
+3. Los círculos del mapa se miraron solo con «Esquí» a 1280.
+
+### Veredicto
+Con la 0005 aplicada en la BD de desarrollo, la lista pública responde 200 con filtros de categoría, de texto y combinados, y los resultados coinciden con lo esperado en las dos anchuras, salvo la predicción de `pequeña` (desviación 1, explicada por los datos). La tanda de pytest, ruff, vitest, build, eslint y `api:check` está en verde. Quedan abiertos el índice, el alfabeto de la tabla de plegado y la línea de acceso del servidor de desarrollo. La validación formal de la spec y el cierre de su estado quedan fuera de T10 (`specs/008-search-filters/tasks.md@ac7a5f5:271`).
