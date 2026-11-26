@@ -6,17 +6,15 @@ from decimal import Decimal
 from typing import NamedTuple
 
 import pytest
-from django.contrib.gis.db.models import GeometryField
 from django.contrib.gis.geos import Point
 from django.db import connection
-from django.db.models import FloatField, Func
-from django.db.models.functions import Cast
 from django.test.utils import CaptureQueriesContext
 
+from apps.assets.filters import Filters, parse_filters
 from apps.assets.location import PRIVACY_RADII
 from apps.assets.models import Asset, PriceUnit
 from apps.assets.rules import COHERENCE_LATITUDE, COHERENCE_LONGITUDE
-from apps.assets.selectors import PUBLIC_FIELDS, visible_assets_in_zone
+from apps.assets.selectors import visible_assets_in_zone
 from apps.assets.tests.conftest import NOW
 from apps.assets.zone import Zone
 from apps.categories.models import Category
@@ -223,39 +221,23 @@ def _assert_generated_titles(assets):
 # --- Consultas -----------------------------------------------------------------
 
 
-def _selector_sql(zone):
+# El texto se pliega dentro de parse_filters, igual que en una petición real
+def _filters_of(case):
+    params = {}
+    if case.category_slug is not None:
+        params["category"] = [case.category_slug]
+    if case.fragment is not None:
+        params["q"] = [case.fragment]
+    filters = parse_filters(params)
+    assert isinstance(filters, Filters)
+    return filters
+
+
+def _selector_sql(zone, filters):
     with CaptureQueriesContext(connection) as context:
-        visible_assets_in_zone(zone=zone, limit=LIMIT)
+        visible_assets_in_zone(zone=zone, limit=LIMIT, filters=filters)
     assert len(context.captured_queries) == 1
     return context.captured_queries[0]["sql"], None
-
-
-# Réplica de la consulta del selector con los filtros que este aún no admite
-def _candidate_sql(zone, category_slug, fragment):
-    geometry = Cast("public_location", GeometryField())
-    queryset = (
-        Asset.objects.filter(status="active", owner__is_active=True)
-        .annotate(
-            longitude=Func(geometry, function="ST_X", output_field=FloatField()),
-            latitude=Func(geometry, function="ST_Y", output_field=FloatField()),
-        )
-        .filter(
-            longitude__range=(zone.west, zone.east),
-            latitude__range=(zone.south, zone.north),
-        )
-    )
-    if category_slug is not None:
-        queryset = queryset.filter(category__slug=category_slug)
-    if fragment is not None:
-        queryset = queryset.filter(title__icontains=fragment)
-    queryset = queryset.order_by("-created_at", "-id").values(*PUBLIC_FIELDS)
-    return queryset[: LIMIT + 1].query.sql_with_params()
-
-
-def _query_of(case, zone):
-    if case.category_slug is None and case.fragment is None:
-        return _selector_sql(zone)
-    return _candidate_sql(zone, case.category_slug, case.fragment)
 
 
 # --- Medición ------------------------------------------------------------------
@@ -370,7 +352,7 @@ def test_measure_the_list_query_plans(db):
     rows = []
     for case in CASES:
         for name, zone in ZONES:
-            result = _measure(*_query_of(case, zone))
+            result = _measure(*_selector_sql(zone, _filters_of(case)))
             rows.append(
                 [
                     case.label,
