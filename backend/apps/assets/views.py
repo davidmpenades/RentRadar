@@ -6,9 +6,10 @@ from rest_framework.response import Response
 from rest_framework.throttling import AnonRateThrottle
 from rest_framework.views import APIView
 
+from apps.assets.filters import parse_public_query
 from apps.assets.selectors import visible_assets_in_zone
 from apps.assets.serializers import PublicAssetListSerializer, PublicAssetSerializer
-from apps.assets.zone import ZoneError, parse_zone
+from apps.assets.zone import ZoneError
 from apps.core.api import ApiError
 from apps.core.middleware import mark_response_cookieless
 from apps.core.serializers import ApiErrorSerializer
@@ -33,6 +34,16 @@ def _bound_parameter(name, description):
     )
 
 
+def _filter_parameter(name, description):
+    return OpenApiParameter(
+        name,
+        OpenApiTypes.STR,
+        OpenApiParameter.QUERY,
+        required=False,
+        description=description,
+    )
+
+
 class PublicAssetListView(APIView):
     # Sin autenticación: la respuesta es igual para todos y la sesión no se toca
     authentication_classes = []
@@ -48,6 +59,22 @@ class PublicAssetListView(APIView):
             _bound_parameter("west", "Longitud del límite oeste de la zona."),
             _bound_parameter("north", "Latitud del límite norte de la zona."),
             _bound_parameter("east", "Longitud del límite este de la zona."),
+            _filter_parameter(
+                "category",
+                "Identificador de categoría (por ejemplo, ski). Limita la lista a "
+                "los bienes de esa categoría. Secuencias de letras minúsculas ASCII "
+                "o dígitos separadas por un guion simple, hasta 50 caracteres. Un "
+                "identificador bien formado que no corresponde a ninguna categoría "
+                "da una lista vacía.",
+            ),
+            _filter_parameter(
+                "q",
+                "Texto que debe contener el título, sin distinguir mayúsculas ni las "
+                "tildes de las letras latinas de Europa occidental (la ñ cuenta como "
+                "una letra distinta de la n). Se recorta por los extremos; hasta 64 "
+                "caracteres y sin caracteres de control. Solo se compara con el "
+                "título.",
+            ),
         ],
         responses={
             200: PublicAssetListSerializer,
@@ -57,11 +84,13 @@ class PublicAssetListView(APIView):
         },
     )
     def get(self, request):
-        zone = parse_zone(dict(request.query_params.lists()))
-        if isinstance(zone, ZoneError):
-            raise ApiError(zone.code, zone.params)
+        query = parse_public_query(dict(request.query_params.lists()))
+        if isinstance(query, ZoneError):
+            raise ApiError(query.code, query.params)
 
-        rows, incomplete = visible_assets_in_zone(zone=zone, limit=PUBLIC_LIST_LIMIT)
+        rows, incomplete = visible_assets_in_zone(
+            zone=query.zone, limit=PUBLIC_LIST_LIMIT, filters=query.filters
+        )
         response = Response(
             {
                 "results": PublicAssetSerializer(rows, many=True).data,

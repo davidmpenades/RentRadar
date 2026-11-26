@@ -156,7 +156,7 @@ describe("fetchPublicAssets: la petición", () => {
     expect(Object.keys(calls[0]?.init ?? {}).sort()).toEqual(["credentials", "signal"]);
   });
 
-  it("la ruta y los cuatro nombres de parámetro son los de la descripción OpenAPI", async () => {
+  it("la ruta y los parámetros de la petición son los de la descripción OpenAPI", async () => {
     const { calls, fetchAssets } = setup(() => Promise.resolve(jsonResponse({ results: [], incomplete: false })));
     await fetchAssets(BOX, new AbortController().signal);
     const requested = new URL(calls[0]?.url ?? "", "http://localhost");
@@ -164,9 +164,15 @@ describe("fetchPublicAssets: la petición", () => {
     expect(Object.keys(openapi.paths)).toContain(requested.pathname);
     const operation = openapi.paths["/api/v1/public/assets/"].get;
     const declared = operation.parameters.map((parameter) => parameter.name).sort();
-    expect(declared).toEqual(["east", "north", "south", "west"]);
+    const required = operation.parameters
+      .filter((parameter) => parameter.required === true)
+      .map((parameter) => parameter.name)
+      .sort();
+    expect(declared).toEqual(["category", "east", "north", "q", "south", "west"]);
+    expect(required).toEqual(["east", "north", "south", "west"]);
     expect(operation.parameters.every((parameter) => parameter.in === "query")).toBe(true);
-    expect([...requested.searchParams.keys()].sort()).toEqual(declared);
+    // Sin filtros, la petición manda exactamente los obligatorios
+    expect([...requested.searchParams.keys()].sort()).toEqual(required);
   });
 
   it("devuelve la respuesta validada", async () => {

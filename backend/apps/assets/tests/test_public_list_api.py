@@ -2,6 +2,7 @@ import json
 import logging
 import re
 import uuid
+from datetime import timedelta
 from unittest import mock
 
 import pytest
@@ -15,6 +16,7 @@ from rest_framework.throttling import AnonRateThrottle
 
 from apps.assets.models import Asset
 from apps.assets.tests.conftest import (
+    NOW,
     SENTINEL_LATITUDE,
     SENTINEL_LONGITUDE,
     coordinate_forms,
@@ -61,6 +63,7 @@ PLANNED_CODES = {
     "throttled",
 }
 OTHER_IP = "10.1.1.1"
+BOUND_NAMES = {"south", "west", "north", "east"}
 
 
 class FakeClock:
@@ -366,6 +369,8 @@ def test_input_errors_are_not_stored_and_do_not_echo_the_values_or_log_them(
         "west": "39.512345",
         "north": "39.598765",
         "east": "99999999",
+        "category": "Zzqq-Cat",
+        "q": "zzqqtexto" + "x" * 64,
     }
     caplog.set_level(logging.DEBUG)
 
@@ -382,7 +387,14 @@ def test_unknown_parameters_are_ignored(client, visible_asset):
     visible_asset()
     expected = fetch(client).json()
 
-    for extra in ({"format": "xml"}, {"category": "pool"}, {"q": "taladro"}):
+    extras = (
+        {"format": "xml"},
+        {"category_slug": "ski"},
+        {"text": "esqui"},
+        {"Category": "ski"},
+        {"Q": "esqui"},
+    )
+    for extra in extras:
         response = fetch(client, {**VALENCIA_QUERY, **extra})
 
         assert response.status_code == 200
@@ -856,6 +868,145 @@ def test_no_form_of_the_exact_coordinates_reaches_the_logs(client, build_asset, 
         assert form not in caplog.text
 
 
+# --- Filtros category y q -----------------------------------------------------
+
+
+def filtered_query(**filters):
+    return {**VALENCIA_QUERY, **filters}
+
+
+def public_ids(body):
+    return [item["public_id"] for item in body["results"]]
+
+
+def test_category_and_text_together_return_only_the_assets_that_meet_both(
+    client, visible_asset, ski_category
+):
+    both = visible_asset(title="Esqui de pista", category=ski_category)
+    visible_asset(title="Taladro", category=ski_category)
+    visible_asset(title="Esqui de pista")
+    visible_asset(title="Taladro")
+
+    response = fetch(client, filtered_query(category="ski", q="esqui"))
+
+    assert response.status_code == 200
+    assert public_ids(response.json()) == [str(both.public_id)]
+
+
+def test_a_well_formed_unknown_category_returns_200_and_an_empty_complete_list(
+    client, visible_asset
+):
+    visible_asset()
+
+    response = fetch(client, filtered_query(category="no-such-category"))
+
+    assert response.status_code == 200
+    assert response.json() == {"results": [], "incomplete": False}
+
+
+@pytest.mark.parametrize("case", ["more-than-the-limit-match", "few-match-among-many"])
+def test_the_limit_applies_after_the_filter(client, build_asset, case):
+    # Los que no cumplen son más recientes: un tope previo al filtro los contaría
+    if case == "more-than-the-limit-match":
+        matching, newer = PUBLIC_LIST_LIMIT + 1, 100
+    else:
+        matching, newer = 5, PUBLIC_LIST_LIMIT + 50
+    titles = [f"Taladro {n}" for n in range(newer)]
+    titles += [f"Esqui {n}" for n in range(matching)]
+    assets = [
+        build_asset(title=title, created_at=NOW - timedelta(minutes=minutes))
+        for minutes, title in enumerate(titles)
+    ]
+    Asset.objects.bulk_create(assets)
+
+    body = fetch(client, filtered_query(q="esqui")).json()
+
+    expected = [str(asset.public_id) for asset in assets[newer:]][:PUBLIC_LIST_LIMIT]
+    assert public_ids(body) == expected
+    assert body["incomplete"] is (matching > PUBLIC_LIST_LIMIT)
+
+
+@pytest.mark.parametrize("viewer", ["anonymous", "owner", "staff"])
+def test_every_kind_of_visitor_receives_the_same_body_with_filters(
+    client, owner, staff, visible_asset, ski_category, viewer
+):
+    matching = {"title": "Esqui de pista", "category": ski_category}
+    inside = visible_asset(**matching)
+    visible_asset(status="paused", **matching)
+    visible_asset(41.0, -0.35, **matching)
+    inactive = User.objects.create(email="inactive@correo.es", is_active=False)
+    visible_asset(owner=inactive, **matching)
+    query = filtered_query(category="ski", q="esqui")
+    anonymous_body = fetch(client, query).json()
+
+    if viewer != "anonymous":
+        client.force_login({"owner": owner, "staff": staff}[viewer])
+    response = fetch(client, query)
+
+    assert response.status_code == 200
+    assert response.json() == anonymous_body
+    assert public_ids(anonymous_body) == [str(inside.public_id)]
+
+
+def test_the_root_and_every_asset_have_exactly_the_planned_keys_with_filters(
+    client, visible_asset, ski_category
+):
+    visible_asset(title="Esqui uno", category=ski_category)
+    visible_asset(title="Esqui dos", category=ski_category, privacy_radius=2000)
+
+    body = fetch(client, filtered_query(category="ski", q="esqui")).json()
+
+    assert set(body) == ROOT_KEYS
+    assert len(body["results"]) == 2
+    for item in body["results"]:
+        assert set(item) == ASSET_KEYS
+
+
+def test_the_body_never_contains_the_exact_location_with_filters(
+    client, visible_asset, ski_category
+):
+    asset = visible_asset(title="Esqui de pista", category=ski_category)
+    exact = asset.exact_location
+
+    response = fetch(client, filtered_query(category="ski", q="esqui"))
+
+    assert len(response.json()["results"]) == 1
+    for form in coordinate_forms(exact.x, exact.y, projected=False):
+        assert form not in response.content.decode()
+
+
+def test_with_the_limit_exceeded_invalid_filters_are_still_429(client, clock):
+    exhaust_limit(client)
+
+    response = client.get(URL, filtered_query(category="-ski", q=""))
+
+    assert response.status_code == 429
+    assert response.json()["code"] == "throttled"
+
+
+def test_a_successful_request_with_a_text_does_not_leave_it_in_the_logs(
+    client, visible_asset, caplog
+):
+    visible_asset(title="Zzqqtexto")
+    caplog.set_level(logging.INFO)
+
+    response = fetch(client, filtered_query(q="ZzqqTexto"))
+
+    assert len(response.json()["results"]) == 1
+    assert "zzqqtexto" not in caplog.text.lower()
+
+
+def test_invalid_filters_return_400_with_only_their_own_codes(client):
+    response = fetch(client, filtered_query(category="-ski", q=""))
+
+    assert response.status_code == 400
+    assert "no-store" in directives(response)
+    assert response.json() == {
+        "code": "invalid_parameters",
+        "params": {"category": "invalid_format", "q": "empty"},
+    }
+
+
 # --- Descripción OpenAPI ------------------------------------------------------
 
 
@@ -889,10 +1040,11 @@ def test_the_openapi_description_is_valid_and_documents_the_list(tmp_path):
     operation = path["get"]
     assert operation["operationId"] == "listPublicAssets"
     parameters = {parameter["name"]: parameter for parameter in operation["parameters"]}
-    assert set(parameters) == {"south", "west", "north", "east"}
-    for parameter in parameters.values():
+    assert set(parameters) == {"south", "west", "north", "east", "category", "q"}
+    for name, parameter in parameters.items():
         assert parameter["in"] == "query"
-        assert parameter["required"] is True
+        assert parameter["description"]
+        assert parameter.get("required", False) is (name in BOUND_NAMES)
     assert set(operation["responses"]) == {"200", "400", "405", "429"}
     schema = resolve(
         spec, operation["responses"]["200"]["content"]["application/json"]["schema"]

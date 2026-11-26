@@ -48,11 +48,13 @@ backend/
     │   ├── location.py    # Función de aproximación (pura): centro de la celda de la cuadrícula
     │   ├── rules.py       # Reglas de los campos (puras): texto, precio, radio, estado, coordenadas
     │   ├── zone.py        # parse_zone (puro): valida los cuatro límites de la zona y devuelve Zone o ZoneError
-    │   ├── selectors.py   # visible_assets_in_zone: bienes visibles de una zona, solo con campos públicos
-    │   ├── models.py      # Asset: ubicación exacta y pública en campos separados, CHECK con nombre
+    │   ├── filters.py     # parse_filters y parse_public_query (puros): validan category y q y los unen con la zona; devuelven PublicQuery o ZoneError
+    │   ├── folding.py     # Tabla de plegado (mayúsculas y tildes) y fold_for_search, la misma que usa la columna title_folded
+    │   ├── selectors.py   # visible_assets_in_zone: bienes visibles de una zona, con filtros opcionales de categoría y de título, solo con campos públicos
+    │   ├── models.py      # Asset: ubicación exacta y pública en campos separados, CHECK con nombre; title_folded (columna generada con el título plegado, solo para buscar)
     │   ├── services.py    # create_asset y update_asset: única vía de escritura de bienes
     │   ├── serializers.py # Forma JSON de la lista pública (diez campos) y esquemas de respuesta de la documentación
-    │   ├── views.py       # PublicAssetListView y PublicListThrottle: la lista pública, sin sesión y con límite
+    │   ├── views.py       # PublicAssetListView y PublicListThrottle: la lista pública, sin sesión, con límite y con los filtros category y q
     │   ├── urls.py        # Ruta public/assets/, montada bajo api/v1/ en config/urls.py
     │   ├── demo.py        # Datos puros de los 25 bienes de demostración (no importa el modelo)
     │   ├── management/commands/create_demo_assets.py  # Comando de demostración: solo en development y test, en una transacción
@@ -90,7 +92,7 @@ Los servicios no devuelven los errores de Django tal cual: los traducen a `Domai
 - Ni los errores, ni `str()` ni `repr()` ni los logs contienen coordenadas. `test_leaks.py` lo comprueba con coordenadas centinela en 22 formas.
 
 ## API pública
-La lista pública (`GET|HEAD /api/v1/public/assets/`) no autentica al visitante ni toca la sesión: `authentication_classes` está vacío y la respuesta no depende de cookies ni de cabeceras. El límite de peticiones (`PublicListThrottle`) se aplica antes de comprobar el método y de validar la zona, y cuenta por `REMOTE_ADDR` (`NUM_PROXIES = 0`). Todas las respuestas de la vista, errores incluidos, llevan la marca de `mark_response_cookieless` y salen sin cookies. Los errores salen con `Cache-Control: no-store`, y solo el 200 es cacheable. El módulo de negociación no importa `rest_framework.views`: DRF resuelve esa clase al importar la vista. Aunque exista el middleware de autenticación, la vista sigue sin leer la sesión: un test cuenta sus consultas y exige que ninguna toque `django_session`, también con una cookie de sesión válida, caducada o mal formada. Con una cookie mal formada, también la de nulos, `SessionMiddleware` añade a la respuesta el borrado de la cookie y la marca lo quita.
+La lista pública (`GET|HEAD /api/v1/public/assets/`) no autentica al visitante ni toca la sesión: `authentication_classes` está vacío y la respuesta no depende de cookies ni de cabeceras. El límite de peticiones (`PublicListThrottle`) se aplica antes de comprobar el método y de validar la zona y los filtros, y cuenta por `REMOTE_ADDR` (`NUM_PROXIES = 0`). `category` y `q` son opcionales: `parse_public_query` los valida junto con la zona dentro de `get`. Si fallan a la vez zona y filtros, `invalid_parameters` lleva los códigos de todos; `zone_inverted` y `zone_too_large` solo salen si los filtros son válidos. El selector los aplica en la misma consulta; la comparación del texto usa `title_folded`, una columna generada por `translate()` con la tabla de `folding.py`, y el texto buscado no se registra en logs ni se devuelve en los errores. Todas las respuestas de la vista, errores incluidos, llevan la marca de `mark_response_cookieless` y salen sin cookies. Los errores salen con `Cache-Control: no-store`, y solo el 200 es cacheable. El módulo de negociación no importa `rest_framework.views`: DRF resuelve esa clase al importar la vista. Aunque exista el middleware de autenticación, la vista sigue sin leer la sesión: un test cuenta sus consultas y exige que ninguna toque `django_session`, también con una cookie de sesión válida, caducada o mal formada. Con una cookie mal formada, también la de nulos, `SessionMiddleware` añade a la respuesta el borrado de la cookie y la marca lo quita.
 
 ## Autenticación y sesión
 Registro, entrada, «quién soy» y salida (`/api/v1/auth/register/`, `/login/`, `/session/` y `/logout/`, en `apps/users`). La autenticación es la sesión de Django con CSRF, en el mismo origen que la página; JWT y la aplicación móvil quedan fuera por ahora.
