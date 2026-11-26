@@ -163,7 +163,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T5 done`
   - Hecho cuando: pytest, ruff, vitest, build y `npm run api:check` en verde, `spectacular --validate --fail-on-warn` limpio y sin desfase de `openapi.json`, el diff de la colección es el previsto y la tabla de errores y la descripción OpenAPI de `category` y `q` están revisadas.
 
-- [ ] **T6. Medición después y decisión sobre el índice.** RNF Rendimiento
+- [x] **T6. Medición después y decisión sobre el índice.** RNF Rendimiento
   - Depende de T5.
   - Qué: apps/assets/tests/test_list_query_plan.py (las consultas candidatas pasan a usar el selector real, y se borran) y specs/008-search-filters/validation.md («Rendimiento: después», criterios y recomendación).
   - Tests del plan: ninguno de B1-B13 ni F1-F7.
