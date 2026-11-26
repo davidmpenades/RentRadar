@@ -178,7 +178,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T6 done`
   - Hecho cuando: las mediciones «antes» y «después» y la decisión están en validation.md, los criterios del plan están evaluados (si uno falla, se registra con su propuesta y no bloquea) y pytest está en verde. Si la medición recomienda el índice GiST funcional, solo se anota: es un cambio aparte.
 
-- [ ] **T7. Estado de filtros y petición filtrada.** RF-8, RF-9, RF-10, RF-12
+- [x] **T7. Estado de filtros y petición filtrada.** RF-8, RF-9, RF-10, RF-12
   - Depende de T5.
   - Qué:
     - frontend/src/search/filters.ts y src/search/categories.ts, y sus tests;
