@@ -127,7 +127,7 @@ Reparto: exactamente T1 a T10 de «Reparto estimado en tareas» del plan. El ín
     3. `docs(spec-008): mark T4 done`
   - Hecho cuando: pytest (incluido `test_architecture`) y ruff en verde, el diff de la colección es el previsto y M1, M2 y M3 están registradas.
 
-- [ ] **T5. Endpoint con filtros y contrato.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6
+- [x] **T5. Endpoint con filtros y contrato.** RF-1, RF-2, RF-3, RF-4, RF-5, RF-6
   - Depende de T4. Vista y contrato van en un solo commit de código, porque la tanda previa comprueba el desfase de openapi.json.
   - Qué:
     - apps/assets/views.py (parseo dentro de `get`, `category` y `q` con `required=False`);
