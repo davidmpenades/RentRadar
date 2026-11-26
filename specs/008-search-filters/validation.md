@@ -777,3 +777,157 @@ Peticiones de la lista pública, vistas en el panel de red del navegador.
 7. El estilo fallido (la barra no pintada, `frontend/src/pages/MapPage.tsx@58dbfc1:106`) no se comprobó en el navegador: sin conexión no carga ni el documento. Se comprueba en T9 (`specs/008-search-filters/tasks.md@58dbfc1:241`).
 8. El anillo de foco del chip va por dentro (`outline-offset: -5px`) con `!important`, porque la regla global de `:focus-visible` no va en capa y gana sin él (`frontend/src/styles/buttons.css@58dbfc1:122-127`). Antes: `outline-offset` de 2px y el anillo por fuera, con su borde superior en y=108 tocando el formulario.
 9. La tanda previa al commit pasó `eslint` solo sobre `FilterBar.tsx`, y la regla pide pasarlo sobre todo lo tocado. Tras el commit, `npx eslint` sobre los siete ficheros .ts y .tsx de `frontend/` que toca `58dbfc1`: código de salida 0.
+
+## T9 — comprobaciones
+- Commit de código: `57eec8ef4af427f7ff98421bc0635cd277aa91f3` `feat(panel): add filtered states and headings`. Nueve ficheros de `frontend/src` y 190 inserciones y 59 borrados: `i18n/es.ts`, `pages/MapPage.tsx`, `panel/ResultsPanel.tsx`, `panel/ResultsPanel.test.ts`, `panel/header.ts`, `panel/header.test.ts`, `state/viewState.ts`, `state/viewState.test.ts` y `state/zone.test.ts`. El diff completo (`git diff 57eec8e~1 57eec8e`) tiene el sha256 `39f972cc46712ac258864dd43bd9cebf55ecbbda5405d447aa44587fec5a7426`, el mismo que el diff de 551 líneas revisado antes del commit.
+- Cambio:
+  - `viewState` recibe `filtersActive` y `empty` y `results` llevan `filtered` (`frontend/src/state/viewState.ts@57eec8e:29-30`, `39`, `53` y `66-67`).
+  - `headerText(count, incomplete, filtered)` elige la clave de `es.panel` por plantilla y `statusText` lee `view.filtered` (`frontend/src/panel/header.ts@57eec8e:5-8`, `17` y `19`).
+  - `ResultsPanel` pinta la cabecera como `<h2>` dentro de la región de estado (`frontend/src/panel/ResultsPanel.tsx@57eec8e:66`) y, en el vacío con filtros, «Quitar filtros» y, si se puede, «Volver a la zona inicial», los dos con `btn btn-primary` y en ese orden (`frontend/src/panel/ResultsPanel.tsx@57eec8e:12`, `19-20`, `31-32` y `35-44`).
+  - «Quitar filtros» del panel pasa la acción por `run` y deja el foco en la cabecera con el `focusHeader` que ya existía (`frontend/src/panel/ResultsPanel.tsx@57eec8e:20-23`, `53`, `63` y `73`).
+  - `MapPage` pasa `onClearFilters`, lleva un `h1` `sr-only` como primer hijo de `main` y calcula `filtersActive` con los filtros de la petición lanzada (`frontend/src/pages/MapPage.tsx@57eec8e:32`, `38-43`, `55-56`, `115` y `141`).
+  - Textos nuevos: cinco claves en `es.panel` y `es.map.heading` (`frontend/src/i18n/es.ts@57eec8e:76-81` y `118`).
+- Tests: 8 ids nuevos y 17 casos más en la colección (`npx vitest run` pasa de 1366 a 1383 tests); cada uno lleva encima un comentario `// Rojo si: …` con el fallo concreto:
+  - `frontend/src/state/viewState.test.ts@57eec8e:98`, `108` y `122` (V1, V2 y «no añade filtered a %s»).
+  - `frontend/src/panel/header.test.ts@57eec8e:28` y `72` (`headerText` y `statusText` con filtros).
+  - `frontend/src/panel/ResultsPanel.test.ts@57eec8e:158`, `163` y `174` (cabecera `h2`, «Quitar filtros» y volver a la zona inicial).
+- Tanda previa al commit (la de la segunda ronda), con la línea de resumen literal de cada orden (las órdenes, en `specs/008-search-filters/tasks.md@57eec8e:15`, `17`, `18`, `33`, `34` y `35`):
+  - D1: `backend` y `db`.
+  - D3: `2697 passed, 2 skipped in 49.14s`
+  - D4: `All checks passed!` y `158 files already formatted`
+  - D12: `1 passed in 1.02s`
+  - D13: código de salida 0.
+  - D14: `System check identified no issues (0 silenced).`
+  - `npx vitest run`: `Test Files  39 passed (39)` y `Tests  1383 passed (1383)`.
+  - `npm run build`: `✓ built in 708ms`.
+  - `npx eslint` sobre los nueve ficheros .ts y .tsx del commit: código de salida 0.
+  - `npm run api:check`: código de salida 0.
+
+### Rojo
+Se tomó con los tests escritos antes del código, antes de los comentarios «Rojo si» y antes del cambio de `MapPage` de la segunda ronda (filtros de la petición lanzada).
+- `npx vitest run src/state/viewState.test.ts src/panel/header.test.ts src/panel/ResultsPanel.test.ts`:
+  - ` Test Files  3 failed (3)`
+  - `      Tests  19 failed | 79 passed (98)`
+- Las 19 líneas, todas por `AssertionError` y ninguna por import:
+```
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > pinta la cabecera como h2 dentro de la región de estado (carga)
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > pinta la cabecera como h2 dentro de la región de estado (resultados)
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > pinta la cabecera como h2 dentro de la región de estado (vacío)
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > pinta la cabecera como h2 dentro de la región de estado (acerca el mapa)
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > pinta la cabecera como h2 dentro de la región de estado (error)
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > pinta «Quitar filtros» solo en el vacío con filtros
+ FAIL  src/panel/ResultsPanel.test.ts > ResultsPanel > en el vacío con filtros ofrece volver a la zona inicial solo si se puede
+ FAIL  src/panel/header.test.ts > headerText > con filtros, 1 con la lista incompleta false dice «1 bien en esta zona con estos filtros»
+ FAIL  src/panel/header.test.ts > headerText > con filtros, 24 con la lista incompleta false dice «24 bienes en esta zona con estos filtros»
+ FAIL  src/panel/header.test.ts > headerText > con filtros, 1 con la lista incompleta true dice «Mostrando 1 bien con estos filtros. Puede haber más: acerca el mapa para verlos todos»
+ FAIL  src/panel/header.test.ts > headerText > con filtros, 40 con la lista incompleta true dice «Mostrando 40 bienes con estos filtros. Puede haber más: acerca el mapa para verlos todos»
+ FAIL  src/panel/header.test.ts > statusText > con filtros, el vacío dice «No hay bienes en esta zona con estos filtros»
+ FAIL  src/panel/header.test.ts > statusText > con filtros, los resultados dice «1 bien en esta zona con estos filtros»
+ FAIL  src/state/viewState.test.ts > viewState > es results con las tarjetas en el orden de la respuesta
+ FAIL  src/state/viewState.test.ts > viewState > es empty con una respuesta válida sin bienes
+ FAIL  src/state/viewState.test.ts > viewState > es empty si hay bienes pero ninguno se ve en la zona visible
+ FAIL  src/state/viewState.test.ts > viewState > no ofrece volver a la zona inicial si ya está en ella, ni en vacío ni en zoomIn
+ FAIL  src/state/viewState.test.ts > viewState > marca como filtrado el vacío cuando hay filtros activos
+ FAIL  src/state/viewState.test.ts > viewState > marca como filtrados los resultados cuando hay filtros activos
+```
+- Verde desde el principio: «no añade filtered a %s aunque haya filtros activos». De «pinta «Quitar filtros» solo en el vacío con filtros» falla la primera aserción; la mitad sin filtros ya era verde.
+
+### Rojo de tipos
+Al cambiar solo los tipos (`ViewState`, `ViewStateInput`, la firma de `headerText` y las props de `ResultsPanel`), antes de arreglar a quienes los usan y con las mismas salvedades de arriba, `npx tsc -b` dio seis errores, solo en `MapPage.tsx`, `ResultsPanel.tsx`, `header.ts` y `viewState.ts`, y ninguno en tests. Las posiciones son las del árbol de ese momento, no las de `57eec8e`:
+```
+src/pages/MapPage.tsx(35,26): error TS2345: Argument of type '{ styleFailed: boolean; request: RequestState; atInitialView: boolean; }' is not assignable to parameter of type 'ViewStateInput'.
+  Property 'filtersActive' is missing in type '{ styleFailed: boolean; request: RequestState; atInitialView: boolean; }' but required in type 'ViewStateInput'.
+src/pages/MapPage.tsx(127,10): error TS2741: Property 'onClearFilters' is missing in type '{ view: ViewState; onRetry: () => void | undefined; onReset: () => void; }' but required in type 'ResultsPanelProps'.
+src/panel/ResultsPanel.tsx(60,12): error TS2741: Property 'onClearFilters' is missing in type '{ view: { kind: "loading"; } | { kind: "results"; cards: readonly { readonly public_id: string; readonly title: string; readonly category_slug: string; readonly category_name: string; readonly price: string; ... 4 more ...; readonly longitude: number; }[]; incomplete: boolean; filtered: boolean; } | { ...; } | { ......' but required in type 'ResultsPanelProps'.
+src/panel/header.ts(22,14): error TS2554: Expected 3 arguments, but got 2.
+src/state/viewState.ts(66,11): error TS2322: Type '{ kind: "empty"; canReset: boolean; }' is not assignable to type 'ViewState'.
+  Property 'filtered' is missing in type '{ kind: "empty"; canReset: boolean; }' but required in type '{ kind: "empty"; canReset: boolean; filtered: boolean; }'.
+src/state/viewState.ts(67,11): error TS2322: Type '{ kind: "results"; cards: { readonly public_id: string; readonly title: string; readonly category_slug: string; readonly category_name: string; readonly price: string; readonly currency: string; readonly price_unit: string; readonly privacy_radius: number; readonly latitude: number; readonly longitude: number; }[]; ...' is not assignable to type 'ViewState'.
+  Property 'filtered' is missing in type '{ kind: "results"; cards: { readonly public_id: string; readonly title: string; readonly category_slug: string; readonly category_name: string; readonly price: string; readonly currency: string; readonly price_unit: string; readonly privacy_radius: number; readonly latitude: number; readonly longitude: number; }[]; ...' but required in type '{ kind: "results"; cards: readonly { readonly public_id: string; readonly title: string; readonly category_slug: string; readonly category_name: string; readonly price: string; readonly currency: string; readonly price_unit: string; readonly privacy_radius: number; readonly latitude: number; readonly longitude: numb...'.
+```
+- Con la implementación hecha, `npx tsc -b` dio código de salida 0.
+
+### Inventario
+- `npx vitest list src/state src/panel src/i18n src/pages`: de 77 a 85 líneas. Con `LC_ALL=C sort` son 8 líneas añadidas y ninguna quitada ni renombrada. La lista de después es la misma antes y después del cambio de `MapPage`. Los ids con `%j`, `%s` o `%d` no se expanden en la lista, así que añadir `filtered: false` a las filas de las tablas no cambia ningún id. Los 8 ids:
+```
+src/panel/ResultsPanel.test.ts > ResultsPanel > en el vacío con filtros ofrece volver a la zona inicial solo si se puede
+src/panel/ResultsPanel.test.ts > ResultsPanel > pinta la cabecera como h2 dentro de la región de estado (%s)
+src/panel/ResultsPanel.test.ts > ResultsPanel > pinta «Quitar filtros» solo en el vacío con filtros
+src/panel/header.test.ts > headerText > con filtros, %d con la lista incompleta %s dice «%s»
+src/panel/header.test.ts > statusText > con filtros, %s dice «%s»
+src/state/viewState.test.ts > viewState > marca como filtrado el vacío cuando hay filtros activos
+src/state/viewState.test.ts > viewState > marca como filtrados los resultados cuando hay filtros activos
+src/state/viewState.test.ts > viewState > no añade filtered a %s aunque haya filtros activos
+```
+- Tests existentes con el mismo id y el cuerpo cambiado:
+  - `frontend/src/state/viewState.test.ts`: el ayudante `view`, que pasa `filtersActive: false` por defecto (`frontend/src/state/viewState.test.ts@57eec8e:34-37`), y cuatro `toEqual` con `filtered: false` (`:56`, `:71`, `:75` y `:83`).
+  - `frontend/src/panel/header.test.ts`: cuatro llamadas a `headerText` con un tercer argumento `false` (`frontend/src/panel/header.test.ts@57eec8e:7`, `11`, `15` y `19`) y tres filas de la tabla de `statusText` con `filtered: false` (`:49-51`).
+  - `frontend/src/panel/ResultsPanel.test.ts`: el ayudante `panel`, con `onClearFilters: noop` (`frontend/src/panel/ResultsPanel.test.ts@57eec8e:35-36`), y trece literales de `ViewState` con `filtered: false` (`:100`, `:111-112`, `:126-127`, `:145-146`, `:198`, `:200`, `:218-219`, `:242` y `:251`).
+  - `frontend/src/state/zone.test.ts`: la llamada a `viewState` con `filtersActive: false` (`frontend/src/state/zone.test.ts@57eec8e:50`).
+
+### Navegador
+Chrome DevTools MCP en un contexto aislado, con el viewport emulado y sin táctil, contra `http://localhost:5173/map` y los datos de demostración de la BD de desarrollo.
+
+#### Primera ronda (375×667 y 1280×800)
+Se tomó con la versión anterior de `MapPage`, que calculaba `filtersActive` con lo tecleado (`hasActiveFilters(filters)`). La única diferencia con el commit es ese cálculo y los comentarios de los tests.
+- Árbol de accesibilidad con datos reales, a las dos anchuras: `banner`; `main` con `heading "Bienes en alquiler en el mapa" level="1"`, `search` (`searchbox "Buscar por título"`), 12 `button` de chips, `region "Mapa de bienes en alquiler"`, y `complementary "Bienes en esta zona"` con `status` y `heading "24 bienes en esta zona" level="2"`.
+- 375×667:
+  - Encabezados en el DOM: `["H1:Bienes en alquiler en el mapa:sr-only","H2:24 bienes en esta zona:text-lg leading-snug font-semibold"]`. `scrollWidth` del documento 375 con `innerWidth` 375.
+  - Vacío con filtros, «Kayak» pulsado (lista vacía simulada): `h2` «No hay bienes en esta zona con estos filtros». En la vista inicial solo sale «Quitar filtros», con clase `btn btn-primary mt-3`, left 17, right 168.8, top 474.7, bottom 518.7 (151.8×44). Panel: top 400.2, bottom 667, left 0, right 375, `scrollWidth` 373 y `clientWidth` 373.
+  - Los dos botones, tras «Acercar» (fuera de la vista inicial), en este orden y los dos con clase `btn btn-primary mt-3`:
+    - «Quitar filtros»: left 17, right 168.8, top 474.7, bottom 518.7 (151.8×44).
+    - «Volver a la zona inicial»: left 17, right 239.7, top 530.7, bottom 574.7 (222.7×44).
+    - Panel: `scrollWidth` 373, `clientWidth` 373, `scrollHeight` 265 y `clientHeight` 265. Documento: `scrollWidth` 375 con `innerWidth` 375. Ningún botón desborda.
+  - Foco tras «Quitar filtros» del panel: `document.activeElement` es el `DIV` con `tabindex="-1"` de la cabecera del panel. Ningún chip pulsado, campo vacío, `h2` «24 bienes en esta zona» y la barra sin «Quitar filtros».
+  - Error con filtros, con datos reales: con `Offline` y «Kayak», `h2` «No hay conexión. Comprueba tu red y vuelve a intentarlo.» y «Reintentar» con clase `btn btn-primary mt-3`, left 17, right 152.5 y alto 44; «Kayak» sigue pulsado. En línea, «Reintentar» repite `GET /api/v1/public/assets/?south=39.35&west=-0.50&north=39.60&east=-0.25&category=kayak`: `[net::ERR_INTERNET_DISCONNECTED]` (reqid 449) y después `[200]` (reqid 450). Después: `h2` «2 bienes en esta zona con estos filtros», «Kayak» pulsado y el foco en la cabecera del panel.
+  - Estilo bloqueado: `main` con `heading "Bienes en alquiler en el mapa" level="1"` y `alert` con «No se ha podido cargar el mapa.» y `button "Reintentar"`. DOM: encabezados `["H1:Bienes en alquiler en el mapa"]`, un solo `role="alert"`, sin `form[role=search]`, 0 elementos con `aria-pressed`, sin panel; `scrollWidth` del documento 375.
+- 1280×800:
+  - Vacío con filtros, «Kayak» y «Acercar» (lista vacía simulada): `h2` «No hay bienes en esta zona con estos filtros». «Quitar filtros»: `btn btn-primary mt-3`, left 17, right 168.8, top 194.5, bottom 238.5 (151.8×44). «Volver a la zona inicial»: `btn btn-primary mt-3`, left 17, right 239.7, top 250.5, bottom 294.5 (222.7×44). Panel: left 0, right 400, top 120, bottom 800, `scrollWidth` 398 y `clientWidth` 398. Documento: `scrollWidth` 1280 con `innerWidth` 1280.
+  - Foco tras «Quitar filtros» del panel: la cabecera del panel (`DIV`); ningún chip pulsado; `h2` «24 bienes en esta zona».
+  - Error con filtros, con datos reales: con `Offline` y «Kayak», `h2` «No hay conexión. Comprueba tu red y vuelve a intentarlo.» y «Reintentar» de 135.5×44; «Kayak» pulsado. En línea, «Reintentar» repite `GET /api/v1/public/assets/?south=39.35&west=-0.65&north=39.60&east=-0.10&category=kayak`: `[net::ERR_INTERNET_DISCONNECTED]` (reqid 765) y después `[200]` (reqid 766). Después: `h2` «2 bienes en esta zona con estos filtros», «Kayak» pulsado y el foco en la cabecera del panel.
+  - Estilo bloqueado: igual que a 375 (un `h1`, un `role="alert"`, ni barra, ni chips ni panel); `scrollWidth` del documento 1280.
+
+#### Segunda ronda (375×667, con el código del commit)
+Medidas de tiempo sobre el `h2` de la región de estado del panel, con el setter nativo y un evento `input` con `bubbles`, y un `MutationObserver` sobre esa región. Los tiempos se cuentan desde el momento del evento.
+- Escribir una letra desde la vista inicial:
+  - `h2` antes y justo tras el evento: «24 bienes en esta zona».
+  - `h2` a los 130.1 ms: «24 bienes en esta zona» (no dice «con estos filtros»).
+  - Cambios observados: a 309.8 ms «Buscando bienes…» y a 322.4 ms «1 bien en esta zona con estos filtros».
+  - Al final: campo «a», `location.href` sin cambios, `localStorage.length` 0 y `sessionStorage.length` 0.
+- Borrar el texto con el filtro aplicado:
+  - `h2` antes y justo tras el evento: «1 bien en esta zona con estos filtros».
+  - `h2` a los 105.3 ms: «1 bien en esta zona con estos filtros» (siguen siendo resultados pedidos con el filtro).
+  - Cambios observados: a 306 ms «Buscando bienes…» y a 345.7 ms «24 bienes en esta zona».
+  - Al final: campo vacío y la barra sin «Quitar filtros». Red de la lista: la carga y, al borrar, `GET /api/v1/public/assets/?south=39.35&west=-0.50&north=39.60&east=-0.25 [200]` (reqid 215 y 227).
+
+#### Simulaciones y sus límites
+- Lista vacía para `category=`: no hay ninguna categoría sin bienes en la vista inicial (los 24 bienes cubren las 12), así que un `initScript` sirvió `{ "results": [], "incomplete": false }` a las peticiones de la lista con `category=`. Vale para el estado de la interfaz con una respuesta vacía; no prueba el servidor.
+- Un resultado para `q=`: las peticiones con texto dan 500 en esta BD de desarrollo (observado; se comprueba en T10, sin causa). Un `initScript` sirvió `{ results: [un bien], incomplete: false }` a las peticiones con `q=`; la única servida fue `/api/v1/public/assets/?south=39.35&west=-0.50&north=39.60&east=-0.25&q=a`, que no sale a la red. Vale para la secuencia de textos del panel; no prueba el filtro de texto del servidor.
+- Estilo bloqueado: un `initScript` rechaza con `TypeError` el `fetch` a `https://tiles.openfreemap.org` dentro de la página (rechazó `https://tiles.openfreemap.org/styles/positron`, dos veces). La petición no sale y no se ve en la red; con el estilo rechazado no hay petición a la lista.
+- Cada `initScript` vale para una sola navegación.
+
+### Privacidad y consola
+- Privacidad, en todas las comprobaciones: `location.href` sin cambios (`http://localhost:5173/map`) y `localStorage.length` y `sessionStorage.length` valen 0.
+- Consola (literal):
+  - `[error] Failed to load resource: net::ERR_INTERNET_DISCONNECTED`: una vez a 375 y una a 1280, provocado por la prueba sin conexión.
+  - `[warn] layers[highway-shield-non-us].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`
+  - `[warn] layers[highway-shield-us-interstate].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`
+  - `[warn] layers[road_shield_us].filter[1]: Expected value to be of type number, but found null instead. Falling back to false.`: observado en la primera carga de cada anchura de la primera ronda, sin causa; no aparecía en T8.
+  - Además, `[debug] [vite] connecting...`, `[debug] [vite] connected.` y `[info] Download the React DevTools for a better development experience: https://react.dev/link/react-devtools`.
+  - La segunda ronda no dio errores.
+
+### Decisiones en T9
+1. `filtered` y `filtersActive` son obligatorios: `tsc` avisó en los seis sitios del rojo de tipos (`frontend/src/state/viewState.ts@57eec8e:29-30` y `39`).
+2. Los dos botones del vacío con filtros son `btn btn-primary` y «Quitar filtros» va primero (`frontend/src/panel/ResultsPanel.tsx@57eec8e:35-44`); el plan dice «con «Quitar filtros» (y además «Volver a la zona inicial» si no está en la vista inicial)» (`specs/008-search-filters/plan.md@57eec8e:190`).
+3. `incompleteOneFiltered` es el simétrico de `incompleteOne` y no es literal en el plan, que solo da «Mostrando N bienes con estos filtros. Puede haber más: acerca el mapa para verlos todos» (`specs/008-search-filters/plan.md@57eec8e:189`; `frontend/src/i18n/es.ts@57eec8e:78`).
+4. La clave de `headerText` se arma por plantilla, así que el compilador avisa si falta alguna de las ocho (`frontend/src/panel/header.ts@57eec8e:6-8`).
+5. `filtersActive` se calcula con los filtros de la petición lanzada, fijados en `run` junto al cambio a «Buscando» (`frontend/src/pages/MapPage.tsx@57eec8e:32`, `42` y `55-56`), y no con lo tecleado: el plan nombra la entrada pero no dice de dónde sale («Entrada `filtersActive`», `specs/008-search-filters/plan.md@57eec8e:53`; `viewState({ styleFailed, request, atInitialView, filtersActive })`, `:172`). Se usa `filtersQuery(...) !== ""` porque `filters.ts` no tiene una función para `AppliedFilters`: `hasActiveFilters` recibe `FilterState` (`frontend/src/search/filters.ts@57eec8e:32`; `filtersQuery`, `:38-43`).
+6. Tras «Quitar filtros» del panel, el foco va a la cabecera con el `focusHeader` que ya existía (`frontend/src/panel/ResultsPanel.tsx@57eec8e:20-23`, `53` y `73`).
+
+### Desviaciones del plan en T9
+1. `frontend/src/state/zone.test.ts` queda fuera de la lista de T9 (`specs/008-search-filters/tasks.md@57eec8e:225-229`): solo gana `filtersActive: false` en la llamada a `viewState` (`frontend/src/state/zone.test.ts@57eec8e:50`).
+2. «`src/panel/ResultsPanel.test.ts`: los de la región de estado y la cabecera (107-121, 139-148), por el cambio de `<p>` a `<h2>`.» (`specs/008-search-filters/tasks.md@57eec8e:237`) no se cumple: ningún test existente comprobaba `<p>`; solo ganan `filtered: false` y `onClearFilters: noop`.
+3. «`npx vitest list src/state src/panel`, antes y después.» (`specs/008-search-filters/tasks.md@57eec8e:238`): se listaron además `src/i18n` y `src/pages`.
+4. El fallo de «con estos filtros» durante la espera se dedujo del código (`frontend/src/pages/MapPage.tsx@5bf1719:49` y `frontend/src/map/scheduler.ts@5bf1719:39-46`) y no se midió antes del arreglo; después del arreglo sí (segunda ronda).
+5. F4, «con un error, los filtros no cambian» (`specs/008-search-filters/plan.md@57eec8e:342`), y el arreglo de `MapPage` no tienen test unitario, porque `MapPage` no se prueba en node. Se comprobaron en el navegador: «Reintentar» con `category=kayak` (primera ronda) y las dos medidas de tiempo (segunda ronda).
+6. A 1280 px no se midió el vacío con un solo botón.
