@@ -436,3 +436,51 @@ apps/assets/tests/test_selectors.py::test_the_wildcards_and_quotes_of_the_text_a
    - `test_the_text_is_not_searched_in_the_description_the_owner_the_coordinates_or_the_category_name` pasa a `test_the_text_is_searched_only_in_the_title` (línea 696), con los mismos cuatro ids; con el nombre original, la línea del `def` medía 100 columnas. Los tests de texto construyen el filtro con `parse_filters`, no con `Filters` a mano, para que el plegado del texto y el de la columna se prueben juntos.
 2. `title_folded` no lo cubría el test existente: `plan.md:333` decía que `test_the_select_clause_has_no_columns_outside_the_whitelist` lo cubría, pero ese test solo recorre seis columnas (`id`, `description`, `status`, `created_at`, `updated_at` y `category_id`; `backend/apps/assets/tests/test_selectors.py@d13fbad:503-517`). Lo cubre el test nuevo `test_the_select_clause_has_no_columns_outside_the_whitelist_with_filters` (`backend/apps/assets/tests/test_selectors.py@d13fbad:828-834`), cuya lista de columnas (`backend/apps/assets/tests/test_selectors.py@d13fbad:537-545`) empieza por `title_folded`. El test existente no se tocó.
 3. M1 se parte en M1a (quitar `status="active"`) y M1b (quitar `owner__is_active=True`), porque `tasks.md` dice «`status` u `owner`» y son dos condiciones distintas de la misma consulta, cada una con tests distintos que la ven. Las dos mutaciones tocan la misma línea (`backend/apps/assets/selectors.py@d13fbad:30`), pero una por ejecución y con su propia predicción sellada.
+
+## T5 — comprobaciones
+- Commit de código: `1346356541da6c5c0ea9744e03a278a567d460fe` `feat(api): accept category and text filters`. Seis ficheros: `backend/apps/assets/views.py`, `backend/apps/assets/tests/test_public_list_api.py`, `backend/openapi.json`, `frontend/src/api/schema.gen.ts`, `frontend/src/api/publicAssets.test.ts` y `docs/architecture.md`. El diff completo (`git diff 1346356~1 1346356`) tiene el sha256 `3e9c1f61a20c1f60d1165de0c993a7c9f161c36abd024d191de60e5d562704bb`, el mismo que el diff revisado antes del commit.
+- Cambio de la vista (`backend/apps/assets/views.py@1346356:86-93`): `get` valida con `parse_public_query`, lanza `ApiError` con el `ZoneError` que devuelve y pasa `zone`, `limit` y `filters` al selector. La respuesta, la caché y `Vary` no cambian (`backend/apps/assets/views.py@1346356:100-101`). Los dos parámetros nuevos salen de `_filter_parameter`, con `required=False` (`backend/apps/assets/views.py@1346356:37-44` y `62-77`).
+- Tanda previa al commit. Se repitió entera tras cada cambio: la primera dio `Test Files  1 failed | 35 passed (36)` y `Tests  1 failed | 1323 passed (1324)` en `src/api/publicAssets.test.ts` (ver la desviación 2); la última, tras los dos retoques de los tests, con la línea de resumen literal de cada orden:
+  - `docker compose exec backend ruff check .`: `All checks passed!`
+  - `docker compose exec backend ruff format --check .`: `158 files already formatted`
+  - `docker compose exec backend pytest -q`: `2697 passed, 2 skipped in 54.33s`.
+  - `docker compose exec backend pytest -q config/tests/test_migrations.py`: `1 passed in 1.09s`
+  - Desfase de `openapi.json` (la orden de la CI, `.github/workflows/ci.yml@1346356:44`): `spectacular --validate --fail-on-warn` y `diff /tmp/openapi.json openapi.json` sin diferencias.
+  - `manage.py check` en contenedor suelto con `-e DB_HOST=db-inexistente.invalid`: `System check identified no issues (0 silenced).`
+  - `npx vitest run`: `Test Files  36 passed (36)` y `Tests  1324 passed (1324)`.
+  - `npm run build`: `✓ built in 782ms`.
+  - `npx eslint src/api/publicAssets.test.ts`: sin avisos, código de salida 0.
+  - `npm run api:check`: código de salida 0 (no imprime línea de resumen).
+- Suites, tras el commit: `pytest --collect-only -q apps/assets/tests` da `1208 tests collected in 1.70s` (1196 al cerrar T4, más los 12 de esta tarea). El total de `pytest -q` es `2697 passed, 2 skipped`.
+- D6, `pytest --collect-only -q` sobre `apps/assets/tests/test_public_list_api.py`, `apps/assets/tests/test_public_list_session.py` y `config/tests`: de 302 a 314 tests. Son exactamente 12 ids añadidos, todos de `apps/assets/tests/test_public_list_api.py::`, y ninguno eliminado ni renombrado:
+```
+test_category_and_text_together_return_only_the_assets_that_meet_both
+test_a_well_formed_unknown_category_returns_200_and_an_empty_complete_list
+test_the_limit_applies_after_the_filter[more-than-the-limit-match]
+test_the_limit_applies_after_the_filter[few-match-among-many]
+test_every_kind_of_visitor_receives_the_same_body_with_filters[anonymous]
+test_every_kind_of_visitor_receives_the_same_body_with_filters[owner]
+test_every_kind_of_visitor_receives_the_same_body_with_filters[staff]
+test_the_root_and_every_asset_have_exactly_the_planned_keys_with_filters
+test_the_body_never_contains_the_exact_location_with_filters
+test_with_the_limit_exceeded_invalid_filters_are_still_429
+test_a_successful_request_with_a_text_does_not_leave_it_in_the_logs
+test_invalid_filters_return_400_with_only_their_own_codes
+```
+  Tras los dos retoques de los tests, la colección se repitió y dio 314 ids, ninguno distinto de la anterior.
+- Tests que cambian de aserciones, con el mismo id: `test_input_errors_are_not_stored_and_do_not_echo_the_values_or_log_them` (`backend/apps/assets/tests/test_public_list_api.py@1346356:364`), `test_unknown_parameters_are_ignored` (`backend/apps/assets/tests/test_public_list_api.py@1346356:386`) y `test_the_openapi_description_is_valid_and_documents_the_list` (`backend/apps/assets/tests/test_public_list_api.py@1346356:1022`). Los cinco de fugas que `tasks.md` manda no tocar no cambian.
+- Contrato: `openapi.json` y `schema.gen.ts` solo añaden `category` y `q`, opcionales y de tipo `string`, sin `pattern` ni `maxLength` (`backend/openapi.json@1346356:317` y `343`; `frontend/src/api/schema.gen.ts@1346356:361` y `367`). Los cuatro límites siguen con `required: true`.
+
+### Desviaciones del plan en T5
+1. 12 tests nuevos en lugar de los 28 de `tasks.md` (`specs/008-search-filters/tasks.md@1346356:147`), anclados en `backend/apps/assets/tests/test_public_list_api.py@1346356:871-1007`: un id por fallo distinto. Once de los 12 salen de la lista de 28; el duodécimo, `test_invalid_filters_return_400_with_only_their_own_codes` (línea 999), no estaba en ella. Qué se quitó o cambió:
+   - `test_the_category_filter_returns_only_that_category` (1) no se escribió. Lo que lo cubre son `test_category_and_text_together_return_only_the_assets_that_meet_both` (línea 882) y `test_a_well_formed_unknown_category_returns_200_and_an_empty_complete_list` (línea 896).
+   - Los 9 de visitantes con `[category|text|both]` pasan a 3, uno por visitante, con los dos filtros a la vez (línea 930).
+   - Los de pausado y de cuenta desactivada con cada filtro (6 ids) no se escribieron: los cubre el de visitantes, que incluye un bien pausado y otro de una cuenta desactivada que coinciden con los dos filtros.
+   - Claves y ubicación exacta con cada filtro (3 + 3) pasan a un id cada una, con los dos filtros (líneas 951 y 965).
+   - Los ids de los dos tests con nombre distinto: `test_the_limit_applies_after_the_filter[more-than-the-limit-match|few-match-among-many]` (línea 908), como en T4 (antes `[201-match|5-of-201-match]`), y `test_every_kind_of_visitor_receives_the_same_body_with_filters` (línea 930), antes `..._with_any_filter`.
+2. `frontend/src/api/publicAssets.test.ts` no estaba previsto: su test «la ruta y los cuatro nombres de parámetro son los de la descripción OpenAPI» comparaba los parámetros declarados con los cuatro límites y falló al ganar el contrato dos parámetros. Ahora se llama «la ruta y los parámetros de la petición son los de la descripción OpenAPI» (`frontend/src/api/publicAssets.test.ts@1346356:159`) y comprueba que hay 6 declarados (línea 171), que los obligatorios son exactamente los cuatro límites (línea 172) y que la petición sin filtros manda exactamente los obligatorios (línea 175). El cliente no se tocó.
+3. Los tests se escribieron después de la vista (`backend/apps/assets/views.py@1346356:86-93`) y no se comprobó que fallaran sin ella (`backend/apps/assets/tests/test_public_list_api.py@1346356:871-1007`).
+
+### Decisiones en T5
+1. Las descripciones OpenAPI de `category` y `q` están en castellano, como la del plan (`specs/008-search-filters/plan.md@1346356:137`) y las de los cuatro límites (`backend/apps/assets/views.py@1346356:58-61`).
+2. El test del tope usa `PUBLIC_LIST_LIMIT` y no un 200 literal (`backend/apps/assets/tests/test_public_list_api.py@1346356:911`, `913`, `924` y `926`). El 200 literal lo fija `test_the_max_age_and_the_limit_are_the_planned_ones` (`backend/apps/assets/tests/test_public_list_api.py@1346356:623-625`).
