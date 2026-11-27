@@ -976,7 +976,7 @@ Esperado y obtenido. Salvo donde se indica, las dos anchuras dieron lo mismo.
 - b. Chips:
   - «Esquí»: esperado 1. Obtenido: «1 bien en esta zona con estos filtros» y «Equipo de esquí de pista completo». A 1280 se ve un solo círculo en el mapa; a 375 el panel tapa el centro de la vista inicial y los círculos no se miraron.
   - «Piscina»: esperado 2 y sin el pausado. Obtenido: «Piscina con zona de césped» y «Piscina climatizada por horas»; «Piscina infantil con toldo» no aparece. Los círculos de este caso no se miraron.
-  - «Quitar filtros»: esperado 24. Obtenido: 24 tarjetas, ningún chip pulsado, y el foco en el campo «Qué».
+  - «Quitar filtros»: esperado 24. Obtenido: 24 tarjetas, ningún chip pulsado, y el foco en el campo «Buscar por título».
 - c. Texto:
   - `esqui`: esperado 1. Obtenido: 1 («Equipo de esquí de pista completo»).
   - `ESQUÍ`: esperado 1. Obtenido: 1.
@@ -996,7 +996,7 @@ Esperado y obtenido. Salvo donde se indica, las dos anchuras dieron lo mismo.
   - «Bicicleta eléctrica» más `esqui`: esperado 0, con «Quitar filtros» y el foco en la cabecera. Obtenido: «No hay bienes en esta zona con estos filtros» y un botón «Quitar filtros» en el panel (de 152×44 a 375). Al pulsarlo, 24 tarjetas y el foco en el contenedor de la cabecera (`tabindex="-1"` y con el `h2` dentro), como dice `specs/008-search-filters/plan.md@ac7a5f5:186`.
   - «Esquí» más `esqui`: esperado 1. Obtenido: 1.
 - f. Teclado, anuncios, tamaños, limón, URL, almacenamiento, red y consola:
-  - Teclado: desde el campo, Tab recorre «Borrar texto» y «Quitar filtros» cuando hay filtros, los 12 chips en orden (de «Bicicleta eléctrica» a «Otros») y después el mapa y los enlaces de atribución; cada parada con contorno visible de 2 px. Espacio sobre «Esquí» y Intro sobre «Quitar filtros» funcionan. El foco tras «Quitar filtros» de la barra va al campo «Qué».
+  - Teclado: desde el campo, Tab recorre «Borrar texto» y «Quitar filtros» cuando hay filtros, los 12 chips en orden (de «Bicicleta eléctrica» a «Otros») y después el mapa y los enlaces de atribución; cada parada con contorno visible de 2 px. Espacio sobre «Esquí» y Intro sobre «Quitar filtros» funcionan. El foco tras «Quitar filtros» de la barra va al campo «Buscar por título».
   - Anuncios: la región de estado dice «1 bien en esta zona con estos filtros» tras el chip y «No hay bienes en esta zona con estos filtros» sin resultados.
   - Encabezados: un `h1` («Bienes en alquiler en el mapa») y un `h2` en el panel («24 bienes en esta zona», «1 bien…» o «No hay bienes…»).
   - Tamaños: todos los controles visibles miden 44 px o más, salvo los tres enlaces de atribución del mapa (OpenFreeMap, © OpenMapTiles y OpenStreetMap, de 14 px de alto, en las dos anchuras). Son del control de atribución de la librería de mapas, no de esta spec. Sin desbordamiento horizontal a 375.
@@ -1060,3 +1060,120 @@ Ninguna medición nueva. Las de T1 y T6 están en «Rendimiento: antes» (`specs
 
 ### Veredicto
 Con la 0005 aplicada en la BD de desarrollo, la lista pública responde 200 con filtros de categoría, de texto y combinados, y los resultados coinciden con lo esperado en las dos anchuras, salvo la predicción de `pequeña` (desviación 1, explicada por los datos). La tanda de pytest, ruff, vitest, build, eslint y `api:check` está en verde. Quedan abiertos el índice, el alfabeto de la tabla de plegado y la línea de acceso del servidor de desarrollo. La validación formal de la spec y el cierre de su estado quedan fuera de T10 (`specs/008-search-filters/tasks.md@ac7a5f5:271`).
+
+## Validación formal (/sdd-validate)
+Vuelta de corrección 1. Los revisores y la pasada de navegador trabajaron sobre `4c80b86`; la corrección son los commits `bab6f01` y `3d28e3b`. Las anclas son `ruta@commit:línea`.
+
+### Alcance y veredictos
+- Tres revisores, de solo lectura: calidad, seguridad y documentación.
+- Recibieron `spec.md`, `plan.md`, `tasks.md` y el diff de código `dev...4c80b86`. No recibieron este documento.
+- Veredictos: calidad, «cambios necesarios»; seguridad, «cambios necesarios»; documentación, «aprobado».
+
+### Hallazgos y decisión
+- I-1, corregido: la respuesta 200 con filtros no tenía test de caché pública. Lo cubre `test_the_success_response_with_filters_is_public_for_60_seconds` (`backend/apps/assets/tests/test_public_list_api.py@bab6f01:1000`).
+- I-2, corregido: el identificador `ski-` no se probaba. Lo cubre `test_a_category_with_a_wrong_format_is_rejected[trailing-hyphen]` (`backend/apps/assets/tests/test_filters.py@bab6f01:206`).
+- O-1, corregido: el 400 con filtros inválidos no comprobaba que no se consultaran bienes. Lo cubre `test_invalid_filters_are_rejected_without_querying_the_assets` (`backend/apps/assets/tests/test_public_list_api.py@bab6f01:1025`).
+- I-3, asumido: los tests de fugas y de zona usan solo «categoría y texto a la vez». Motivo: cada bien trampa coincide con la categoría y con el texto. Anclas: `backend/apps/assets/tests/test_selectors.py@4c80b86:604-609` (pausado), `:616-621` (cuenta desactivada) y `:630-632` (fuera de la zona); `backend/apps/assets/tests/test_public_list_api.py@4c80b86:933-948` (pausado, fuera de la zona y cuenta desactivada, con `category="ski", q="esqui"`). Riesgo residual: un defecto propio de «solo categoría» o «solo texto» (`backend/apps/assets/selectors.py@4c80b86:29-44`).
+- I-4, corregido en `3d28e3b`: spec, plan y tasks decían «Qué» como nombre del buscador. La spec dice ahora «El buscador tiene una etiqueta accesible «Buscar por título».» (`specs/008-search-filters/spec.md@3d28e3b:101`). `git grep -n 'Qué'` sobre `3d28e3b` en spec, plan y tasks solo da otros usos de la palabra, y `specs/008-search-filters/tasks.md@3d28e3b:201` es ahora «T8. Barra de filtros: buscador y chips.». En T10 de este documento, la etiqueta «Qué» de las líneas 979 y 999 pasa a «Buscar por título».
+- O-3, O-12, O-13 y O-14: opcionales, fuera de la 008.
+  - O-3: comentario de cabecera de tres líneas en `backend/apps/assets/folding.py@4c80b86:1-3`.
+  - O-12: el test del cliente para el error de red llama a `fetchAssets(BOX, …)` sin filtros, y ningún test del cliente usa un `q` centinela en los errores de red (`frontend/src/api/publicAssets.test.ts@4c80b86:390-403`).
+  - O-13: ningún test envía filtros y recibe una respuesta con un campo extra; la respuesta se valida siempre con `validateResponse` (`frontend/src/api/publicAssets.ts@4c80b86:95`).
+  - O-14: `appliedFilters` no limita la longitud del texto (`frontend/src/search/filters.ts@4c80b86:24-30`); el límite de 64 está en el campo (`frontend/src/search/FilterBar.tsx@4c80b86:81`, `maxLength={64}`).
+- O-7, O-8, O-9, O-15 y O-17: opcionales, sin cambios en la 008.
+  - O-7: `_selector_sql` devuelve `(sql, None)` solo para encajar con `_measure` (`backend/apps/assets/tests/test_list_query_plan.py@4c80b86:240`, `return context.captured_queries[0]["sql"], None`); sin cambios en la 008.
+  - O-8: los commits `90e3173` y `2eab6ca` vuelven a partir líneas de `MEMORY.md` ajenas a la spec (`git diff --stat dev...4c80b86 -- MEMORY.md`: 7 inserciones y 11 borrados); sin cambios en la 008.
+  - O-9: según el revisor (deducido), cada pausa de 300 ms al escribir pide la lista y cuenta para el límite de 60/min por IP (`frontend/src/pages/MapPage.tsx@4c80b86:120`, `onTextChange={(raw) => changeFilters(setText(filters, raw), "delayed")}`; `frontend/src/map/scheduler.ts@4c80b86:1`, `export const REQUEST_DELAY_MS = 300;`; `backend/apps/assets/views.py@4c80b86:23-24`, `rate = "60/min"` y `scope = "public_assets"`; `backend/config/settings/base.py@4c80b86:76`, `"NUM_PROXIES": 0`); sin cambios en la 008.
+  - O-15: según el revisor, la documentación de Django no dice que `contains` escape `\`; lo fija el caso `id="backslash"` (`backend/apps/assets/tests/test_selectors.py@4c80b86:670`) sobre `title_folded__contains` (`backend/apps/assets/selectors.py@4c80b86:44`); informativo, sin cambios en la 008.
+  - O-17: `FormEvent` en `FilterBar.tsx`: el revisor de documentación lo anota con confianza baja, como deducido y sin acción (`frontend/src/search/FilterBar.tsx@4c80b86:1` y `:58`); sin cambios en la 008.
+- O-10 y O-11: abiertos para el despliegue (apartado «Abiertos para el despliegue»).
+- O-19: observado, no se investiga. `specs/008-search-filters/validation.md@3d28e3b:1052`: «Observado, sin investigar: al sustituir `bici` por `  bici  ` (espacios al principio y al final) a 1280, la red muestra una segunda petición con `q=bici`.»
+- O-20: la evidencia de RF-12 y RF-13 era de la primera ronda de T9 (`specs/008-search-filters/validation.md@3d28e3b:1039`: «en T10 no se repitieron»; `:1040`: «no se repitió: está en T9»). Se repitió con el código final (apartado «Navegador»).
+- Ya anotados en este documento, con la frase literal:
+  - O-2, U+200B, U+202E y NFD contra la BD en los tests del selector: `specs/008-search-filters/validation.md@3d28e3b:484`: «`[zero-width-space|right-to-left-override|combining-acute]` (3) pasa a `test_a_text_of_only_combining_characters_does_not_return_every_asset` (línea 712)»; y `:485`: «`nfd` se quita porque lo cubre `a_text_in_nfd_is_normalised_before_folding[accent]` de T3».
+  - O-4, sin test unitario de los manejadores de `MapPage`: `specs/008-search-filters/validation.md@3d28e3b:932`: «y el arreglo de `MapPage` no tienen test unitario, porque `MapPage` no se prueba en node». La evidencia en el navegador con el código final está en el apartado «Navegador».
+  - O-5, `filtersActive` como estado que el plan no cita: `specs/008-search-filters/validation.md@3d28e3b:924`: «`filtersActive` se calcula con los filtros de la petición lanzada, fijados en `run` junto al cambio a «Buscando»».
+  - O-6, test existente de la spec 005 modificado: `specs/008-search-filters/validation.md@3d28e3b:199`: «Un test existente de edición compara la fila completa y tuvo que incluir la columna plegada; no estaba previsto en el plan.» El test está en `backend/apps/assets/tests/test_update.py@4c80b86:218`.
+  - O-16, columna generada nullable: `specs/008-search-filters/validation.md@3d28e3b:200`: «La columna generada es nullable en la BD: Django no emite `NOT NULL` en una columna generada».
+  - O-18, el módulo de medición no corre en la tanda: `specs/008-search-filters/validation.md@3d28e3b:940`: «(los dos saltados son los de medición)»; y `:545`: «Mediciones: la orden de «Rendimiento: después (T6)», dos veces, `2 passed in 35.25s` y `2 passed in 34.79s`».
+
+### Corrección
+- Commits: `bab6f01` (`test(assets): cover filtered cache, early rejection and trailing hyphen`) y `3d28e3b` (`docs(spec-008): align the search field name with the approved label`).
+- `git diff --stat bab6f01 HEAD -- backend`, sin salida: `backend/` en `3d28e3b` es idéntico al de `bab6f01`.
+- Inventario de `apps/assets/tests`: 1208 → 1211 ids, solo los 3 previstos (I-1, I-2 y O-1). `git grep -n` de esos tres ids sobre `4c80b86`: sin coincidencias (código de salida 1); sobre `bab6f01`: las tres líneas ancla de arriba.
+- Tanda del 27-11, líneas de resumen. Las órdenes son las de `specs/008-search-filters/tasks.md@3d28e3b:15-36`:
+  - D3 (`specs/008-search-filters/tasks.md@3d28e3b:17`, `docker compose exec backend pytest -q`): `2700 passed, 2 skipped in 46.59s`.
+  - D4 (`specs/008-search-filters/tasks.md@3d28e3b:18`, `docker compose exec backend sh -c "ruff check . && ruff format --check ."`): `All checks passed!` y `158 files already formatted`.
+  - D12 (`specs/008-search-filters/tasks.md@3d28e3b:33`, `docker compose exec backend pytest -q config/tests/test_migrations.py`): `1 passed`.
+  - D13 (`specs/008-search-filters/tasks.md@3d28e3b:34`): sin diferencias.
+  - D14 (`specs/008-search-filters/tasks.md@3d28e3b:35`): `no issues`.
+  - Frontend (`specs/008-search-filters/tasks.md@3d28e3b:36`): `npx vitest run`, 39 ficheros y 1383 tests; `npm run build`, ✓; `npx eslint <ficheros tocados>`, 0 errores en los 19 ficheros `.ts` y `.tsx` de la spec que lint revisa (`src/api/schema.gen.ts` lo excluye la configuración de eslint y lo cubre `npm run api:check`); `npm run api:check`, código de salida 0.
+
+### Mutaciones A, B y C
+- Cada una se aplicó sola sobre `bab6f01`, con la suite completa. La base sin mutar es `2700 passed, 2 skipped` (D3, arriba). Las predicciones se sellaron antes de ejecutar. Antes de cada una, `ruff check` y `ruff format --check` por stdin sobre el fichero mutado salieron con código 0 (seis códigos, uno por orden y mutación).
+- Desviación: el plan limita las pruebas de mecanismo a M1-M4 (`specs/008-search-filters/plan.md@3d28e3b:382`: «Solo cuatro, todas en el backend.»; M1 a M4 en `:383-386`). Motivo: los tres tests nuevos se escribieron sobre un código que ya cumplía, así que nunca se habían visto en rojo, y una mutación por test demuestra que cada uno detecta su fallo.
+- A, en `backend/apps/assets/views.py@bab6f01:100`. Antes:
+```
+        patch_cache_control(response, public=True, max_age=PUBLIC_LIST_MAX_AGE)
+```
+  Después:
+```
+        max_age = PUBLIC_LIST_MAX_AGE if query.filters.title_fragment is None else 0
+        patch_cache_control(response, public=True, max_age=max_age)
+```
+  - Predicción: cae `apps/assets/tests/test_public_list_api.py::test_the_success_response_with_filters_is_public_for_60_seconds`; resumen `1 failed, 2699 passed, 2 skipped`.
+  - Obtenido: `1 failed, 2699 passed, 2 skipped in 45.83s`, con el id previsto y 0 líneas `ERROR `.
+  - Restauración: sha256 de `views.py` antes `a4d6fc2df956e5d93630d3c9a25729996f25657871417c65d08d7039530e54b3`, mutado `e24a7d1ac22899c4f3eaffb784437588bb17aefb41c2e618dd7e4d7c19634445` y restaurado `a4d6fc2df956e5d93630d3c9a25729996f25657871417c65d08d7039530e54b3`, igual que `git show bab6f01:backend/apps/assets/views.py | sha256sum`; `git status --short` vacío.
+- B, en `backend/apps/assets/views.py@bab6f01:1` y `:89`, dos sustituciones. Antes (línea 1):
+```
+from django.utils.cache import patch_cache_control, patch_vary_headers
+```
+  Después:
+```
+from django.db import connection
+from django.utils.cache import patch_cache_control, patch_vary_headers
+```
+  Antes (línea 89):
+```
+            raise ApiError(query.code, query.params)
+```
+  Después:
+```
+            connection.cursor().execute("SELECT 1")
+            raise ApiError(query.code, query.params)
+```
+  - Predicción: cae `apps/assets/tests/test_public_list_api.py::test_invalid_filters_are_rejected_without_querying_the_assets`; resumen `1 failed, 2699 passed, 2 skipped`.
+  - Obtenido: `1 failed, 2699 passed, 2 skipped in 46.67s`, con el id previsto y 0 líneas `ERROR `.
+  - Restauración: sha256 de `views.py` antes `a4d6fc2df956e5d93630d3c9a25729996f25657871417c65d08d7039530e54b3`, mutado `4918c6387b78760990aee5887de8790d5f64639c0edc0d0ad17dd38c96e1677c` y restaurado `a4d6fc2df956e5d93630d3c9a25729996f25657871417c65d08d7039530e54b3`, igual que `git show bab6f01:backend/apps/assets/views.py | sha256sum`; `git status --short` vacío.
+- C, en `backend/apps/assets/filters.py@bab6f01:57`. Antes:
+```
+    if not CATEGORY_PATTERN.fullmatch(values[0]):
+```
+  Después:
+```
+    if not CATEGORY_PATTERN.fullmatch(values[0].rstrip("-")):
+```
+  - Predicción: cae `apps/assets/tests/test_filters.py::test_a_category_with_a_wrong_format_is_rejected[trailing-hyphen]`; resumen `1 failed, 2699 passed, 2 skipped`.
+  - Obtenido: `1 failed, 2699 passed, 2 skipped in 45.60s`, con el id previsto y 0 líneas `ERROR `.
+  - Restauración: sha256 de `filters.py` antes `95426a7b01a91ee404405cd4d4beb1d4ed6900bc177d1b2e031475b27cf6b1ed`, mutado `d68746c4c5f9216cdebcb6d2e6086a21856380966f3caf26f5c02508d8421277` y restaurado `95426a7b01a91ee404405cd4d4beb1d4ed6900bc177d1b2e031475b27cf6b1ed`, igual que `git show bab6f01:backend/apps/assets/filters.py | sha256sum`; `git status --short` vacío.
+
+### Navegador
+Pasada de `/sdd-validate` del 26-11, con la app igual que en `3d28e3b`: `git diff --stat 4c80b86 3d28e3b -- . ':!specs' ':!backend/apps/assets/tests'` sin salida. Chrome DevTools en contexto aislado, a 1280×800 y 375×667, con `npm run dev` y el backend en marcha.
+- a) `scrollWidth` igual a `innerWidth` a 1280, sin filtros y con un chip activo.
+- b) A 375 y a 1280:
+  - `Offline` tras cargar y clic en «Kayak»: `h2` «No hay conexión…» con «Kayak» pulsado.
+  - `Online` y «Reintentar»: `GET` con `category=kayak`, 200 y 2 tarjetas.
+  - Estilo bloqueado con `initScript`: solo el `h1` y el `role="alert"`.
+- c) «Piscina» a 1280: 2 tarjetas y 2 círculos en el mapa.
+- Límites, solo lo observado:
+  - A 1280, dos intentos dieron resultados no válidos («Kayak» se activó y se quitó; llegó una respuesta con la red cortada) y se repitieron en condiciones limpias.
+  - A 375 se hizo una sola secuencia.
+  - La simulación con `initScript` prueba la interfaz, no el servidor.
+
+### Abiertos para el despliegue
+- O-10: la migración `backend/apps/assets/migrations/0005_asset_title_folded.py@4c80b86:15` añade una columna generada guardada. Según la documentación de ALTER TABLE de PostgreSQL 18 (https://www.postgresql.org/docs/18/sql-altertable.html), añadir una columna generada guardada reescribe la tabla entera y sus índices (apartado «Notes»), y la orden toma un bloqueo `ACCESS EXCLUSIVE` salvo que se indique lo contrario (apartado «Description»); `SELECT` toma `ACCESS SHARE`, que choca con `ACCESS EXCLUSIVE` (https://www.postgresql.org/docs/18/explicit-locking.html, apartado 13.3.1). Mientras dura la reescritura, la tabla no admite lecturas ni escrituras; con 25 filas no se nota y no se ha medido con más. Consecuencia: migrar sin tráfico. Aparte, la búsqueda con texto necesita la columna: `specs/008-search-filters/validation.md@3d28e3b:960`: «Antes de aplicarla, las peticiones con `q` daban 500 en esta BD» y «Tras aplicarla, esas mismas peticiones dan 200 (abajo).» Consecuencia: migrar antes de desplegar el código.
+- O-11: sin `statement_timeout`. `backend/config/settings/base.py@4c80b86:127` solo fija `"OPTIONS": {"connect_timeout": 5},` y `git grep -n -i statement_timeout 4c80b86 -- backend` no da coincidencias (código de salida 1).
+- Línea de acceso del servidor de desarrollo con el texto buscado: ya anotada en `specs/008-search-filters/validation.md@3d28e3b:1051`: «Línea de acceso del servidor de desarrollo con el texto buscado en la consulta (observado arriba).»
+
+### Veredicto
+Spec 008 validada. Los hallazgos importantes están corregidos o asumidos con motivo. Quedan abiertos los tres puntos de despliegue: O-10, O-11 y la línea de acceso con el texto buscado.
