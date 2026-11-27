@@ -1,5 +1,5 @@
 # Spec 008 — Búsqueda y filtros por categoría en el mapa
-Estado: en curso
+Estado: implementada
 Depende de: spec 006 (lista pública, mapa y panel), spec 016 (identidad visual: el limón está reservado) y spec 017 (nombres e imágenes de categoría). Recoge la nota de rendimiento de la spec 018 sobre la consulta de la lista pública.
 
 ## Contexto y objetivo
