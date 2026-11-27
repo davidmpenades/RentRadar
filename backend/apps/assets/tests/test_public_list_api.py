@@ -996,6 +996,20 @@ def test_a_successful_request_with_a_text_does_not_leave_it_in_the_logs(
     assert "zzqqtexto" not in caplog.text.lower()
 
 
+# Rojo si: el 200 con filtros pierde la caché pública de 60 s, el Vary o gana cookies
+def test_the_success_response_with_filters_is_public_for_60_seconds(
+    client, visible_asset, ski_category
+):
+    visible_asset(title="Esqui de pista", category=ski_category)
+
+    response = fetch(client, filtered_query(category="ski", q="esqui"))
+
+    assert len(response.json()["results"]) == 1
+    assert directives(response) == {"public", f"max-age={PUBLIC_LIST_MAX_AGE}"}
+    assert response["Vary"] == "Accept-Encoding"
+    assert_no_cookies(response)
+
+
 def test_invalid_filters_return_400_with_only_their_own_codes(client):
     response = fetch(client, filtered_query(category="-ski", q=""))
 
@@ -1005,6 +1019,16 @@ def test_invalid_filters_return_400_with_only_their_own_codes(client):
         "code": "invalid_parameters",
         "params": {"category": "invalid_format", "q": "empty"},
     }
+
+
+# Rojo si: se consultan bienes antes de rechazar unos filtros inválidos
+def test_invalid_filters_are_rejected_without_querying_the_assets(
+    client, django_assert_num_queries
+):
+    with django_assert_num_queries(0):
+        response = fetch(client, filtered_query(category="-ski", q=""))
+
+    assert response.status_code == 400
 
 
 # --- Descripción OpenAPI ------------------------------------------------------

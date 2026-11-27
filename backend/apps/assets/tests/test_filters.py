@@ -202,6 +202,8 @@ def test_format_and_combining_characters_are_accepted_and_kept(text):
     "slug",
     [
         pytest.param("sports--area", id="double-hyphen"),
+        # Rojo si: el patrón acepta un guion al final del identificador
+        pytest.param("ski-", id="trailing-hyphen"),
         pytest.param("ski\n", id="trailing-newline"),
         pytest.param("Ski", id="uppercase"),
         pytest.param(" ski", id="leading-space"),
