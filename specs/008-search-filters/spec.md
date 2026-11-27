@@ -3,12 +3,12 @@ Estado: en curso
 Depende de: spec 006 (lista pública, mapa y panel), spec 016 (identidad visual: el limón está reservado) y spec 017 (nombres e imágenes de categoría). Recoge la nota de rendimiento de la spec 018 sobre la consulta de la lista pública.
 
 ## Contexto y objetivo
-Hoy el visitante ve en el mapa todos los bienes de la zona y no puede acotarlos. La lista pública de la spec 006 ignora cualquier parámetro de categoría o de texto. Esta spec entrega la primera búsqueda, de la base de datos a la pantalla: el visitante elige una categoría con un chip o escribe en el buscador «Qué», y el panel y los círculos muestran solo los bienes que coinciden.
+Hoy el visitante ve en el mapa todos los bienes de la zona y no puede acotarlos. La lista pública de la spec 006 ignora cualquier parámetro de categoría o de texto. Esta spec entrega la primera búsqueda, de la base de datos a la pantalla: el visitante elige una categoría con un chip o escribe en el buscador, y el panel y los círculos muestran solo los bienes que coinciden.
 
 Incluye:
 - el filtro por categoría y el filtro por texto en la lista pública, con su validación y sus errores;
 - la medición del rendimiento de la consulta de la lista antes de cambiarla;
-- los chips de categoría sobre el mapa y el buscador «Qué»;
+- los chips de categoría sobre el mapa y el buscador;
 - los estados de la interfaz con filtros: filtro activo, sin resultados y error;
 - la estructura de encabezados de la pantalla del mapa.
 
@@ -33,7 +33,7 @@ La portada, las teselas de categorías y la barra inferior con «Publicar» no e
 - **Texto buscado**: el que escribe el visitante, recortado por los extremos. Cómo se consigue la comparación sin mayúsculas ni tildes en la base de datos lo decide el plan.
 - **Filtro activo**: filtro de categoría o de texto que el visitante ha aplicado y que sigue en vigor.
 - **Chip de categoría**: control del mapa que representa una categoría y activa o quita su filtro.
-- **Buscador «Qué»**: campo de texto del mapa donde el visitante escribe el filtro de texto.
+- **Buscador**: campo de texto del mapa donde el visitante escribe el filtro de texto. Su etiqueta accesible, no visible, es «Buscar por título» y su texto de ayuda es «Buscar…».
 - **Datos que la lista ya muestra**: los campos que la spec 006 permite devolver de cada bien (RF-2 de esa spec). Ningún filtro mira nada fuera de ellos.
 - **Formato del identificador de categoría**: una o más secuencias de letras minúsculas ASCII o dígitos separadas por un guion simple, sin guion al principio ni al final y sin guiones dobles.
 - Los términos **bien visible**, **zona**, **cuadro pedido**, **lista incompleta**, **panel de resultados**, **tarjeta**, **zona de contenido** y **vista inicial** son los de la spec 006.
@@ -65,9 +65,9 @@ Los demás números los fija el plan: el tiempo de espera del buscador tras deja
 - RF-6: CUANDO llegan a la vez un identificador de categoría válido y un texto válido, EL SISTEMA devuelve solo los bienes que cumplen los dos filtros (Y). Los filtros siempre actúan dentro del cuadro pedido: ni el texto ni la categoría buscan nunca fuera de la zona.
 
 ### Interfaz del mapa
-- RF-7: EL SISTEMA muestra sobre el mapa una fila de chips de categoría, uno por cada categoría, y el buscador «Qué». La fila se puede recorrer entera con teclado y con lector de pantalla a 375 px, aunque no quepan todos los chips en el ancho. Los controles no tapan la atribución del mapa base ni los controles de zoom.
+- RF-7: EL SISTEMA muestra sobre el mapa una fila de chips de categoría, uno por cada categoría, y el buscador. La fila se puede recorrer entera con teclado y con lector de pantalla a 375 px, aunque no quepan todos los chips en el ancho. Los controles no tapan la atribución del mapa base ni los controles de zoom.
 - RF-8: CUANDO el visitante activa un chip, EL SISTEMA marca el chip como activo, pide la lista con esa categoría y limita el panel y los círculos a los bienes de la respuesta. CUANDO activa el chip que ya está activo, quita el filtro y vuelve a pedir la lista sin él. Solo puede haber una categoría activa a la vez: activar otro chip sustituye al anterior. Cada cambio cancela la petición anterior sin terminar y nunca se muestra su respuesta.
-- RF-9: CUANDO el visitante escribe en el buscador «Qué» y el campo lleva quieto el tiempo de espera, o pulsa Intro, EL SISTEMA pide la lista con ese texto, con las mismas reglas de cancelación que RF-8. Borrar el texto quita el filtro de texto. El campo no admite más de 64 caracteres.
+- RF-9: CUANDO el visitante escribe en el buscador y el campo lleva quieto el tiempo de espera, o pulsa Intro, EL SISTEMA pide la lista con ese texto, con las mismas reglas de cancelación que RF-8. Borrar el texto quita el filtro de texto. El campo no admite más de 64 caracteres.
 - RF-10: MIENTRAS haya algún filtro activo, EL SISTEMA lo muestra de forma visible (el chip activo y el texto escrito) y ofrece un control «Quitar filtros» que los quita todos a la vez y vuelve a pedir la lista.
 - RF-11: CUANDO una respuesta válida con algún filtro activo no deja ninguna tarjeta, EL SISTEMA muestra en el panel «No hay bienes en esta zona con estos filtros» y el botón «Quitar filtros», y lo anuncia. El estado vacío sin filtros y el botón «Volver a la zona inicial» siguen siendo los de la spec 006.
 - RF-12: SI falla la petición de bienes con algún filtro activo, ENTONCES EL SISTEMA muestra el mensaje de error de la spec 006 con «Reintentar», y «Reintentar» repite la petición con los mismos filtros. Los filtros activos no se pierden por un error.
@@ -98,7 +98,7 @@ Los demás números los fija el plan: el tiempo de espera del buscador tras deja
 - **Accesibilidad y móvil (constitución, punto 7)**:
   - Se diseña a 375 px y se amplía a 1280 px. Los chips, el buscador, su control para borrar y «Quitar filtros» miden al menos 44 px.
   - El chip activo se distingue sin depender solo del color y lo anuncia el lector de pantalla como activado. El estado activo usa el azul de la identidad visual y nunca el limón, que está reservado para la selección de la spec 007. El contraste es AA.
-  - El buscador tiene una etiqueta accesible «Qué». Todo se usa con teclado y el foco es visible.
+  - El buscador tiene una etiqueta accesible «Buscar por título». Todo se usa con teclado y el foco es visible.
   - La región de estado de la spec 006 anuncia, una vez por petición, el número de resultados con filtros, el vacío con filtros y los errores.
   - Si el visitante pide reducir el movimiento, no hay animaciones.
 - **Idioma (constitución, punto 8)**: los textos nuevos están en castellano y salen del catálogo de mensajes. Los códigos y los identificadores van en inglés.

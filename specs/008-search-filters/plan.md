@@ -10,7 +10,7 @@ Estado del plan: aprobado (24-11-2026). Decididas: método de comparación (D1),
   - el texto se compara con una columna generada por la BD, `title_folded`, que guarda el título plegado (sin mayúsculas ni tildes de un alfabeto fijo, con la ñ distinta de la n). Nunca se compara con la descripción, la categoría, el propietario ni la ubicación.
 - Medición: `EXPLAIN (ANALYZE, BUFFERS)` de la consulta en la BD de test con 50 000 bienes sintéticos, antes de cambiarla (T1) y después (T6), registrada en validation.md. No bloquea la entrega; si recomienda un índice, es un cambio aparte.
 - Frontend:
-  - barra de filtros encima del mapa, con el buscador «Qué», «Quitar filtros» y una fila de 12 chips de categoría que se desplaza en horizontal;
+  - barra de filtros encima del mapa, con el buscador, «Quitar filtros» y una fila de 12 chips de categoría que se desplaza en horizontal;
   - estado de los filtros en funciones puras, petición con los filtros y cancelación con el planificador existente;
   - vacío y error con filtros en el panel;
   - `h1` oculto en la pantalla del mapa y la cabecera del panel como `h2`.
@@ -46,7 +46,7 @@ Estado del plan: aprobado (24-11-2026). Decididas: método de comparación (D1),
 | frontend/src/api/schema.gen.ts | M | Regenerado (`npm run api:gen`) | RNF Contrato |
 | frontend/src/search/categories.ts | C | `CATEGORY_CHIPS`: 12 identificadores en orden de presentación («Otros» al final) | RF-7 |
 | frontend/src/search/filters.ts | C | Puro: `FilterState`, `toggleCategory`, `setText`, `clearFilters`, `appliedFilters`, `hasActiveFilters` y `filtersQuery` | RF-8 a RF-10, RF-12 |
-| frontend/src/search/FilterBar.tsx | C | Formulario `role="search"`, campo «Qué», borrar texto, «Quitar filtros» y grupo de chips `aria-pressed` | RF-7 a RF-10 |
+| frontend/src/search/FilterBar.tsx | C | Formulario `role="search"`, campo de búsqueda, borrar texto, «Quitar filtros» y grupo de chips `aria-pressed` | RF-7 a RF-10 |
 | frontend/src/search/*.test.ts | C | vitest de lo anterior (react-dom/server para el marcado) | RF-7 a RF-10 |
 | frontend/src/api/publicAssets.ts | M | `fetchAssets(box, signal, filters = NO_FILTERS)`: añade `filtersQuery` tras `boxToQuery` | RF-8, RF-9, RF-12 |
 | frontend/src/map/loadAssets.ts | M | Pasa los filtros vigentes al fetcher | RF-8, RF-9, RF-12 |
@@ -54,7 +54,7 @@ Estado del plan: aprobado (24-11-2026). Decididas: método de comparación (D1),
 | frontend/src/panel/header.ts | M | Textos con filtros (número, incompleta y vacío) | RF-11 |
 | frontend/src/panel/ResultsPanel.tsx | M | Cabecera como `h2`; «Quitar filtros» en el vacío con filtros | RF-11 a RF-13 |
 | frontend/src/pages/MapPage.tsx | M | Estado y ref de filtros, `h1` oculto, `FilterBar`, disposición en columna, la barra no se pinta con el estilo fallido | RF-7 a RF-13 |
-| frontend/src/i18n/es.ts | M | Nombres de las 12 categorías, «Qué», «Borrar texto», «Quitar filtros», textos con filtros y `h1` | RF-7 a RF-13 |
+| frontend/src/i18n/es.ts | M | Nombres de las 12 categorías, «Buscar por título», «Borrar texto», «Quitar filtros», textos con filtros y `h1` | RF-7 a RF-13 |
 | frontend/src/styles/buttons.css | M | `.chip` y `.chip[aria-pressed="true"]` (azul, marca de verificación, 44 px, sin limón) | RF-7, RF-10 |
 | specs/008-search-filters/validation.md | C | Medición antes y después, pruebas de mecanismo, verificación en navegador | Criterios |
 
@@ -173,7 +173,7 @@ Códigos por parámetro (el primero que falle, en este orden):
 
 ## Interfaz
 - Móvil primero (375 px). La barra de filtros va en el flujo, encima del mapa y del panel:
-  - fila 1: `form role="search"` con la etiqueta visible «Qué», un `input type="search"` (`maxLength=64`, `autoComplete="off"`, sin atributo `name`, `enterKeyHint="search"`) con el botón «Borrar texto» de 44×44 dentro del campo (patrón `.field-box`/`.eye` de fields.css), y «Quitar filtros» al final de la fila, solo con algún filtro activo;
+  - fila 1: `form role="search"` con la etiqueta `sr-only` «Buscar por título» (sin etiqueta visible: la lupa decorativa y el texto de ayuda «Buscar…» orientan), un `input type="search"` (`maxLength=64`, `autoComplete="off"`, sin atributo `name`, `enterKeyHint="search"`) con el botón «Borrar texto» de 44×44 dentro del campo (patrón `.field-box`/`.eye` de fields.css), y «Quitar filtros» al final de la fila, solo con algún filtro activo;
   - fila 2: `div role="group" aria-label="Categorías"` con 12 `button aria-pressed` de 44 px que se desplazan en horizontal (`overflow-x-auto`); cada chip es una parada de Tab y el navegador lo desplaza a la vista al enfocarlo;
   - la barra tiene altura fija (dos filas de 44 px más los márgenes, unos 108 px), así «Quitar filtros» no cambia la altura y no mueve los controles del mapa;
   - desde 900 px, una sola fila: el campo mide 400 px (alineado con la columna del panel) y los chips van a su derecha.
@@ -183,7 +183,7 @@ Códigos por parámetro (el primero que falle, en este orden):
   - `aria-pressed="true"` lo anuncia como activado;
   - nunca usa el limón; en `forced-colors`, contorno de 2 px como `.btn`.
 - El formulario hace `preventDefault` en el envío. Sin `name` ni `action`, el texto no puede acabar en la URL aunque falle el JS, y `autoComplete="off"` evita el historial de formularios.
-- Foco: al pulsar «Quitar filtros» en la barra, el foco va al campo «Qué»; en el panel, a la cabecera (patrón `focusHeader`, ResultsPanel.tsx:42-44).
+- Foco: al pulsar «Quitar filtros» en la barra, el foco va al campo de búsqueda; en el panel, a la cabecera (patrón `focusHeader`, ResultsPanel.tsx:42-44).
 - Estados del panel:
   - carga: «Buscando bienes…»;
   - resultados con filtros: «1 bien en esta zona con estos filtros», «N bienes en esta zona con estos filtros», «Mostrando N bienes con estos filtros. Puede haber más: acerca el mapa para verlos todos»;
@@ -343,7 +343,7 @@ Regla de este plan: cada test lleva el fallo concreto que lo pone en rojo. Un te
   - Rojo si: el vacío con filtros muestra el texto de sin filtros, o un error borra los filtros.
 - F5. «Reintentar» repite la petición con los mismos filtros (loadAssets).
   - Rojo si: el reintento llama al fetcher sin filtros.
-- F6. Marcado de `FilterBar` (react-dom/server): grupo con etiqueta, chips `aria-pressed`, campo con etiqueta «Qué», `maxLength=64`, sin `name`, `autoComplete="off"`, «Quitar filtros» solo con filtro activo.
+- F6. Marcado de `FilterBar` (react-dom/server): grupo con etiqueta, chips `aria-pressed`, campo con etiqueta «Buscar por título», `maxLength=64`, sin `name`, `autoComplete="off"`, «Quitar filtros» solo con filtro activo.
   - Rojo si: se añade un `name` al campo (el texto podría ir a la URL), falta `aria-pressed` o «Quitar filtros» sale sin filtro.
 - F7. `ResultsPanel`: la cabecera es un `<h2>` dentro de la región de estado y el vacío con filtros pinta «Quitar filtros».
   - Rojo si: la cabecera vuelve a ser un `<p>` o falta el botón.
@@ -393,7 +393,7 @@ Solo cuatro, todas en el backend. En cada una, el test indicado debe ponerse en 
 - T5. Endpoint con filtros y contrato (RF-1 a RF-6).
 - T6. Medición después y decisión sobre el índice (RNF Rendimiento).
 - T7. Estado de filtros y petición filtrada (RF-8, RF-9, RF-10, RF-12).
-- T8. Barra de filtros: buscador «Qué» y chips (RF-7 a RF-10).
+- T8. Barra de filtros: buscador y chips (RF-7 a RF-10).
 - T9. Panel con filtros y encabezados de la pantalla (RF-11 a RF-13).
 - T10. Validación de punta a punta y en el navegador (RF-1 a RF-13).
 - El índice GiST, si la medición lo pide, queda fuera de estas 10 tareas.
