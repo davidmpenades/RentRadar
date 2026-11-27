@@ -5,10 +5,11 @@ from django.contrib.gis.db import models as gis_models
 from django.contrib.gis.db.models import GeometryField
 from django.contrib.gis.db.models.functions import IsEmpty
 from django.db import models
-from django.db.models import FloatField, Func, Q
+from django.db.models import F, FloatField, Func, Q, Value
 from django.db.models.functions import Cast, Length
 from django.db.models.lookups import Range
 
+from apps.assets.folding import FOLD_SOURCE, FOLD_TARGET
 from apps.assets.location import LATITUDE_LIMITS, LONGITUDE_LIMITS, PRIVACY_RADII
 from apps.assets.rules import (
     CURRENCY,
@@ -63,6 +64,14 @@ class Asset(models.Model):
     price = models.DecimalField(max_digits=8, decimal_places=2)
     currency = models.TextField()
     price_unit = models.TextField(choices=PriceUnit.choices)
+    # La BD lo recalcula en cada escritura; solo sirve para buscar por título
+    title_folded = models.GeneratedField(
+        expression=Func(
+            F("title"), Value(FOLD_SOURCE), Value(FOLD_TARGET), function="translate"
+        ),
+        output_field=models.TextField(),
+        db_persist=True,
+    )
     exact_location = gis_models.PointField(
         geography=True, srid=4326, spatial_index=False
     )

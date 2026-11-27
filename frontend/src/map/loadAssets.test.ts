@@ -6,6 +6,7 @@ import {
   RequestTimeoutError,
 } from "../api/publicAssets";
 import { InvalidResponseError } from "../api/validate";
+import { NO_FILTERS, type AppliedFilters } from "../search/filters";
 import { loadAssetsForView } from "./loadAssets";
 import { requestBox, type RequestBox } from "./requestBox";
 
@@ -25,7 +26,7 @@ const ASSET = {
 };
 const LIST = { results: [ASSET], incomplete: false };
 
-type Fetch = (box: RequestBox, signal: AbortSignal) => Promise<typeof LIST>;
+type Fetch = (box: RequestBox, signal: AbortSignal, filters: AppliedFilters) => Promise<typeof LIST>;
 
 function setup(options: { fetch?: Fetch } = {}) {
   const controller = new AbortController();
@@ -33,9 +34,10 @@ function setup(options: { fetch?: Fetch } = {}) {
   const fetchAssets = vi.fn(options.fetch ?? (async () => LIST));
   const report = vi.fn();
   const logError = vi.fn();
-  const run = (bounds = VALENCIA) =>
+  const run = (bounds = VALENCIA, filters: AppliedFilters = NO_FILTERS) =>
     loadAssetsForView({
       bounds,
+      filters,
       request: { signal: controller.signal, isCurrent: () => state.current },
       fetchAssets,
       report,
@@ -52,8 +54,26 @@ describe("loadAssetsForView", () => {
 
     const result = requestBox(VALENCIA);
     expect(result.kind).toBe("ok");
-    expect(fetchAssets).toHaveBeenCalledExactlyOnceWith(result.kind === "ok" ? result.box : null, controller.signal);
+    expect(fetchAssets).toHaveBeenCalledExactlyOnceWith(
+      result.kind === "ok" ? result.box : null,
+      controller.signal,
+      NO_FILTERS,
+    );
     expect(report).toHaveBeenCalledExactlyOnceWith({ kind: "loaded", list: LIST, visibleBounds: VALENCIA });
+  });
+
+  it("pasa al fetcher los filtros que recibe", async () => {
+    const { run, fetchAssets, controller } = setup();
+    const filters = { category: "ski", q: "esqui" };
+
+    await run(VALENCIA, filters);
+
+    const result = requestBox(VALENCIA);
+    expect(fetchAssets).toHaveBeenCalledExactlyOnceWith(
+      result.kind === "ok" ? result.box : null,
+      controller.signal,
+      filters,
+    );
   });
 
   it("guarda la zona visible que recibe y no el cuadro pedido", async () => {

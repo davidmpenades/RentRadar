@@ -71,6 +71,7 @@ EXPECTED_FIELDS = {
     "price": models.DecimalField,
     "currency": models.TextField,
     "price_unit": models.TextField,
+    "title_folded": models.GeneratedField,
     "exact_location": gis_models.PointField,
     "public_location": gis_models.PointField,
     "privacy_radius": models.IntegerField,
@@ -89,6 +90,7 @@ EXPECTED_COLUMNS = {
     "price": "numeric",
     "currency": "text",
     "price_unit": "text",
+    "title_folded": "text",
     "exact_location": "geography",
     "public_location": "geography",
     "privacy_radius": "int4",
@@ -316,7 +318,10 @@ def test_columns_have_the_expected_types_and_none_is_nullable(db):
         geographies = sorted(cursor.fetchall())
 
     assert {name: values[0] for name, values in columns.items()} == EXPECTED_COLUMNS
-    assert {values[1] for values in columns.values()} == {"NO"}
+    # Django no emite NOT NULL en una columna generada; title no admite nulos
+    nullable = {name: values[1] for name, values in columns.items()}
+    assert nullable.pop("title_folded") == "YES"
+    assert set(nullable.values()) == {"NO"}
     assert columns["price"][2:] == (8, 2)
     assert geographies == [
         ("exact_location", "Point", 4326),

@@ -1,4 +1,5 @@
 import { boxToQuery, type RequestBox } from "../map/requestBox";
+import { filtersQuery, NO_FILTERS, type AppliedFilters } from "../search/filters";
 import { hasJsonContentType } from "./http";
 import { runWithTimeout } from "./timeout";
 import { InvalidResponseError, validateResponse } from "./validate";
@@ -68,14 +69,24 @@ async function requestAssets(
   }
 }
 
+// Los filtros van detrás del cuadro; sin filtros no queda ningún & sobrante
+function requestQuery(box: RequestBox, filters: AppliedFilters): string {
+  const filtering = filtersQuery(filters);
+  return filtering === "" ? boxToQuery(box) : `${boxToQuery(box)}&${filtering}`;
+}
+
 export function createPublicAssetsFetcher<Handle>(options: FetcherOptions<Handle>) {
   const { fetch, setTimer, clearTimer, timeoutMs } = options;
 
-  return function fetchAssets(box: RequestBox, signal: AbortSignal): Promise<PublicAssetList> {
+  return function fetchAssets(
+    box: RequestBox,
+    signal: AbortSignal,
+    filters: AppliedFilters = NO_FILTERS,
+  ): Promise<PublicAssetList> {
     return runWithTimeout(
       { signal, timeoutMs, setTimer, clearTimer, onTimeout: () => new RequestTimeoutError() },
       async (inner) => {
-        const response = await requestAssets(fetch, `${PUBLIC_ASSETS_URL}?${boxToQuery(box)}`, {
+        const response = await requestAssets(fetch, `${PUBLIC_ASSETS_URL}?${requestQuery(box, filters)}`, {
           credentials: "omit",
           signal: inner,
         });

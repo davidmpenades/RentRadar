@@ -9,13 +9,14 @@ type ResultsPanelProps = {
   view: ViewState;
   onRetry: () => void;
   onReset: () => void;
+  onClearFilters: () => void;
 };
 
 const BUTTON = "btn btn-primary mt-3";
 
 type PanelActionProps = ResultsPanelProps & { afterAction: () => void };
 
-function PanelAction({ view, onRetry, onReset, afterAction }: PanelActionProps) {
+function PanelAction({ view, onRetry, onReset, onClearFilters, afterAction }: PanelActionProps) {
   const run = (action: () => void) => () => {
     action();
     afterAction();
@@ -27,17 +28,25 @@ function PanelAction({ view, onRetry, onReset, afterAction }: PanelActionProps) 
       </button>
     );
   }
-  if ((view.kind === "empty" || view.kind === "zoomIn") && view.canReset) {
-    return (
-      <button type="button" onClick={run(onReset)} className={BUTTON}>
-        {es.panel.resetView}
-      </button>
-    );
-  }
-  return null;
+  const canClearFilters = view.kind === "empty" && view.filtered;
+  const canResetView = (view.kind === "empty" || view.kind === "zoomIn") && view.canReset;
+  return (
+    <>
+      {canClearFilters && (
+        <button type="button" onClick={run(onClearFilters)} className={BUTTON}>
+          {es.search.clearAll}
+        </button>
+      )}
+      {canResetView && (
+        <button type="button" onClick={run(onReset)} className={BUTTON}>
+          {es.panel.resetView}
+        </button>
+      )}
+    </>
+  );
 }
 
-export function ResultsPanel({ view, onRetry, onReset }: ResultsPanelProps) {
+export function ResultsPanel({ view, onRetry, onReset, onClearFilters }: ResultsPanelProps) {
   const status = statusText(view);
   const headerRef = useRef<HTMLDivElement>(null);
   // El botón pulsado desaparece al cambiar el estado: el foco pasa antes a la cabecera, que no se anuncia por enfocarla
@@ -54,9 +63,15 @@ export function ResultsPanel({ view, onRetry, onReset }: ResultsPanelProps) {
         <div ref={headerRef} tabIndex={-1}>
           {/* Siempre presente: un anuncio solo se produce si cambia su texto */}
           <div role="status" aria-live="polite">
-            {status && <p className="text-lg leading-snug font-semibold">{status}</p>}
+            {status && <h2 className="text-lg leading-snug font-semibold">{status}</h2>}
           </div>
-          <PanelAction view={view} onRetry={onRetry} onReset={onReset} afterAction={focusHeader} />
+          <PanelAction
+            view={view}
+            onRetry={onRetry}
+            onReset={onReset}
+            onClearFilters={onClearFilters}
+            afterAction={focusHeader}
+          />
         </div>
       </div>
       {view.kind === "results" && (

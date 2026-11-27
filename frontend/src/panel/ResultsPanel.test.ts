@@ -32,7 +32,8 @@ const escape = (text: string) =>
 const HOSTILE = ["<img src=x onerror=alert(1)>", "<script>alert(1)</script>", '"><svg onload=alert(1)>', "&lt;b&gt;"];
 const noop = () => {};
 const NBSP = String.fromCharCode(160);
-const panel = (view: ViewState) => renderToStaticMarkup(createElement(ResultsPanel, { view, onRetry: noop, onReset: noop }));
+const panel = (view: ViewState) =>
+  renderToStaticMarkup(createElement(ResultsPanel, { view, onRetry: noop, onReset: noop, onClearFilters: noop }));
 const card = (item: PublicAsset) => renderToStaticMarkup(createElement("ul", null, createElement(AssetCard, { asset: item })));
 const imgTags = (html: string) => html.match(/<img\b[^>]*>/g) ?? [];
 const asideTag = (html: string) => html.match(/<aside\b[^>]*>/)?.[0] ?? "";
@@ -96,7 +97,7 @@ describe("AssetCard: el texto del anuncio es texto", () => {
 describe("ResultsPanel", () => {
   it("pinta una tarjeta y una imagen por bien, todas con alt vacío", () => {
     const cards = [1, 2, 3, 4, 5].map((n) => asset(n, { title: HOSTILE[n % HOSTILE.length]! }));
-    const html = panel({ kind: "results", cards, incomplete: false });
+    const html = panel({ kind: "results", cards, incomplete: false, filtered: false });
     expect(html.match(/<li\b/g)).toHaveLength(cards.length);
     const images = imgTags(html);
     expect(images).toHaveLength(cards.length);
@@ -107,8 +108,8 @@ describe("ResultsPanel", () => {
   it("lleva siempre la región de estado en los estados con panel", () => {
     const views: ViewState[] = [
       { kind: "loading" },
-      { kind: "results", cards: [asset(1)], incomplete: false },
-      { kind: "empty", canReset: true },
+      { kind: "results", cards: [asset(1)], incomplete: false, filtered: false },
+      { kind: "empty", canReset: true, filtered: false },
       { kind: "zoomIn", canReset: false },
       { kind: "error", failure: "network" },
     ];
@@ -122,8 +123,8 @@ describe("ResultsPanel", () => {
   it("no enseña el aviso de ubicación aproximada en ningún estado", () => {
     const views: ViewState[] = [
       { kind: "loading" },
-      { kind: "results", cards: [asset(1)], incomplete: true },
-      { kind: "empty", canReset: true },
+      { kind: "results", cards: [asset(1)], incomplete: true, filtered: false },
+      { kind: "empty", canReset: true, filtered: false },
       { kind: "zoomIn", canReset: true },
       { kind: "error", failure: "unexpected" },
       { kind: "styleError" },
@@ -141,10 +142,46 @@ describe("ResultsPanel", () => {
   });
 
   it("ofrece volver a la zona inicial solo si se puede", () => {
-    expect(panel({ kind: "empty", canReset: true })).toContain("Volver a la zona inicial");
-    expect(panel({ kind: "empty", canReset: false })).not.toContain("Volver a la zona inicial");
+    expect(panel({ kind: "empty", canReset: true, filtered: false })).toContain("Volver a la zona inicial");
+    expect(panel({ kind: "empty", canReset: false, filtered: false })).not.toContain("Volver a la zona inicial");
     expect(panel({ kind: "zoomIn", canReset: true })).toContain("Volver a la zona inicial");
     expect(panel({ kind: "zoomIn", canReset: false })).not.toContain("Volver a la zona inicial");
+  });
+
+  // Rojo si: la cabecera vuelve a ser un <p> o sale fuera de la región de estado
+  it.each<[string, ViewState]>([
+    ["carga", { kind: "loading" }],
+    ["resultados", { kind: "results", cards: [asset(1)], incomplete: false, filtered: false }],
+    ["vacío", { kind: "empty", canReset: false, filtered: false }],
+    ["acerca el mapa", { kind: "zoomIn", canReset: false }],
+    ["error", { kind: "error", failure: "network" }],
+  ])("pinta la cabecera como h2 dentro de la región de estado (%s)", (_name, view) => {
+    expect(panel(view)).toMatch(/<div role="status" aria-live="polite"><h2\b/);
+  });
+
+  // Rojo si: falta «Quitar filtros» en el vacío con filtros, o aparece sin filtros o con resultados
+  it("pinta «Quitar filtros» solo en el vacío con filtros", () => {
+    const filtered = panel({ kind: "empty", canReset: false, filtered: true });
+    expect(filtered).toContain("No hay bienes en esta zona con estos filtros");
+    expect(filtered).toContain(">Quitar filtros<");
+    const plain = panel({ kind: "empty", canReset: false, filtered: false });
+    expect(plain).not.toContain("Quitar filtros");
+    const results = panel({ kind: "results", cards: [asset(1)], incomplete: false, filtered: true });
+    expect(results).not.toContain("Quitar filtros");
+  });
+
+  // Rojo si: «Quitar filtros» sustituye a «Volver a la zona inicial», cambia el orden, o este sale ya en la vista inicial
+  it("en el vacío con filtros ofrece volver a la zona inicial solo si se puede", () => {
+    const away = panel({ kind: "empty", canReset: true, filtered: true });
+    expect(away).toContain(">Volver a la zona inicial<");
+    expect(away.indexOf("Quitar filtros")).toBeGreaterThan(-1);
+    expect(away.indexOf("Quitar filtros")).toBeLessThan(away.indexOf("Volver a la zona inicial"));
+    const buttons = away.match(/<button\b[^>]*>/g) ?? [];
+    expect(buttons).toHaveLength(2);
+    for (const button of buttons) expect(classesOf(button)).toEqual(expect.arrayContaining(["btn", "btn-primary"]));
+    const home = panel({ kind: "empty", canReset: false, filtered: true });
+    expect(home).toContain(">Quitar filtros<");
+    expect(home).not.toContain("Volver a la zona inicial");
   });
 
   it.each(["network", "timeout", "server", "throttled", "invalid", "unexpected"] as const)(
@@ -158,9 +195,9 @@ describe("ResultsPanel", () => {
   );
 
   it.each<[string, ViewState]>([
-    ["resultados", { kind: "results", cards: [asset(1)], incomplete: false }],
+    ["resultados", { kind: "results", cards: [asset(1)], incomplete: false, filtered: false }],
     ["error", { kind: "error", failure: "network" }],
-    ["vacío", { kind: "empty", canReset: true }],
+    ["vacío", { kind: "empty", canReset: true, filtered: false }],
     ["carga", { kind: "loading" }],
   ])("la cabecera (%s) es enfocable por código y contiene la región de estado y los botones", (_name, view) => {
     const html = panel(view);
@@ -178,8 +215,8 @@ describe("ResultsPanel", () => {
   it("es una sola superficie de cristal y se marca para anclar el aviso", () => {
     const views: ViewState[] = [
       { kind: "loading" },
-      { kind: "results", cards: [asset(1)], incomplete: false },
-      { kind: "empty", canReset: true },
+      { kind: "results", cards: [asset(1)], incomplete: false, filtered: false },
+      { kind: "empty", canReset: true, filtered: false },
       { kind: "zoomIn", canReset: false },
       { kind: "error", failure: "network" },
     ];
@@ -202,7 +239,7 @@ describe("ResultsPanel", () => {
   });
 
   it("ni la lista ni las tarjetas llevan una superficie propia", () => {
-    const html = panel({ kind: "results", cards: [asset(1), asset(2)], incomplete: false });
+    const html = panel({ kind: "results", cards: [asset(1), asset(2)], incomplete: false, filtered: false });
     const tags = [...(html.match(/<ul\b[^>]*>/g) ?? []), ...(html.match(/<li\b[^>]*>/g) ?? [])];
     expect(tags).toHaveLength(3);
     for (const tag of tags) {
@@ -211,7 +248,7 @@ describe("ResultsPanel", () => {
   });
 
   it("los botones son botones principales", () => {
-    for (const view of [{ kind: "error", failure: "network" }, { kind: "empty", canReset: true }] satisfies ViewState[]) {
+    for (const view of [{ kind: "error", failure: "network" }, { kind: "empty", canReset: true, filtered: false }] satisfies ViewState[]) {
       const buttons = panel(view).match(/<button\b[^>]*>/g) ?? [];
       expect(buttons.length).toBeGreaterThan(0);
       for (const button of buttons) expect(classesOf(button)).toEqual(expect.arrayContaining(["btn", "btn-primary"]));

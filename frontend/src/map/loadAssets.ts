@@ -1,5 +1,6 @@
 import { classifyFailure, type FailureKind } from "../api/publicAssets";
 import type { components } from "../api/schema.gen";
+import type { AppliedFilters } from "../search/filters";
 import type { ScheduledRequest } from "./scheduler";
 import { requestBox, type RequestBox, type VisibleBounds } from "./requestBox";
 
@@ -14,7 +15,8 @@ export type RequestOutcome =
 type LoadAssetsOptions = {
   bounds: VisibleBounds;
   request: ScheduledRequest;
-  fetchAssets: (box: RequestBox, signal: AbortSignal) => Promise<PublicAssetList>;
+  filters: AppliedFilters;
+  fetchAssets: (box: RequestBox, signal: AbortSignal, filters: AppliedFilters) => Promise<PublicAssetList>;
   report: (outcome: RequestOutcome) => void;
   logError: (error: unknown) => void;
 };
@@ -35,7 +37,7 @@ function failureOf(error: unknown, logError: (error: unknown) => void): FailureK
 
 // Pide los bienes de la zona y reporta cómo acabó, salvo si la petición se canceló o ya no es la actual
 export async function loadAssetsForView(options: LoadAssetsOptions): Promise<void> {
-  const { bounds, request, fetchAssets, report, logError } = options;
+  const { bounds, request, filters, fetchAssets, report, logError } = options;
 
   const box = requestBox(bounds);
   if (box.kind !== "ok") {
@@ -44,7 +46,7 @@ export async function loadAssetsForView(options: LoadAssetsOptions): Promise<voi
   }
 
   try {
-    const list = await fetchAssets(box.box, request.signal);
+    const list = await fetchAssets(box.box, request.signal, filters);
     if (request.isCurrent()) report({ kind: "loaded", list, visibleBounds: bounds });
   } catch (error) {
     // Una petición vieja no decide nada: la nueva reporta por su cuenta

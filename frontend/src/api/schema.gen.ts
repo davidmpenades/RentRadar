@@ -357,10 +357,14 @@ export interface operations {
     listPublicAssets: {
         parameters: {
             query: {
+                /** @description Identificador de categoría (por ejemplo, ski). Limita la lista a los bienes de esa categoría. Secuencias de letras minúsculas ASCII o dígitos separadas por un guion simple, hasta 50 caracteres. Un identificador bien formado que no corresponde a ninguna categoría da una lista vacía. */
+                category?: string;
                 /** @description Longitud del límite este de la zona. */
                 east: string;
                 /** @description Latitud del límite norte de la zona. */
                 north: string;
+                /** @description Texto que debe contener el título, sin distinguir mayúsculas ni las tildes de las letras latinas de Europa occidental (la ñ cuenta como una letra distinta de la n). Se recorta por los extremos; hasta 64 caracteres y sin caracteres de control. Solo se compara con el título. */
+                q?: string;
                 /** @description Latitud del límite sur de la zona. */
                 south: string;
                 /** @description Longitud del límite oeste de la zona. */

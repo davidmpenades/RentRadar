@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 
 import { fetchPublicAssets } from "../api/publicAssets";
+import { es } from "../i18n/es";
 import { circlesToFeatureCollection } from "../map/circles";
 import { loadAssetsForView } from "../map/loadAssets";
 import { MapView } from "../map/MapView";
@@ -8,6 +9,17 @@ import type { VisibleBounds } from "../map/requestBox";
 import { createRequestScheduler, REQUEST_DELAY_MS } from "../map/scheduler";
 import { atInitialView, type Viewport } from "../map/viewport";
 import { ResultsPanel } from "../panel/ResultsPanel";
+import { FilterBar } from "../search/FilterBar";
+import {
+  appliedFilters,
+  clearFilters,
+  filtersQuery,
+  NO_FILTERS,
+  setText,
+  toggleCategory,
+  type AppliedFilters,
+  type FilterState,
+} from "../search/filters";
 import { INITIAL_REQUEST, requestCircles, startLoading, viewState, type RequestState } from "../state/viewState";
 
 export function MapPage() {
@@ -15,10 +27,20 @@ export function MapPage() {
   const [styleFailed, setStyleFailed] = useState(false);
   const [atInitial, setAtInitial] = useState(true);
   const [resetSignal, setResetSignal] = useState(0);
+  const [filters, setFilters] = useState<FilterState>(clearFilters);
+  // Los filtros de la petición lanzada: el panel los usa para decir «con estos filtros» solo de lo pedido con ellos
+  const [requestedFilters, setRequestedFilters] = useState<AppliedFilters>(NO_FILTERS);
   const boundsRef = useRef<VisibleBounds | null>(null);
+  // Lo que lee run: el estado llega tarde a una petición lanzada en el mismo evento
+  const filtersRef = useRef<AppliedFilters>(NO_FILTERS);
   const schedulerRef = useRef<ReturnType<typeof createRequestScheduler<number>> | null>(null);
 
-  const view = viewState({ styleFailed, request, atInitialView: atInitial });
+  const view = viewState({
+    styleFailed,
+    request,
+    atInitialView: atInitial,
+    filtersActive: filtersQuery(requestedFilters) !== "",
+  });
   const circles = useMemo(() => circlesToFeatureCollection(requestCircles(request)), [request]);
 
   useEffect(() => {
@@ -31,9 +53,11 @@ export function MapPage() {
         if (!bounds) return;
         // Si el cuadro no se pide, el aviso llega en el mismo lote y «Buscando» no llega a pintarse
         setRequest(startLoading);
+        setRequestedFilters(filtersRef.current);
         void loadAssetsForView({
           bounds,
           request: scheduled,
+          filters: filtersRef.current,
           fetchAssets: fetchPublicAssets,
           report: setRequest,
           logError: (error) => console.error(error),
@@ -74,19 +98,49 @@ export function MapPage() {
 
   const handleReset = useCallback(() => setResetSignal((current) => current + 1), []);
 
+  // El estado siguiente se calcula aquí y no dentro de un actualizador: StrictMode lo ejecuta dos veces
+  const changeFilters = (next: FilterState, timing: "now" | "delayed") => {
+    const applied = appliedFilters(next);
+    // Un espacio final no cambia lo que se pide: no hay petición nueva
+    const changed = filtersQuery(applied) !== filtersQuery(filtersRef.current);
+    setFilters(next);
+    filtersRef.current = applied;
+    if (!changed) return;
+    if (timing === "now") schedulerRef.current?.runNow();
+    else schedulerRef.current?.schedule();
+  };
+
   return (
-    <main className="relative h-full overflow-hidden">
-      <MapView
-        circles={circles}
-        styleFailed={styleFailed}
-        resetSignal={resetSignal}
-        onStyleFailed={handleStyleFailed}
-        onStyleRetry={handleStyleRetry}
-        onReady={handleReady}
-        onMoveStart={handleMoveStart}
-        onMoveEnd={handleMoveEnd}
-      />
-      <ResultsPanel view={view} onRetry={handleRetry} onReset={handleReset} />
+    <main className="flex h-full flex-col overflow-hidden">
+      <h1 className="sr-only">{es.map.heading}</h1>
+      {!styleFailed && (
+        <FilterBar
+          filters={filters}
+          onToggleCategory={(slug) => changeFilters(toggleCategory(filters, slug), "now")}
+          onTextChange={(raw) => changeFilters(setText(filters, raw), "delayed")}
+          onSubmit={() => schedulerRef.current?.runNow()}
+          onClearText={() => changeFilters(setText(filters, ""), "now")}
+          onClearAll={() => changeFilters(clearFilters(), "now")}
+        />
+      )}
+      <div className="relative min-h-0 flex-1">
+        <MapView
+          circles={circles}
+          styleFailed={styleFailed}
+          resetSignal={resetSignal}
+          onStyleFailed={handleStyleFailed}
+          onStyleRetry={handleStyleRetry}
+          onReady={handleReady}
+          onMoveStart={handleMoveStart}
+          onMoveEnd={handleMoveEnd}
+        />
+        <ResultsPanel
+          view={view}
+          onRetry={handleRetry}
+          onReset={handleReset}
+          onClearFilters={() => changeFilters(clearFilters(), "now")}
+        />
+      </div>
     </main>
   );
 }
